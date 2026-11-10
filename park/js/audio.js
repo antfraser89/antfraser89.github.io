@@ -124,6 +124,7 @@ export function createAudio(getSettings) {
       tone(140, { to: 50, dur: 0.3, vol: 0.14 });
     },
     whoosh: () => noise({ dur: 0.4, vol: 0.08, freq: 2400, q: 1.5 }),
+    swish: () => noise({ dur: 0.16, vol: 0.045, freq: 3400, q: 0.9 }),
     tour: () => arp([60, 64, 67, 72, 76, 79, 84], 0.09, { dur: 0.3, vol: 0.14 }),
     error: () => tone(170, { type: 'square', dur: 0.09, vol: 0.06 }),
     // the machine

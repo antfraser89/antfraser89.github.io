@@ -258,6 +258,7 @@ export function createRenderer(canvas, world, hooks = {}) {
   let rocketIn = 0;
   let showUntil = 0; // fireworks keep going until this time
   const animT = PLOTS.map(() => 0);
+  const pops = PLOTS.map(() => 0); // 1 → 0 while a new stage bounces into place
 
   function setTown() {
     if (world.state.town === town) return;
@@ -323,11 +324,13 @@ export function createRenderer(canvas, world, hooks = {}) {
     cam.x = W.w / 2;
     cam.y = W.rowY[0] + 60 - (usableH() / cam.zoom) * 0.2;
     cam.tx = cam.ty = null;
+    introT = -1;
     clampCam();
   }
 
   // Glide so plot k sits in the clear space above any open sheet.
   function focus(k) {
+    if (introT >= 0) { introT = -1; cam.zoom = introTo; }
     const p = PLOTS[k];
     const d = designAt(world.state, k);
     const clearBottom = vh - Math.max(insets.bottom, sheetCover);
@@ -337,7 +340,33 @@ export function createRenderer(canvas, world, hooks = {}) {
     cam.ty = p.y - d.h * 0.42 - (wantY - centreY()) / cam.zoom;
   }
 
+  // First look at the park: start pulled back and settle in.
+  let introT = -1;
+  let introFrom = 0;
+  let introTo = 0;
+  const homeY = () => W.rowY[0] + 60 - (usableH() / cam.zoom) * 0.2;
+  function intro() {
+    resetView();
+    introTo = cam.zoom;
+    introFrom = Math.max(cam.minZoom, cam.zoom * 0.7);
+    if (introTo - introFrom < 0.02) return;
+    introT = 0;
+    cam.zoom = introFrom;
+    cam.y = homeY();
+    clampCam();
+  }
+
   function updateCamera(dt) {
+    if (introT >= 0) {
+      introT = Math.min(1, introT + dt / 1.25);
+      const u = 1 - Math.pow(1 - introT, 3);
+      cam.zoom = lerp(introFrom, introTo, u);
+      cam.x = W.w / 2;
+      cam.y = homeY();
+      clampCam();
+      if (introT >= 1) introT = -1;
+      return;
+    }
     if (cam.tx === null) return;
     const k = 1 - Math.exp(-dt * 7);
     const bx = cam.x;
@@ -381,6 +410,7 @@ export function createRenderer(canvas, world, hooks = {}) {
       cam.x -= (e.clientX - drag.x) / cam.zoom;
       cam.y -= (e.clientY - drag.y) / cam.zoom;
       cam.tx = cam.ty = null;
+      introT = -1;
       clampCam();
     }
     drag.x = e.clientX;
@@ -411,6 +441,7 @@ export function createRenderer(canvas, world, hooks = {}) {
   }, { passive: false });
 
   function zoomAt(sx, sy, zoom) {
+    introT = -1;
     const before = toWorld(sx, sy);
     cam.zoom = clamp(zoom, cam.minZoom, cam.maxZoom);
     const after = toWorld(sx, sy);
@@ -466,7 +497,7 @@ export function createRenderer(canvas, world, hooks = {}) {
       const sp = (opts.speed || 150) * (0.4 + Math.random() * 0.8);
       particles.push({
         x: x + (Math.random() - 0.5) * (opts.spread || 10),
-        y: y + (Math.random() - 0.5) * (opts.spread || 10),
+        y: y + (Math.random() - 0.5) * (opts.spreadY ?? opts.spread ?? 10),
         vx: Math.cos(a) * sp,
         vy: Math.sin(a) * sp,
         g: opts.gravity ?? 420,
@@ -484,6 +515,10 @@ export function createRenderer(canvas, world, hooks = {}) {
   const CONFETTI = ['#e5484d', '#ffc53d', '#3e63dd', '#46a758', '#e93d82', '#fff6e0'];
   const confetti = (x, y, n = 36) => burst(x, y, n, CONFETTI, { up: true, speed: 260, life: 1.3, spread: 60 });
   const coins = (x, y, n = 4) => burst(x, y, n, ['#ffc53d', '#ffd75e'], { up: true, speed: 150, life: 0.75, shape: 'coin', size: 5 });
+  // builders' dust rolling out from under a new stage
+  const dust = (x, y, w = 120) => burst(x, y, 20, ['#f1e6cc', '#e2d2b0', '#fff8e8'], {
+    up: true, speed: 70, life: 1.0, size: 13, shape: 'puff', spread: w * 0.9, spreadY: 14, gravity: -30,
+  });
   const custard = (x, y) => burst(x, y, 34, ['#fff3c4', '#ffe9a6', '#ffffff'], { speed: 260, life: 0.9, size: 9, shape: 'coin' });
 
   function launchRocket() {
@@ -499,6 +534,7 @@ export function createRenderer(canvas, world, hooks = {}) {
   }
 
   function updateEffects(dt) {
+    for (let k = 0; k < pops.length; k++) if (pops[k] > 0) pops[k] = Math.max(0, pops[k] - dt * 1.7);
     for (const p of particles) {
       p.t += dt;
       p.vy += p.g * dt;
@@ -572,7 +608,13 @@ export function createRenderer(canvas, world, hooks = {}) {
     ctx.translate(p.x, p.y - 4);
     A.drawPlotBack(ctx, d.w, plot.stage, time + k);
     ctx.save();
-    if (rt.pulse > 0) {
+    if (pops[k] > 0) {
+      // freshly built: drop in, overshoot and settle
+      const u = 1 - pops[k];
+      const sx = 1 + Math.sin(u * Math.PI * 3) * (1 - u) * 0.16;
+      const grow = Math.min(1, u * 3.2);
+      ctx.scale(sx * (0.85 + grow * 0.15), (2 - sx) * (0.55 + grow * 0.45));
+    } else if (rt.pulse > 0) {
       const squash = 1 + Math.sin(rt.pulse * Math.PI) * 0.025;
       ctx.scale(squash, 2 - squash);
     }
@@ -785,7 +827,12 @@ export function createRenderer(canvas, world, hooks = {}) {
       const a = clamp(1 - p.t / p.life, 0, 1);
       ctx.globalAlpha = Math.min(1, a * 2);
       ctx.fillStyle = p.color;
-      if (p.shape === 'coin') {
+      if (p.shape === 'puff') {
+        ctx.globalAlpha = a * 0.55;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size * (1 + (1 - a) * 1.4), 0, TAU);
+        ctx.fill();
+      } else if (p.shape === 'coin') {
         ctx.beginPath();
         ctx.ellipse(p.x, p.y, p.size * Math.abs(Math.cos(p.rot)) + 1, p.size, 0, 0, TAU);
         ctx.fill();
@@ -925,6 +972,9 @@ export function createRenderer(canvas, world, hooks = {}) {
     confetti,
     coins,
     custard,
+    dust,
+    intro,
+    pop: (k) => { pops[k] = 1; },
     burst,
     cam,
     toScreenX,

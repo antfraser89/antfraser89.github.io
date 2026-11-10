@@ -1,8 +1,9 @@
-// The DOM layer: HUD, the slot machine dock, sheets, mini-games and modals.
+// The DOM layer: the app shell (HUD, tab bar, the machine page, the park
+// page), sheets, mini-games and modals.
 // Sheets are built once when opened and refreshed in place, so buttons never
 // get replaced under the player's finger.
 import {
-  ADS, CARDS, CARD_SETS, CURRENCY, DAILY, EVENT_MILESTONES, GAME_TITLE, GUEST_LOOKS, LEAGUE_PRIZES, PACKS, PET, PLOTS, STAGES,
+  ADS, CARDS, CARD_SETS, CURRENCY, DAILY, EVENT_MILESTONES, GAME_TITLE, GUEST_LOOKS, LEAGUE_PRIZES, PACKS, PAY, PET, PLOTS, STAGES,
   PRODUCTS, STORE_PREVIEW, TOWN_REWARD, TUNING, UPGRADE_REWARDS, VAULT, VERSION, setUnlockTown, townInfo,
 } from './config.js';
 import * as A from './art.js';
@@ -57,6 +58,10 @@ const ICON = {
   events: svg('<path d="M7 4h10v5a5 5 0 0 1-10 0zM7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3M12 14v4M8 20h8"/>'),
   news: svg('<path d="M6 9a6 6 0 1 1 12 0c0 6 2 7 2 7H4s2-1 2-7M10 20a2 2 0 0 0 4 0"/>'),
   gear: svg('<path d="M4 7h10M18 7h2M4 12h2M10 12h10M4 17h12M20 17h0"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="18" cy="17" r="2"/>'),
+  park: svg('<path d="M12 3v3M3 20h18M5 20v-8l7-6 7 6v8M10 20v-5h4v5"/><path d="M12 3l4 1.500-4 1.500" fill="currentColor"/>'),
+  spin: svg('<rect x="3" y="5" width="18" height="14" rx="3.500"/><path d="M9 5v14M15 5v14"/><circle cx="6" cy="12" r="1.300" fill="currentColor"/><circle cx="12" cy="12" r="1.300" fill="currentColor"/><circle cx="18" cy="12" r="1.300" fill="currentColor"/>'),
+  shop: svg('<path d="M5 8h14l-1 12H6L5 8zM9 8V6a3 3 0 0 1 6 0v2"/>'),
+  info: svg('<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.300v.4"/>'),
   close: svg('<path d="M5 5l14 14M19 5 5 19" stroke-width="3"/>'),
   back: svg('<path d="M14 5l-7 7 7 7" stroke-width="3"/>'),
   stop: svg('<rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/>'),
@@ -67,7 +72,7 @@ const img = (src, cls = 'ico') => `<img class="${cls}" src="${src}" alt="">`;
 export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave, onReset }) {
   const root = document.getElementById('ui');
   const st = () => world.state;
-  const rand = Math.random;
+  const rand = () => Math.random();
   const TOKEN = img(symbolImage('token', 40));
   const COIN = img(symbolImage('coin', 40));
   const CHIPS = img(symbolImage('chips', 40));
@@ -206,67 +211,192 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     else if (mission.go === 'cards') openAlbum();
     else if (mission.go === 'pet') openPet();
     else {
-      closeSheet();
+      setBase('machine');
       spinBtn.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.12)' }, { transform: 'scale(1)' }], { duration: 420 });
     }
   }
 
-  // ---- side buttons ---------------------------------------------------------
+  // ---- the shell: two base pages and a tab bar ---------------------------------
+  // The machine and the park are the two places you can be. Album, events and
+  // shop open as full pages over either; everything else is a sheet or pop-up.
 
-  const sideBtn = (key, label, icon, fn) => {
+  let base = 'machine';
+  let baseAt = 0;
+  let seenPark = false;
+
+  const setBadge = (btn, n) => {
+    show(btn.badge, n > 0);
+    if (n > 0) setText(btn.badge, n > 99 ? '99+' : String(n));
+  };
+  const bump = (el) => {
+    el.classList.remove('bump');
+    void el.offsetWidth; // restart the animation
+    el.classList.add('bump');
+  };
+  const tabs = {};
+  const tab = (key, label, icon, fn) => {
+    const badge = h('i', { class: 'badge' });
+    const b = h('button', { class: 'tab t-' + key, 'aria-label': label, onclick: () => { click(); fn(); } }, h('span', { html: icon }), h('small', null, label), badge);
+    b.badge = badge;
+    tabs[key] = b;
+    return b;
+  };
+  const tabbar = h('nav', { class: 'tabbar', 'aria-label': 'Main' }, h('div', { class: 'tabbar-inner' },
+    tab('park', 'Park', ICON.park, () => setBase('park')),
+    tab('album', 'Album', ICON.album, () => openAlbum()),
+    tab('machine', 'Slots', ICON.spin, () => setBase('machine')),
+    tab('events', 'Events', ICON.events, () => openEvents()),
+    tab('shop', 'Shop', ICON.shop, () => openShop())));
+
+  const sideBtn = (label, icon, fn) => {
     const badge = h('i', { class: 'badge' });
     const b = h('button', { class: 'side-btn', 'aria-label': label, onclick: () => { click(); fn(); } }, h('span', { html: icon }), h('small', null, label), badge);
     b.badge = badge;
     return b;
   };
-  const albumBtn = sideBtn('album', 'Album', ICON.album, () => openAlbum());
-  const eventsBtn = sideBtn('events', 'Events', ICON.events, () => openEvents());
-  const petBtn = sideBtn('pet', PET.name, `<img src="${gullURL(false)}" alt="">`, () => openPet());
-  const newsBtn = sideBtn('news', 'News', ICON.news, () => openNews());
-  const side = h('div', { class: 'side' }, h('div', { class: 'side-group' }, albumBtn, eventsBtn), h('div', { class: 'side-group' }, petBtn, newsBtn));
-  const setBadge = (btn, n) => {
-    show(btn.badge, n > 0);
-    if (n > 0) setText(btn.badge, n > 99 ? '99+' : String(n));
-  };
+  const petBtn = sideBtn(PET.name, `<img src="${gullURL(false)}" alt="">`, () => openPet());
+  const newsBtn = sideBtn('News', ICON.news, () => openNews());
+  const buildFab = h('button', { class: 'fab', onclick: () => { click(); openBuild(); } }, h('span', { html: ICON.build }), 'Build');
+  buildFab.badge = h('i', { class: 'badge' });
+  buildFab.append(buildFab.badge);
+  const townChipText = h('span');
+  const townChipBar = h('i');
+  const townChip = h('button', { class: 'town-chip', 'aria-label': 'Your park', onclick: () => { click(); openBuild(); } }, townChipText, h('div', { class: 'bar' }, townChipBar));
+  const parkUI = h('div', { class: 'park-ui' }, townChip, h('div', { class: 'park-side' }, petBtn, newsBtn), buildFab);
 
-  // ---- the machine ----------------------------------------------------------
+  // ---- the machine page -------------------------------------------------------
 
   const reelCanvas = h('canvas', { class: 'reels', 'aria-label': 'Slot machine reels' });
   const banner = h('div', { class: 'win-banner' });
   const townEl = h('button', { class: 'marquee-btn', onclick: () => { click(); openBuild(); } });
   const eventEl = h('button', { class: 'marquee-btn event', onclick: () => { click(); openEvents(); } });
   const eventBar = h('i');
-  const buildBadge = h('i', { class: 'badge' });
-  const buildBtn = h('button', { class: 'dock-btn', onclick: () => { click(); openBuild(); } }, h('span', { html: ICON.build }), 'Build', buildBadge);
-  const betBtn = h('button', { class: 'dock-btn bet', onclick: () => { click(); R.cycleBet(st()); refresh(); } });
+  const betVal = h('b', null, '×1');
+  const betMinus = h('button', { 'aria-label': 'Lower the bet', onclick: () => stepBet(-1) }, '−');
+  const betPlus = h('button', { 'aria-label': 'Raise the bet', onclick: () => stepBet(1) }, '+');
+  const betBox = h('div', { class: 'bet-box' }, betMinus, h('div', { class: 'bet-val' }, betVal, h('small', null, 'Bet')), betPlus);
+  const autoBtn = h('button', { class: 'dock-btn', 'aria-label': 'Auto spin', onclick: () => {
+    click();
+    setAuto(!auto);
+    if (auto) doSpin();
+  } }, h('b', null, 'Auto'), 'spin');
   const spinLabel = h('b', null, 'SPIN');
   const spinCost = h('small');
   const spinBtn = h('button', { class: 'spin-btn', 'aria-label': 'Spin' }, h('span', { class: 'spin-face' }, spinLabel, spinCost));
   const bulbAt = (x, y, k) => h('i', { style: `--x:${x};--y:${y};--k:${k % 3}` });
   const bulbList = [];
-  for (let k = 0; k < 9; k++) bulbList.push(bulbAt(`${7 + k * 10.75}%`, '7px', k));
-  for (let k = 0; k < 3; k++) bulbList.push(bulbAt('calc(100% - 7px)', `${27 + k * 23}%`, 9 + k));
-  for (let k = 0; k < 9; k++) bulbList.push(bulbAt(`${93 - k * 10.75}%`, 'calc(100% - 7px)', 12 + k));
-  for (let k = 0; k < 3; k++) bulbList.push(bulbAt('7px', `${73 - k * 23}%`, 21 + k));
+  for (let k = 0; k < 9; k++) bulbList.push(bulbAt(`${7 + k * 10.75}%`, '8px', k));
+  for (let k = 0; k < 5; k++) bulbList.push(bulbAt('calc(100% - 8px)', `${17 + k * 16.5}%`, 9 + k));
+  for (let k = 0; k < 9; k++) bulbList.push(bulbAt(`${93 - k * 10.75}%`, 'calc(100% - 8px)', 14 + k));
+  for (let k = 0; k < 5; k++) bulbList.push(bulbAt('8px', `${83 - k * 16.5}%`, 23 + k));
   const bulbs = h('div', { class: 'bulbs' }, bulbList);
-  const cabinet = h('div', { class: 'cabinet' }, h('div', { class: 'window' }, reelCanvas), bulbs, banner);
-  const dock = h('div', { class: 'dock' },
-    h('div', { class: 'marquee' }, townEl, h('div', { class: 'event-wrap' }, eventEl, h('div', { class: 'bar' }, eventBar))),
-    cabinet,
-    h('div', { class: 'controls' }, buildBtn, spinBtn, betBtn));
+  const gaugeCount = h('b');
+  const gaugeBar = h('i');
+  const gaugeTimer = h('small');
+  // the machine's own credit meter, set into the cabinet under the reels
+  const gauge = h('button', { class: 'gauge', 'aria-label': 'Tokens. Open the shop', onclick: () => { click(); openShop(); } },
+    h('img', { src: symbolImage('token', 40), alt: '' }), gaugeCount, h('div', { class: 'bar' }, gaugeBar), gaugeTimer, h('i', { class: 'plus' }, '+'));
+  const windowEl = h('div', { class: 'window' }, reelCanvas);
+  const cabinet = h('div', { class: 'cabinet' }, windowEl, gauge, bulbs);
+  const lever = h('button', { class: 'lever', 'aria-label': 'Pull the lever to spin', onclick: () => doSpin() }, h('i'));
+  const perch = h('button', { class: 'perch', 'aria-label': `${PET.name} the gull`, onclick: () => { click(); openPet(); } }, h('img', { src: gullURL(false), alt: '' }));
+  perch.badge = h('i', { class: 'badge' });
+  perch.append(perch.badge);
+  const payBtn = h('button', { class: 'pay-btn', 'aria-label': 'What the symbols pay', onclick: () => { click(); paytable(); } }, h('span', { html: ICON.info }), 'Pays');
+  const mCab = h('div', { class: 'm-cab' }, cabinet, lever, perch, payBtn);
+  const jackpotEl = h('b');
+  // the sign on top of the machine; wins light up across it
+  const topper = h('div', { class: 'topper', onclick: () => { click(); paytable(); } },
+    wordmark(), h('div', { class: 'jackpot' }, h('small', null, 'Jackpot'), jackpotEl), banner);
+  const machine = h('section', { class: 'machine', 'aria-label': 'The lucky machine' },
+    h('div', { class: 'm-bg' }, h('div', { class: 'rays' }), h('i'), h('i'), h('b'),
+      // a few motes of light drifting about the tent
+      [[12, 34, 0], [84, 30, 2.1], [22, 62, 4.3], [76, 58, 1.2], [8, 82, 3.4], [92, 78, 5.2], [50, 22, 2.8]]
+        .map(([x, y, d]) => h('em', { style: `left:${x}%;top:${y}%;animation-delay:-${d}s` }))),
+    h('div', { class: 'm-col' }, topper, mCab,
+      h('div', { class: 'marquee' }, townEl, h('div', { class: 'event-wrap' }, eventEl, h('div', { class: 'bar' }, eventBar))),
+      h('div', { class: 'controls' }, betBox, spinBtn, autoBtn)));
+  // tokens live in the cabinet's meter on the machine page and in the top bar elsewhere
+  const tokenTarget = () => (root.classList.contains('on-machine') ? gauge : tokenCard);
   const fxCanvas = h('canvas', { id: 'fx', 'aria-hidden': 'true' });
   const fx = createFx(fxCanvas);
+
+  function syncTabs() {
+    const active = current && current.tab ? current.tab : base;
+    for (const [key, b] of Object.entries(tabs)) toggle(b, 'on', key === active);
+    const page = !!(current && current.page);
+    toggle(parkUI, 'on', base === 'park' && !page);
+    toggle(root, 'on-machine', base === 'machine' && !page);
+  }
+
+  // Switch between the machine and the park.
+  function setBase(next) {
+    closeSheet();
+    if (base === next) return;
+    base = next;
+    baseAt = performance.now();
+    setAuto(false);
+    toggle(machine, 'away', base !== 'machine');
+    audio.play('swish');
+    if (base === 'park') {
+      renderer.resize();
+      if (!seenPark) {
+        seenPark = true;
+        renderer.intro();
+      }
+    }
+    syncTabs();
+    refresh();
+  }
+
+  function stepBet(dir) {
+    const s = st();
+    const bets = E.availableBets(s);
+    const i = Math.max(0, bets.indexOf(s.bet));
+    const next = bets[Math.max(0, Math.min(bets.length - 1, i + dir))];
+    if (next === s.bet) return nope();
+    click();
+    R.setBet(s, next);
+    bump(betVal);
+    return refresh();
+  }
+
+  // What three of each symbol does, with real amounts for this town and bet.
+  function paytable() {
+    const s = st();
+    const u = E.unit(s.town) * s.bet;
+    const row = (syms, text, value) => h('div', { class: 'pay-row' },
+      h('div', { class: 'syms', html: syms.map((x) => `<img src="${symbolImage(x, 40)}" alt="">`).join('') }), h('span', { html: text }), h('b', { html: value }));
+    modal([
+      h('div', { class: 'kicker' }, `At a bet of ×${s.bet}`),
+      h('h2', null, 'What the reels pay'),
+      row(['star', 'star', 'star'], '<b>Jackpot</b> and a silver pack', money(PAY.jackpot * u)),
+      row(['sack', 'sack', 'sack'], 'Three sacks', money(PAY.sacks3 * u)),
+      row(['coin', 'coin', 'coin'], 'Three coins', money(PAY.coins3 * u)),
+      row(['sack'], 'Each sack on the line', money(PAY.sack * u)),
+      row(['coin'], 'Each coin on the line', money(PAY.coin * u)),
+      row(['pie', 'pie', 'pie'], '<b>Pie time!</b> Splat a rival', `up to ${money(PAY.attackHit * u)}`),
+      row(['barrel', 'barrel', 'barrel'], '<b>Lucky dip!</b> Raid a rival', `up to ${money(PAY.raidStash[1] * u * E.raidBonus(s))}`),
+      row(['lock', 'lock', 'lock'], 'A padlock to stop a pie', '+1'),
+      row(['token', 'token', 'token'], 'Free spins', `+${PAY.tokens * s.bet}`),
+      row(['chips', 'chips', 'chips'], `Chips for ${PET.name}`, `+${PAY.treats * s.bet}`),
+      h('p', { class: 'fineprint' }, 'Prizes grow with your bet and with every town you reach.'),
+      h('div', { class: 'actions' }, h('button', { class: 'btn big wide', onclick: () => { click(); closeModal(); } }, 'Got it')),
+    ]);
+  }
 
   let auto = false;
   let held = null; // the result waiting for the reels to stop
   let hideBanner = 0;
-  const shown = { coins: st().coins };
+  const shown = { coins: st().coins, tokens: st().tokens };
 
   const slot = createSlotView(reelCanvas, {
     onTick: () => audio.play('tick'),
     onReelStop: () => {
       audio.play('clunk');
       buzz(8);
+      // each reel lands with a little thump
+      windowEl.animate([{ transform: 'translateY(0)' }, { transform: 'translateY(3px)' }, { transform: 'translateY(0)' }], { duration: 130, easing: 'ease-out' });
     },
     onTease: () => {
       audio.play('tease');
@@ -276,10 +406,10 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
   });
 
   function shake() {
-    dock.classList.remove('shake');
-    void dock.offsetWidth; // restart the animation
-    dock.classList.add('shake');
-    setTimeout(() => dock.classList.remove('shake'), 500);
+    mCab.classList.remove('shake');
+    void mCab.offsetWidth; // restart the animation
+    mCab.classList.add('shake');
+    setTimeout(() => mCab.classList.remove('shake'), 500);
   }
 
   // The headline moment: huge lettering over the park.
@@ -317,21 +447,47 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
   function setAuto(on) {
     auto = on;
     toggle(spinBtn, 'auto', on);
+    toggle(autoBtn, 'on', on);
     if (on) buzz(20);
   }
 
   const busy = () => !!overlayEl || !!modalEl;
 
+  let counting = 0;
   function say(html, cls = '', ms = 1500) {
+    counting++;
     banner.className = 'win-banner on ' + cls;
     setHTML(banner, html);
     banner.__html = null;
     hideBanner = performance.now() + ms;
   }
+  // A win that counts up across the sign.
+  function sayCount(amount, cls, ms) {
+    say(`+${money(0)}`, cls, ms);
+    const id = counting;
+    const t0 = performance.now();
+    const dur = Math.min(1200, ms * 0.5);
+    const step = (t) => {
+      if (id !== counting) return;
+      const u = Math.min(1, (t - t0) / dur);
+      banner.textContent = `+${money(amount * (1 - Math.pow(1 - u, 3)))}`;
+      if (u < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+  // the room lights up for a proper win
+  function lightUp(ms) {
+    machine.classList.add('win');
+    setTimeout(() => machine.classList.remove('win'), ms);
+  }
 
   function doSpin() {
     audio.unlock();
     if (busy()) return;
+    if (base !== 'machine' || current) {
+      setBase('machine'); // spinning happens on the machine page
+      return;
+    }
     if (slot.spinning) {
       slot.skip();
       return;
@@ -348,7 +504,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
       nope();
       const secs = R.nextTokenIn(s, clock());
       say(secs > 0 ? `Out of tokens. Next one in ${fmtClock(secs)}` : 'Out of tokens', 'quiet', 2200);
-      tokenCard.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(-5px)' }, { transform: 'translateX(5px)' }, { transform: 'translateX(0)' }], { duration: 260 });
+      tokenTarget().animate([{ transform: 'translateX(0)' }, { transform: 'translateX(-5px)' }, { transform: 'translateX(5px)' }, { transform: 'translateX(0)' }], { duration: 260 });
       if (!wasAuto) outOfTokens();
       return;
     }
@@ -358,6 +514,8 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     buzz(12);
     cabinet.classList.remove('won');
     cabinet.classList.add('spinning');
+    lever.classList.add('pulled');
+    setTimeout(() => lever.classList.remove('pulled'), 380);
     slot.spin(res.reels, auto, res.kind !== 'mixed');
     refresh();
   }
@@ -384,13 +542,15 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
         }
         break;
       case 'coins3':
-        say(`+${money(res.coins)}`, 'coins big');
+        sayCount(res.coins, 'coins big', 1800);
+        lightUp(1500);
         audio.play('win');
         fly(COIN, reelCanvas, coinCard, 9);
         fx.rain(18);
         break;
       case 'sacks3':
-        say(`+${money(res.coins)}`, 'coins big', 2200);
+        sayCount(res.coins, 'coins big', 2600);
+        lightUp(2400);
         audio.play('bigwin');
         fly(COIN, reelCanvas, coinCard, 16);
         fx.rain(80);
@@ -399,7 +559,8 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
         buzz([30, 40, 30]);
         break;
       case 'jackpot':
-        say(`+${money(res.coins)}`, 'jackpot', 2600);
+        sayCount(res.coins, 'jackpot', 3200);
+        lightUp(3200);
         audio.play('jackpot');
         fly(COIN, reelCanvas, coinCard, 22);
         fx.rain(190);
@@ -417,12 +578,12 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
       case 'tokens':
         say(`+${res.tokens} free spins`, 'tokens');
         audio.play('token');
-        fly(TOKEN, reelCanvas, tokenCard, 6);
+        fly(TOKEN, reelCanvas, tokenTarget(), 6);
         break;
       case 'treats':
         say(`+${res.treats} chips for ${PET.name}`, 'treats');
         audio.play('token');
-        fly(CHIPS, reelCanvas, petBtn, 5);
+        fly(CHIPS, reelCanvas, perch, 5);
         break;
       case 'attack':
         say('PIE TIME!', 'attack', 1200);
@@ -487,17 +648,21 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     sheetBody);
   let current = null;
 
-  function setSheet(key, title, body, refreshFn, back = null) {
+  // opts: back (a function for the back arrow), page (fill the screen), tab
+  // (which tab to light up while it is open)
+  function setSheet(key, title, body, refreshFn, opts = {}) {
     setAuto(false);
     sheetTitle.replaceChildren(...[title].flat());
     sheetBody.replaceChildren(...[body].flat(Infinity).filter(Boolean));
     sheetBody.scrollTop = 0;
-    show(sheetBack, !!back);
-    sheetBack.onclick = back ? () => { click(); back(); } : null;
-    current = { key, refresh: refreshFn };
+    show(sheetBack, !!opts.back);
+    sheetBack.onclick = opts.back ? () => { click(); opts.back(); } : null;
+    toggle(sheet, 'page', !!opts.page);
+    current = { key, refresh: refreshFn, tab: opts.tab || null, page: !!opts.page };
     sheet.classList.add('open');
     refreshFn();
-    renderer.setSheetCover(wide() ? 0 : sheet.offsetHeight);
+    renderer.setSheetCover(opts.page ? 0 : sheet.offsetHeight + tabbar.offsetHeight);
+    syncTabs();
   }
 
   function closeSheet() {
@@ -506,11 +671,13 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     sheet.classList.remove('open');
     renderer.setSelected(-1);
     renderer.setSheetCover(0);
+    syncTabs();
   }
 
   // ---- build ----------------------------------------------------------------
 
   function openBuild(focusPlot = -1) {
+    if (base !== 'park') setBase('park'); // building happens with the park in view
     const info = () => townInfo(st().town);
     const progress = h('i');
     const progressText = h('span');
@@ -593,6 +760,14 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     if (focusPlot >= 0) {
       select(focusPlot);
       rows[focusPlot].row.scrollIntoView({ block: 'nearest' });
+    } else {
+      // nothing chosen: bring the next thing worth building into view
+      const s = st();
+      const next = PLOTS.findIndex((p) => {
+        const plot = s.plots[p.index];
+        return plot.splat ? s.coins >= E.repairCost(s.town, p.index, plot.stage) : plot.stage < STAGES && s.coins >= E.stageCost(s.town, p.index, plot.stage + 1);
+      });
+      if (next >= 0) select(next);
     }
   }
 
@@ -600,7 +775,15 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     const p = PLOTS[k];
     const d = S.designAt(st(), k);
     audio.play(up.stage === 1 ? 'build' : up.stage === STAGES ? 'milestone' : 'upgrade');
+    if (current && current.key === 'build') {
+      // watch it go up
+      renderer.setSelected(k);
+      renderer.focus(k);
+      sheetBody.querySelectorAll('.row').forEach((row, i) => toggle(row, 'picked', i === k));
+    }
     renderer.confetti(p.x, p.y - d.h * 0.5, up.stage === STAGES ? 70 : 30);
+    renderer.dust(p.x, p.y - 6, d.w);
+    renderer.pop(k);
     buzz(up.stage === STAGES ? [20, 30, 40] : 14);
     if (up.stage === 1) toast(`<b>${d.name}</b> is open for business!`);
     else if (up.stage === STAGES) toast(`<b>${d.name}</b> is a five-star attraction!`, 'gold');
@@ -616,16 +799,15 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
       return;
     }
     const s = st();
-    audio.play('tour');
-    modal([
-      h('div', { class: 'kicker' }, 'Park complete'),
-      h('h2', null, townInfo(s.town).name),
-      h('p', { html: `Every attraction at five stars and the whole town talking. Next stop: <b>${townInfo(s.town + 1).name}</b>.` }),
-      h('div', { class: 'prize', html: describe(TOWN_REWARD, true) }),
-      h('div', { class: 'actions' },
-        h('button', { class: 'btn plain big', onclick: () => { click(); closeModal(); } }, 'Stay a while'),
-        h('button', { class: 'btn gold big', onclick: () => { closeModal(); travelNow(); } }, 'Pack up')),
-    ]);
+    renderer.fireworks(5);
+    celebrate({
+      kicker: 'Park complete!',
+      title: townInfo(s.town).name,
+      sub: `Every attraction at five stars and the whole town talking. Pack up for <b>${townInfo(s.town + 1).name}</b> and these are yours.`,
+      reward: TOWN_REWARD,
+      raw: true,
+      actions: [['Stay a while', null, 'btn plain big'], ['Pack up', () => travelNow(), 'btn gold big']],
+    });
   }
 
   async function travelNow() {
@@ -661,9 +843,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     const albumBtnBig = h('button', { class: 'btn gold big wide', onclick: () => {
       const reward = R.claimAlbum(st());
       if (!reward) return nope();
-      audio.play('jackpot');
-      renderer.fireworks(6);
-      toast(`Album complete! ${describe(reward)}. A new season begins.`, 'gold');
+      celebrate({ kicker: 'Album complete!', title: `Season ${st().cards.season - 1} finished`, sub: 'Every card collected. A fresh season of cards starts now.', reward });
       onSave();
       refresh();
     } }, 'Claim the album prize');
@@ -675,9 +855,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
         e.stopPropagation();
         const reward = R.claimSet(st(), s);
         if (!reward) return nope();
-        audio.play('milestone');
-        renderer.fireworks(3);
-        toast(`${set.name} complete! ${describe(reward)}`, 'gold');
+        celebrate({ kicker: 'Set complete!', title: set.name, sub: 'All nine cards, safe in the album.', reward });
         onSave();
         refresh();
       } }, 'Claim');
@@ -713,7 +891,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
           : s.cards.sets[t.s] ? 'Complete ✓'
             : complete ? '' : `${R.setCount(s, t.s)}/9 · prize ${TOKEN}${t.set.reward}`);
       }
-    });
+    }, { page: true, tab: 'album' });
   }
 
   function openSet(s) {
@@ -721,7 +899,14 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     const cells = set.cards.map((c) => {
       const image = h('img', { alt: c.name });
       const count = h('i', { class: 'count' });
-      return { c, image, count, el: h('div', { class: 'card-cell' }, image, count) };
+      const el = h('div', { class: 'card-cell', onclick: () => {
+        const n = st().cards.owned[c.id] || 0;
+        if (n > 0) {
+          click();
+          zoomCard(c, n);
+        }
+      } }, image, count);
+      return { c, image, count, el };
     });
     const note = h('div', { class: 'note' });
     setSheet('set:' + s, set.name, [note, h('div', { class: 'card-grid' }, cells.map((c) => c.el))], () => {
@@ -734,10 +919,11 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
           cell.image.__k = key;
           cell.image.src = cardImage(cell.c, n > 0);
         }
+        toggle(cell.el, 'has', n > 0);
         show(cell.count, n > 1);
         setText(cell.count, '×' + n);
       }
-    }, openAlbum);
+    }, { back: openAlbum, page: true, tab: 'album' });
   }
 
   function openVault() {
@@ -765,7 +951,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
         setText(r.sub, r.tier.gold ? (offer.available ? 'Picks a gold card missing from your album' : 'You have every gold card on offer')
           : r.tier.fresh ? 'Four cards, plus one you are guaranteed not to have' : 'Three cards from the sets you have unlocked');
       }
-    }, openAlbum);
+    }, { back: openAlbum, page: true, tab: 'album' });
   }
 
   function openPack(type) {
@@ -778,7 +964,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
 
   // The reveal: cards arrive face down and flip one at a time.
   function showCards(cards, note = '', packType = null) {
-    const row = h('div', { class: 'reveal-row' });
+    const row = h('div', { class: 'reveal-row' + (cards.length <= 3 ? ' few' : '') });
     const title = h('h2', null, packType ? PACKS[packType].name : 'New cards');
     const more = h('div', { class: 'actions' });
     const foot = h('p', { class: 'fineprint' }, note);
@@ -852,7 +1038,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
       setHTML(table, html);
       setHTML(prizes, LEAGUE_PRIZES.map((p, i) => `<b>${i === 0 ? '1st' : `Top ${p.upTo}`}</b> ${describe(p.reward, true)}`).join(' &nbsp;·&nbsp; '));
       if (s.league.last && !s.league.last.seen) s.league.last.seen = true;
-    });
+    }, { page: true, tab: 'events' });
   }
 
   // ---- Chips ------------------------------------------------------------------
@@ -940,6 +1126,67 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     nextPopup();
   }
 
+  function lootItems(reward, raw = false) {
+    const items = [];
+    if (!reward) return items;
+    if (reward.tokens) items.push([symbolImage('token', 80), fmt(reward.tokens), 'tokens']);
+    if (reward.coins) items.push([symbolImage('coin', 80), money(raw ? reward.coins * E.unit(st().town) : reward.coins), 'coins']);
+    if (reward.treats) items.push([symbolImage('chips', 80), String(reward.treats), 'chips']);
+    if (reward.pack) items.push([packURL(reward.pack), '×1', PACKS[reward.pack].name]);
+    if (reward.packs) {
+      for (const type of Object.keys(PACKS)) if (reward.packs[type]) items.push([packURL(type), '×' + reward.packs[type], PACKS[type].name]);
+    }
+    return items;
+  }
+
+  // The big reveal for prizes worth stopping for.
+  function celebrate({ kicker, title, sub, reward, raw = false, actions }) {
+    audio.play('bigwin');
+    fx.rain(70);
+    buzz([20, 30, 40]);
+    const buttons = actions || [['Collect', null, 'btn big wide']];
+    overlay('celebrate', [
+      h('div', { class: 'kicker' }, kicker),
+      h('h2', null, title),
+      sub ? h('p', { html: sub }) : null,
+      h('div', { class: 'loot' }, lootItems(reward, raw).map(([src, big, small], i) => h('div', { class: 'loot-item', style: `--i:${i}` }, h('img', { src, alt: '' }), h('b', null, big), h('small', null, small)))),
+      h('div', { class: 'actions' }, buttons.map(([label, fn, cls]) => h('button', { class: cls || 'btn big', onclick: () => {
+        click();
+        closeOverlay();
+        if (fn) fn();
+        refresh();
+      } }, label))),
+    ]);
+  }
+
+  // A card held up to the light: it tilts and catches a shine under the finger.
+  function zoomCard(card, count) {
+    const inner = h('div', { class: 'zoom-inner' }, h('img', { src: cardImage(card, true, 300), alt: card.name }));
+    const wrap = h('div', { class: 'zoom-card' + (card.gold ? ' gold' : '') }, inner);
+    const tilt = (e) => {
+      const r = wrap.getBoundingClientRect();
+      const x = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+      const y = Math.max(0, Math.min(1, (e.clientY - r.top) / r.height));
+      inner.style.setProperty('--ry', `${(x - 0.5) * 28}deg`);
+      inner.style.setProperty('--rx', `${(0.5 - y) * 22}deg`);
+      inner.style.setProperty('--mx', `${x * 100}%`);
+      inner.style.setProperty('--my', `${y * 100}%`);
+    };
+    wrap.addEventListener('pointermove', tilt);
+    wrap.addEventListener('pointerleave', () => {
+      inner.style.setProperty('--ry', '0deg');
+      inner.style.setProperty('--rx', '0deg');
+    });
+    overlay('zoom', [
+      wrap,
+      h('h2', null, card.name),
+      h('p', null, `${CARD_SETS[card.set].name} · ${'★'.repeat(card.stars)}${card.gold ? ' · gold card' : ''}`),
+      h('p', null, count > 1 ? `You have ${count}. The spares became stars for the vault.` : 'You have one of these.'),
+      h('div', { class: 'actions' }, h('button', { class: 'btn plain big wide', onclick: () => { click(); closeOverlay(); } }, 'Close')),
+    ], { dismiss: true });
+    audio.play('card');
+  }
+
   function openPending() {
     const p = st().pending;
     if (!p || busy()) return;
@@ -999,7 +1246,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
       fly(COIN, el, coinCard, res.blocked ? 5 : 14);
       onSave();
       refresh();
-      done.append(h('button', { class: 'btn big wide', onclick: () => { click(); closeOverlay(); refresh(); } }, 'Back to the park'));
+      done.append(h('button', { class: 'btn big wide', onclick: () => { click(); closeOverlay(); refresh(); } }, 'Carry on'));
     }
   }
 
@@ -1070,7 +1317,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
           audio.play('bigwin');
           buzz([30, 30, 60]);
         }
-        done.append(h('button', { class: 'btn big wide', onclick: () => { click(); closeOverlay(); refresh(); } }, 'Back to the park'));
+        done.append(h('button', { class: 'btn big wide', onclick: () => { click(); closeOverlay(); refresh(); } }, 'Carry on'));
         onSave();
       } else {
         update();
@@ -1173,13 +1420,12 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
 
   function showLeague(result) {
     if (!result) return;
-    popup(() => modal([
-      h('div', { class: 'kicker' }, 'The Pie League'),
-      h('h2', null, result.rank === 1 ? 'You won the league!' : `You came ${['', '1st', '2nd', '3rd'][result.rank] || result.rank + 'th'}`),
-      h('p', null, `${fmt(result.points)} points yesterday.`),
-      h('div', { class: 'prize', html: describe(result.reward) || 'No prize this time' }),
-      h('div', { class: 'actions' }, h('button', { class: 'btn big wide', onclick: () => { audio.play('claim'); closeModal(); refresh(); } }, 'Collect')),
-    ]));
+    popup(() => celebrate({
+      kicker: 'The Pie League',
+      title: result.rank === 1 ? 'You won the league!' : `You came ${['', '1st', '2nd', '3rd'][result.rank] || result.rank + 'th'}`,
+      sub: `${fmt(result.points)} points yesterday.`,
+      reward: result.reward,
+    }));
   }
 
   function showDaily() {
@@ -1223,7 +1469,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     const code = h('textarea', { id: 'save-code', 'aria-label': 'Save code', placeholder: 'Paste a save code here to load it', spellcheck: 'false' });
     const msg = h('p', { class: 'fineprint' }, 'Your game saves on this device automatically.');
     const stats = [
-      ['Fairs finished', fmt(s.stats.towns)], ['Spins', fmt(s.stats.spins)], ['Coins won', money(s.stats.coinsWon)],
+      ['Parks finished', fmt(s.stats.towns)], ['Spins', fmt(s.stats.spins)], ['Coins won', money(s.stats.coinsWon)],
       ['Pies thrown', fmt(s.stats.attacks)], ['Lucky dips', fmt(s.stats.raids)], ['Jackpots', fmt(s.stats.jackpots)],
       ['Cards collected', fmt(s.stats.cards)], ['Guests served', fmt(s.stats.served)], ['Time played', fmtTime(s.stats.playTime)],
     ];
@@ -1365,9 +1611,8 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     if (!ok) return;
     const reward = R.applyPurchase(st(), product.id);
     if (!reward) return;
-    audio.play('jackpot');
-    fx.rain(50);
-    toast(`Thank you! ${describe(reward) || product.name}`, 'gold');
+    if (lootItems(reward).length) celebrate({ kicker: 'Thank you!', title: product.name, reward });
+    else toast(`Thank you! ${product.name} is yours.`, 'gold');
     onSave();
     refresh();
   }
@@ -1378,7 +1623,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     const reward = R.claimAdTokens(st(), clock());
     if (!reward) return undefined;
     audio.play('token');
-    fly(TOKEN, from || dock, tokenCard, 8);
+    fly(TOKEN, from || spinBtn, tokenTarget(), 8);
     toast(`Thanks for watching: ${describe(reward)}`, 'gold');
     onSave();
     refresh();
@@ -1428,7 +1673,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
         setText(t.btn, owned ? 'Owned' : priceOf(t.p));
         t.btn.disabled = owned || (preview && !STORE_PREVIEW);
       }
-    });
+    }, { page: true, tab: 'shop' });
   }
 
   function outOfTokens() {
@@ -1455,8 +1700,10 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
 
   function showSplash(done) {
     const el = h('div', { class: 'splash', role: 'button', tabindex: '0', 'aria-label': 'Tap to play' },
-      h('div', { class: 'rays' }),
-      h('div', { class: 'splash-inner' }, wordmark(), h('p', null, 'Spin. Build. Pie your rivals.'), h('div', { class: 'tap' }, 'Tap to play'), h('small', null, 'Fraser Studios')));
+      h('div', { class: 'rays' }), h('i'), h('i'),
+      h('div', { class: 'splash-inner' }, wordmark(),
+        h('div', { class: 'splash-reel' }, ['pie', 'coin', 'star', 'sack', 'barrel'].map((sym, i) => h('img', { src: symbolImage(sym, 72), alt: '', style: `animation-delay:${0.45 + i * 0.09}s` }))),
+        h('p', null, 'Spin. Build. Pie your rivals.'), h('div', { class: 'tap' }, 'Tap to play'), h('small', null, 'Fraser Studios')));
     const go = () => {
       if (el.classList.contains('gone')) return;
       audio.unlock();
@@ -1468,6 +1715,46 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     el.addEventListener('click', go);
     el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') go(); });
     root.append(el);
+  }
+
+  // ---- coach marks ---------------------------------------------------------------
+
+  const coachText = h('div', { class: 'coach-text' });
+  const coachIn = h('div', { class: 'coach-in' }, coachText, h('div', { class: 'coach-arrow' }));
+  const coachEl = h('div', { class: 'coach', 'aria-hidden': 'true' }, coachIn);
+
+  function coach(target, text) {
+    const r = target && target.getBoundingClientRect();
+    if (!r || !r.width) {
+      coachEl.classList.remove('on');
+      return;
+    }
+    const below = r.top < 130;
+    toggle(coachEl, 'below', below);
+    coachIn.style.left = Math.max(84, Math.min(window.innerWidth - 84, r.left + r.width / 2)) + 'px';
+    coachIn.style.top = (below ? r.bottom + 5 : r.top - 5) + 'px';
+    setText(coachText, text);
+    coachEl.classList.add('on');
+  }
+
+  // Point a new player at the next thing to press. Stops after the first builds.
+  function updateCoach() {
+    const s = st();
+    if (busy() || slot.spinning || held || s.stats.upgrades >= 2 || s.mission.index > 2 || document.querySelector('.splash')) return coach(null);
+    if (current) {
+      if (current.key === 'build' && s.mission.index >= 1 && s.stats.upgrades === 0) return coach(sheetBody.querySelector('.row .btn:not([disabled])'), 'Build it!');
+      return coach(null);
+    }
+    if (s.mission.index === 0 && currentMission(s).done) return coach(missionReward, 'Collect your prize');
+    if (s.stats.spins === 0 && base === 'machine' && !current) return coach(spinBtn, 'Tap to spin!');
+    if (s.mission.index >= 1 && s.stats.upgrades === 0) {
+      const cheapest = Math.min(...PLOTS.map((p) => E.stageCost(s.town, p.index, 1)));
+      if (s.coins >= cheapest) {
+        if (base === 'machine' && !current) return coach(tabs.park, 'Spend your coins here');
+        if (base === 'park' && !current) return coach(buildFab, 'Time to build');
+      }
+    }
+    return coach(null);
   }
 
   // ---- toasts -----------------------------------------------------------------
@@ -1518,39 +1805,59 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     toggle(missionBtn, 'done', mission.done);
     setHTML(missionReward, mission.done ? `Claim ${describe(mission.reward, true)}` : `${fmt(mission.cur)}/${fmt(mission.target)} · ${describe(mission.reward, true)}`);
 
-    // dock
+    // the machine
     const info = townInfo(s.town);
-    setHTML(townEl, `<b>${info.name}</b><small>${STAR} ${E.stagesBuilt(s)}/${PLOTS.length * STAGES}</small>`);
+    const built = E.stagesBuilt(s);
+    const total = PLOTS.length * STAGES;
+    setHTML(townEl, `<b>${info.name}</b><small>${STAR} ${built}/${total}</small>`);
     const ev = R.eventInfo(s, now);
     setHTML(eventEl, ev.next ? `<b>${ev.theme.name}</b><small>${fmt(ev.points)}/${fmt(ev.next.at)} → ${describe(ev.next.reward, true)}</small>` : `<b>${ev.theme.name}</b><small>All prizes won</small>`);
     eventBar.style.width = ev.next ? Math.min(100, ((ev.points - ev.prev) / (ev.next.at - ev.prev)) * 100) + '%' : '100%';
     R.setBet(s, s.bet);
     const bets = E.availableBets(s);
-    setHTML(betBtn, `<b>×${s.bet}</b>Bet`);
-    betBtn.disabled = bets.length < 2;
+    const bi = bets.indexOf(s.bet);
+    setText(betVal, `×${s.bet}`);
+    betMinus.disabled = bi <= 0;
+    betPlus.disabled = bi >= bets.length - 1;
     const spinning = slot.spinning;
     setText(spinLabel, auto ? 'AUTO' : s.pending && !spinning ? (s.pending.type === 'attack' ? 'PIE!' : 'DIP!') : 'SPIN');
     setHTML(spinCost, auto ? 'tap to stop' : tokens < 1 && !spinning ? (secs > 0 ? fmtClock(secs) : '') : `${s.bet} ${s.bet === 1 ? 'token' : 'tokens'}`);
     toggle(spinBtn, 'empty', tokens < 1 && !spinning && !s.pending);
     toggle(spinBtn, 'ready', tokens >= 1 && !spinning && !auto && !held);
     if (auto && tokens < s.bet && !spinning && !held) setAuto(false);
+    setText(jackpotEl, money(PAY.jackpot * E.unit(s.town) * s.bet));
+    setHTML(gaugeCount, `${fmt(tokens)}<span>/${cap}</span>`);
+    gaugeBar.style.width = Math.min(100, (tokens / cap) * 100) + '%';
+    setText(gaugeTimer, tokens >= cap ? 'Full' : `next ${fmtClock(secs)}`);
+    if (tokens > shown.tokens) { bump(tokensEl); bump(gaugeCount); }
+    shown.tokens = tokens;
 
+    // the park page and the tabs
+    setHTML(townChipText, `<b>${info.name}</b><small>${STAR} ${built} of ${total} stars</small>`);
+    townChipBar.style.width = (built / total) * 100 + '%';
     let canBuild = 0;
     for (const p of PLOTS) {
       const plot = s.plots[p.index];
       if (plot.splat ? s.coins >= E.repairCost(s.town, p.index, plot.stage) : plot.stage < STAGES && s.coins >= E.stageCost(s.town, p.index, plot.stage + 1)) canBuild++;
     }
-    setBadge({ badge: buildBadge }, canBuild + (E.townComplete(s) ? 1 : 0));
+    const toBuild = canBuild + (E.townComplete(s) ? 1 : 0);
+    setBadge(buildFab, toBuild);
+    toggle(buildFab, 'can', toBuild > 0);
+    setBadge(tabs.park, toBuild);
     const packs = Object.values(s.cards.packs).reduce((a, b) => a + b, 0);
     const claimable = CARD_SETS.filter((set) => !s.cards.sets[set.index] && R.setComplete(s, set.index)).length;
-    setBadge(albumBtn, packs + claimable);
+    setBadge(tabs.album, packs + claimable);
+    setBadge(tabs.events, s.league.last && !s.league.last.seen ? 1 : 0);
+    setBadge(tabs.shop, 0);
+    setBadge(tabs.machine, 0);
     setBadge(petBtn, s.pet.treats);
+    setBadge(perch, s.pet.treats);
     setBadge(newsBtn, s.news.filter((n) => !n.seen).length);
-    setBadge(eventsBtn, s.league.last && !s.league.last.seen ? 1 : 0);
+    updateCoach();
 
     // early on, point at the first plot worth building
     let point = -1;
-    if (s.stats.upgrades < 3 && !current) {
+    if (s.stats.upgrades < 3 && !current && base === 'park') {
       const k = PLOTS.findIndex((p) => s.plots[p.index].stage < STAGES && s.coins >= E.stageCost(s.town, p.index, s.plots[p.index].stage + 1));
       point = k;
     }
@@ -1565,22 +1872,23 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     if (current) current.refresh();
   }
 
-  root.append(hud, side, dock, sheet, toasts, fxCanvas, curtainEl);
+  root.append(machine, hud, parkUI, sheet, tabbar, toasts, coachEl, fxCanvas, curtainEl);
 
-  const wide = () => root.classList.contains('wide');
   function measure() {
     const w = window.innerWidth;
     const hgt = window.innerHeight;
-    toggle(root, 'wide', w >= 900 || (w > hgt && hgt < 560));
+    toggle(root, 'landscape', w > hgt && hgt < 560);
+    toggle(root, 'roomy', w >= 900 && hgt >= 560);
     const top = hud.getBoundingClientRect().bottom + 6;
-    if (wide()) renderer.setInsets(top, 0, dock.offsetWidth + 20);
-    else renderer.setInsets(top, dock.offsetHeight, 0);
-    toasts.style.top = top + 4 + 'px';
     root.style.setProperty('--top', top + 'px');
-    root.style.setProperty('--dock-h', dock.offsetHeight + 'px');
+    root.style.setProperty('--row', hud.querySelector('.hud-row').getBoundingClientRect().bottom + 8 + 'px');
+    renderer.setInsets(top, tabbar.offsetHeight + 6, 0);
+    // toasts drop in over the mission chip, clear of the machine's sign
+    toasts.style.top = hud.querySelector('.hud-row').getBoundingClientRect().bottom + 6 + 'px';
     slot.resize();
     fx.resize();
   }
+  syncTabs();
   refresh();
   measure();
 
@@ -1591,6 +1899,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     toast,
     describe,
     spin: doSpin,
+    setBase,
     openBuild,
     openPending,
     closeSheet,
@@ -1602,6 +1911,9 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     showDaily,
     fly,
     get sheetKey() { return current ? current.key : null; },
+    get base() { return base; },
+    // the park only needs drawing when it can be seen
+    get parkVisible() { return (base === 'park' && !(current && current.page)) || performance.now() - baseAt < 480; },
     get busy() { return busy(); },
     get coinCard() { return coinCard; },
   };

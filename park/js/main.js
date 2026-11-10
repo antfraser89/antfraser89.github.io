@@ -97,6 +97,7 @@ function onTap(sx, sy) {
 function handleEvents() {
   for (const ev of world.events) {
     if (ev.type === 'pay') {
+      if (!ui.parkVisible) continue; // nobody is looking at the park
       const p = PLOTS[ev.k];
       const d = S.designAt(world.state, ev.k);
       renderer.popText(p.x, p.y - d.h * 0.62, '+' + money(ev.amount));
@@ -125,7 +126,7 @@ function announce(item) {
   const p = PLOTS[item.plot];
   const d = S.designAt(world.state, item.plot);
   audio.play('splat');
-  renderer.custard(p.x, p.y - d.h * 0.5);
+  if (ui.parkVisible) renderer.custard(p.x, p.y - d.h * 0.5);
   ui.toast(`<b>${who} pied your ${d.name}!</b> Clean it up to reopen.`);
 }
 
@@ -164,7 +165,8 @@ function frame(now) {
     simTime -= step;
   }
   handleEvents();
-  renderer.draw(dt);
+  // the park keeps running behind the machine, but is only painted when on show
+  if (ui.parkVisible) renderer.draw(dt);
   ui.frame(dt);
 
   tickClock += dt;

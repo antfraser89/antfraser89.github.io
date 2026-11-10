@@ -18,6 +18,20 @@ python3 -m http.server 8080   # or: npm run serve
 # then visit http://localhost:8080
 ```
 
+## Finding your way round
+
+A tab bar runs along the bottom of the screen.
+
+| Tab | What is there |
+| --- | --- |
+| Slots | The lucky machine, on a page of its own: three tall reels, the token meter set into the cabinet, the bet, and the spin button. The sign on top shows the jackpot and counts up each win. This is where the game opens. |
+| Park | The living park. Tap an attraction or the Build button to spend coins; Chips and the rivals' news are here too. |
+| Album | Card packs, the six sets and the star vault. Tap a card for a closer look. |
+| Events | The spin event's prizes and the daily league table. |
+| Shop | Tokens, bundles and the free-token advert. |
+
+Coins, padlocks and the current mission stay on screen everywhere. On a wide screen the same pages simply get more room, and a phone on its side puts the reels beside the controls.
+
 ## How the game works
 
 | System | What it does |
@@ -63,7 +77,7 @@ Because the game pairs a slot-style machine with paid spins, expect app stores t
 
 ```
 index.html            page shell
-css/style.css         HUD, the machine, sheets, mini-games, modals
+css/style.css         HUD, tab bar, the machine page, the park page, sheets, mini-games, modals
 js/config.js          all game data and tuning numbers
 js/economy.js         pure maths: units, costs, bets, the gate
 js/rules.js           spins, rivals, building, cards, pet, events, league, daily gift
@@ -76,7 +90,7 @@ js/cardart.js         the 54 card paintings and the card frame
 js/render.js          the park canvas: camera, lighting, particles, labels
 js/slotview.js        the reels
 js/fx.js              the coin shower
-js/ui.js              HUD, the machine dock, sheets, mini-games, shop, modals
+js/ui.js              HUD, tab bar, the machine and park pages, sheets, mini-games, shop, modals
 js/audio.js           sound effects and the organ waltz
 js/main.js            boot, frame loop, saving, time away
 tests/                unit tests for the rules

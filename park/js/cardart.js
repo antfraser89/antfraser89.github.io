@@ -1,7 +1,7 @@
 // Collectable cards: a little painting for each, plus the card frame.
 // Paintings are drawn in a 100 x 100 box centred on the origin.
 import { ATTRACTIONS, CARD_SETS } from './config.js';
-import { P, drawAttraction, drawBandstand, drawGull, drawSymbol, prim } from './art.js';
+import { P, displayFont, drawAttraction, drawBandstand, drawGull, drawSymbol, prim } from './art.js';
 
 const { rect, rr, circ, ell, line, poly, star, label, cloud, TAU } = prim;
 
@@ -803,13 +803,13 @@ export function drawCard(ctx, card, w, h, owned = true) {
   ctx.fillStyle = owned ? '#fffaf0' : '#efe9d8';
   ctx.fill();
   const name = owned ? card.name : '???';
-  let fs = Math.min(nh * 0.34, w * 0.115);
+  let fs = Math.min(nh * 0.38, w * 0.128);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = owned ? '#2b2140' : '#9a927c';
   const words = name.split(' ');
   let lines = [name];
-  ctx.font = `800 ${fs}px "Trebuchet MS", "Segoe UI", system-ui, sans-serif`;
+  ctx.font = displayFont(fs);
   if (ctx.measureText(name).width > pw * 0.92 && words.length > 1) {
     // break into two lines as evenly as the words allow
     let best = 1;
@@ -822,14 +822,14 @@ export function drawCard(ctx, card, w, h, owned = true) {
       }
     }
     lines = [words.slice(0, best).join(' '), words.slice(best).join(' ')];
-    fs = Math.min(fs, nh * 0.27);
-    ctx.font = `800 ${fs}px "Trebuchet MS", "Segoe UI", system-ui, sans-serif`;
+    fs = Math.min(fs, nh * 0.29);
+    ctx.font = displayFont(fs);
     const wide = Math.max(ctx.measureText(lines[0]).width, ctx.measureText(lines[1]).width);
     if (wide > pw * 0.92) fs *= (pw * 0.92) / wide;
   } else if (ctx.measureText(name).width > pw * 0.92) {
     fs *= (pw * 0.92) / ctx.measureText(name).width;
   }
-  ctx.font = `800 ${fs}px "Trebuchet MS", "Segoe UI", system-ui, sans-serif`;
+  ctx.font = displayFont(fs);
   const starY = ny + nh * 0.83;
   const textMid = ny + nh * (lines.length > 1 ? 0.35 : 0.38);
   lines.forEach((ln, i) => ctx.fillText(ln, w / 2, textMid + (i - (lines.length - 1) / 2) * fs * 1.08));
