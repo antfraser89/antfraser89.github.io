@@ -1508,7 +1508,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     setHTML(tokensEl, `${fmt(tokens)}<span>/${cap}</span>`);
     const secs = R.nextTokenIn(s, now);
     setText(tokenTimer, tokens >= cap ? 'Full' : `next ${fmtClock(secs)}`);
-    setText(tillEl, `+${money(E.idleRate(s) * 60)}/min`);
+    setText(tillEl, `${money(E.idleRate(s) * 60)}/min`);
     const shields = s.shields - (held ? held.shield : 0);
     shieldEls.forEach((el, i) => toggle(el, 'on', i < shields));
 

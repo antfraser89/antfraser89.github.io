@@ -194,11 +194,11 @@ svg { display: block; }
   text-align: left;
 }
 button.stat-card.tokens { padding-right: 31px; }
-.stat-card.coins { flex: 1; }
-.stat-card.tokens { flex: 1.12; }
+.stat-card.coins { flex: 1.06; }
+.stat-card.tokens { flex: 1.1; }
 .stat-card b span { font-family: var(--font); font-weight: 900; font-size: 11.5px; opacity: 0.65; margin-left: 1px; }
 .stat-card b { display: block; font-family: var(--display); font-weight: var(--display-w); font-size: 18px; letter-spacing: 0.01em; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.stat-card small { display: block; font-size: 10.5px; color: var(--lilac); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.stat-card small { display: block; font-size: 10px; color: var(--lilac); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 .stat-card > div { min-width: 0; }
 .ico-wrap { flex: none; width: 27px; height: 27px; filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.3)); }
 .ico-wrap .ico { width: 27px; height: 27px; margin: 0; vertical-align: 0; }
