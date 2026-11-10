@@ -1,9 +1,11 @@
 // Canvas renderer for the park: camera, cached ground, depth-sorted sprites,
-// the day/night lighting pass, particles and the on-map labels.
+// water, the evening light, particles and the on-map labels.
 import { GAME_TITLE, PLOTS, STAGES, WORLD as W, townInfo } from './config.js';
 import * as A from './art.js';
+import * as SC from './scenery.js';
 import * as E from './economy.js';
 import { money } from './format.js';
+import { layoutFor } from './layout.js';
 import { designAt, isOpen, mulberry32 } from './sim.js';
 
 const TAU = Math.PI * 2;
@@ -11,13 +13,14 @@ const M = 240; // ground detail is painted this far beyond the world edge
 const GROUND_SCALE = 1.25;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const lerp = (a, b, t) => a + (b - a) * t;
+const inEllipse = (e, x, y, pad = 0) => ((x - e.x) / (e.rx + pad)) ** 2 + ((y - e.y) / (e.ry + pad)) ** 2 < 1;
 
-
-
-// How dark it is, 0 (day) to 1 (night), from the state clock.
+// How far the day has gone, 0 (broad day) to 1 (night), from the state clock.
+// The long ramp before dusk is the golden hour, when the park looks its best.
 export function darkness(clock) {
-  if (clock < 0.5) return 0;
-  if (clock < 0.6) return (clock - 0.5) / 0.1;
+  if (clock < 0.3) return 0;
+  if (clock < 0.54) return ((clock - 0.3) / 0.24) * 0.45;
+  if (clock < 0.64) return 0.45 + ((clock - 0.54) / 0.1) * 0.55;
   if (clock < 0.9) return 1;
   return 1 - (clock - 0.9) / 0.1;
 }
@@ -35,33 +38,67 @@ function makeGlow(r, g, b) {
   return cv;
 }
 
-// Static scenery that has to be depth-sorted against guests and attractions.
-function buildScenery(seed) {
+// Scenery that has to be depth-sorted against guests and attractions.
+function buildScenery(L, theme, seed) {
   const r = mulberry32(seed);
   const items = [];
-  W.rowY.forEach((rowY, k) => {
-    const y = rowY - 104;
-    for (const s of [-1, 1]) items.push({ kind: 'lamp', x: W.aveX + s * (W.aveHalf + 14), y });
-    items.push({ kind: 'bunting', x: W.aveX, y: y + 0.5 });
-    if (k !== 1) items.push({ kind: 'bench', x: W.aveX + (k ? 1 : -1) * (W.aveHalf + 26), y: rowY - 150 });
-    for (const s of [-1, 1]) {
-      items.push({ kind: 'tree', x: W.aveX + s * (458 - r() * 12), y: rowY - 96 - r() * 30, v: Math.floor(r() * 8), s: 0.85 + r() * 0.3 });
-      items.push({ kind: 'tree', x: W.aveX + s * (446 + r() * 14), y: rowY + 60 + r() * 30, v: Math.floor(r() * 8), s: 0.8 + r() * 0.3 });
-    }
-  });
+  const gx = L.gate.x;
+  const crowded = (x, y, gap) => items.some((it) => Math.hypot(it.x - x, it.y - y) < gap);
+  items.push({ kind: 'gate', x: gx, y: W.gateY });
   for (const s of [-1, 1]) {
-    items.push({ kind: 'lamp', x: W.aveX + s * 150, y: W.gateY - 60 });
-    items.push({ kind: 'booth', x: W.aveX + s * 150, y: W.gateY + 2 });
-    items.push({ kind: 'tree', x: W.aveX + s * 440, y: 96 + r() * 30, v: 3, s: 0.95 });
-    items.push({ kind: 'lamp', x: W.aveX + s * 110, y: 196 });
+    items.push({ kind: 'booth', x: gx + s * 150, y: W.gateY + 2 });
+    items.push({ kind: 'lamp', x: gx + s * 78, y: W.gateY - 96 });
   }
-  items.push({ kind: 'gate', x: W.aveX, y: W.gateY });
-  items.push({ kind: 'bandstand', x: W.aveX, y: 150 });
+  items.push({ kind: 'bunting', x: gx, y: W.gateY - 95.5, half: 78 });
+  for (const p of L.props) items.push({ ...p });
+
+  // lamps down the promenades, on alternating sides, with the odd bench
+  for (const id of L.lampPaths) {
+    const path = L.paths[id];
+    const board = path.kind === 'board';
+    let side = id % 2 ? 1 : -1;
+    let run = 100;
+    for (let i = 1; i < path.pts.length; i++) {
+      const [ax, ay] = path.pts[i - 1];
+      const [bx, by] = path.pts[i];
+      const len = Math.hypot(bx - ax, by - ay) || 1;
+      run += len;
+      if (run < 168) continue;
+      const off = board ? path.w / 2 - 8 : path.w / 2 + 13;
+      const x = bx - ((by - ay) / len) * off * side;
+      const y = by + ((bx - ax) / len) * off * side;
+      if (y > W.gateY - 130 || L.onPlot(x, y, 6) || L.wet(x, y) || crowded(x, y, 70)) continue;
+      if (!board && L.onPath(x, y, -5)) continue;
+      run = 0;
+      side = -side;
+      items.push({ kind: 'lamp', x, y });
+      const bxp = x + ((bx - ax) / len) * 34;
+      const byp = y + ((by - ay) / len) * 34;
+      if (!board && r() < 0.45 && !L.onPath(bxp, byp, 2) && !L.onPlot(bxp, byp, 6) && !L.wet(bxp, byp)) items.push({ kind: 'bench', x: bxp, y: byp });
+    }
+  }
+
+  // trees wherever there is open ground for them
+  const want = L.paved ? 20 : 44;
+  let placed = 0;
+  for (let k = 0; k < 700 && placed < want; k++) {
+    const x = 44 + r() * (W.w - 88);
+    const y = 84 + r() * (W.gateY - 110);
+    if (L.noTreesAbove && y < L.noTreesAbove) continue;
+    if (L.wet(x, y) || L.wet(x, y - 30) || L.onPath(x, y, 26) || L.onPath(x, y - 42, 12) || L.onPlot(x, y, 18)) continue;
+    if (L.garden && inEllipse(L.garden, x, y, 40)) continue;
+    if (L.plaza && inEllipse(L.plaza, x, y, 30)) continue;
+    if (L.island && inEllipse(L.island, x, y, 30)) continue;
+    if (Math.abs(x - gx) < 200 && y > W.gateY - 130) continue;
+    if (crowded(x, y, 50)) continue;
+    items.push({ kind: 'tree', x, y, v: Math.floor(r() * 8), s: 0.85 + r() * 0.4 });
+    placed++;
+  }
   return items;
 }
 
-// A small repeating tile of grass (or sand, or snow) that fills the whole view.
-function buildTile(theme, seed) {
+// A small repeating tile of grass (or sand, snow, cobbles) that fills the whole view.
+function buildTile(theme, seed, paved) {
   const size = 320;
   const cv = document.createElement('canvas');
   cv.width = cv.height = Math.round(size * GROUND_SCALE);
@@ -75,9 +112,9 @@ function buildTile(theme, seed) {
     for (const dx of [-size, 0, size]) for (const dy of [-size, 0, size]) fn(dx, dy);
   };
   c.fillStyle = theme.ground2;
-  c.globalAlpha = 0.55;
-  for (let k = 0; k < 7; k++) {
-    const [x, y, rx, ry, rot] = [r() * size, r() * size, 30 + r() * 60, 14 + r() * 24, r() * 3];
+  c.globalAlpha = 0.6;
+  for (let k = 0; k < 9; k++) {
+    const [x, y, rx, ry, rot] = [r() * size, r() * size, 30 + r() * 70, 14 + r() * 26, r() * 3];
     wrapped((dx, dy) => {
       c.beginPath();
       c.ellipse(x + dx, y + dy, rx, ry, rot, 0, TAU);
@@ -85,10 +122,22 @@ function buildTile(theme, seed) {
     });
   }
   c.globalAlpha = 1;
+  if (paved) {
+    // setts laid in rows
+    for (let gy = 0; gy < size; gy += 16) {
+      for (let gx = (gy / 16) % 2 ? -10 : 0; gx < size; gx += 20) {
+        c.fillStyle = r() < 0.5 ? 'rgba(255,255,255,0.05)' : 'rgba(10,15,30,0.06)';
+        c.beginPath();
+        c.roundRect(gx + 1.5, gy + 1.5, 17, 13, 3);
+        c.fill();
+      }
+    }
+    return cv;
+  }
   c.strokeStyle = theme.tuft;
-  c.lineWidth = 1.6;
+  c.lineWidth = 1.5;
   c.lineCap = 'round';
-  for (let k = 0; k < 22; k++) {
+  for (let k = 0; k < 26; k++) {
     const x = 8 + r() * (size - 16);
     const y = 8 + r() * (size - 16);
     c.beginPath();
@@ -113,7 +162,7 @@ const cellHash = (gx, gy) => {
 const inTreeBand = (x, y) => x > -M + 50 && x < W.w + M - 50 && y > -M + 110 && y < W.h + M - 30;
 
 // Everything static inside and just around the fence, on a transparent layer.
-function buildGround(theme, seed) {
+function buildGround(L, theme, seed) {
   const cv = document.createElement('canvas');
   cv.width = Math.round((W.w + 2 * M) * GROUND_SCALE);
   cv.height = Math.round((W.h + 2 * M) * GROUND_SCALE);
@@ -121,111 +170,121 @@ function buildGround(theme, seed) {
   c.scale(GROUND_SCALE, GROUND_SCALE);
   c.translate(M, M);
   const r = mulberry32(seed);
+  const gx = L.gate.x;
+  const snow = theme.weather === 'snow';
+  const stone = L.paved || theme.key === 'sand';
 
-  for (const p of PLOTS) {
+  for (const w of L.water) {
+    SC.paintWater(c, w, theme);
+    if (w.frozen) SC.paintIce(c, w, r);
+  }
+  if (L.island) SC.paintIsland(c, L.island, theme);
+  for (const d of L.decks) SC.paintDeck(c, d, theme, 0);
+  if (L.head) SC.paintPierHead(c, L.head, theme, 0);
+  for (const d of L.decks) SC.paintDeck(c, d, theme, 1);
+  if (L.head) SC.paintPierHead(c, L.head, theme, 1);
+
+  // open squares: just inside the gate, and wherever the map asks for one
+  const square = (e) => {
     c.beginPath();
-    c.roundRect(p.x - 138, p.y - 104, 276, 128, 26);
-    c.fillStyle = theme.plot;
+    c.ellipse(e.x, e.y, e.rx + 5, e.ry + 5, 0, 0, TAU);
+    c.fillStyle = stone ? theme.stoneEdge : theme.pathEdge;
     c.fill();
-    c.strokeStyle = 'rgba(0,0,0,0.06)';
+    c.beginPath();
+    c.ellipse(e.x, e.y, e.rx, e.ry, 0, 0, TAU);
+    c.fillStyle = stone ? theme.stone : theme.path;
+    c.fill();
+    c.beginPath();
+    c.ellipse(e.x, e.y, e.rx * 0.62, e.ry * 0.62, 0, 0, TAU);
+    c.strokeStyle = 'rgba(255,255,255,0.16)';
     c.lineWidth = 3;
     c.stroke();
-  }
-
-  // paths: avenue, spurs to each plot, and a plaza at each end
-  const reach = W.entranceOffset + 22;
-  const paths = (grow, col) => {
-    c.fillStyle = col;
-    c.beginPath();
-    c.roundRect(W.aveX - W.aveHalf - grow, 150, (W.aveHalf + grow) * 2, W.h + M, 20);
-    c.fill();
-    for (const y of W.rowY) {
-      c.beginPath();
-      c.roundRect(W.aveX - reach - grow, y - 8 - grow, (reach + grow) * 2, 58 + grow * 2, 18);
-      c.fill();
-    }
-    c.beginPath();
-    c.ellipse(W.aveX, 168, 150 + grow, 74 + grow, 0, 0, TAU);
-    c.fill();
-    c.beginPath();
-    c.ellipse(W.aveX, W.gateY - 4, 132 + grow, 66 + grow, 0, 0, TAU);
-    c.fill();
   };
-  paths(5, theme.pathEdge);
-  paths(0, theme.path);
-  c.fillStyle = 'rgba(0,0,0,0.06)';
-  for (let k = 0; k < 180; k++) {
-    const y = 160 + r() * (W.h + M - 170);
-    c.fillRect(W.aveX - W.aveHalf + 6 + r() * (W.aveHalf * 2 - 22), y, 6 + r() * 8, 2.5);
+  if (L.garden) {
+    SC.paintGarden(c, L.garden, theme, L.beds, r, snow);
+    if (L.feature && L.feature.kind === 'fountain') SC.paintFountainBasin(c, L.feature.x, L.feature.y - 4, theme);
   }
-  for (const yRow of W.rowY) {
-    for (let k = 0; k < 26; k++) c.fillRect(W.aveX - reach + 8 + r() * (reach * 2 - 26), yRow + r() * 44, 6 + r() * 8, 2.5);
+  for (const p of L.plots) {
+    const decked = L.decks.some((d) => p.x > d.x && p.x < d.x + d.w && p.y > d.y && p.y < d.y + d.h);
+    if (!decked) SC.paintPad(c, p.x, p.y, theme, L.paved ? 'cobble' : 'lawn');
   }
+  square({ x: gx, y: W.gateY - 4, rx: 134, ry: 66 });
+  if (L.plaza) square(L.plaza);
+  const order = (p) => (p.kind === 'spur' ? 0 : p.kind === 'board' ? 2 : 1);
+  for (const path of [...L.paths].sort((a, b) => order(a) - order(b))) {
+    const decked = path.kind === 'board';
+    if (!decked) SC.paintPath(c, path, theme, r);
+  }
+  for (const b of L.bridges) SC.paintBridge(c, b, theme);
 
   // flowers round the plots
-  const blooms = ['#ff6b8b', '#ffd75e', '#ffffff', '#c98cff', '#ff9a4d'];
-  if (theme.weather !== 'snow') {
-    for (const p of PLOTS) {
-      for (let k = 0; k < 16; k++) {
-        const fx = p.x + (r() - 0.5) * 250 + (r() < 0.5 ? -8 : 8);
-        const fy = p.y - 112 + r() * 12 + (k % 2) * 142;
-        if (Math.abs(fx - W.aveX) < reach + 14 && k % 2) continue;
+  if (!snow && !L.paved) {
+    for (const p of L.plots) {
+      for (let k = 0; k < 18; k++) {
+        const fx = p.x + (r() - 0.5) * 262;
+        const fy = p.y - 114 + r() * 10 + (k % 2) * 146;
+        if (L.onPath(fx, fy, 6) || L.wet(fx, fy)) continue;
         c.beginPath();
-        c.arc(fx, fy, 2.6, 0, TAU);
-        c.fillStyle = blooms[Math.floor(r() * blooms.length)];
+        c.arc(fx, fy, 2.4, 0, TAU);
+        c.fillStyle = theme.blooms[Math.floor(r() * theme.blooms.length)];
         c.fill();
       }
     }
   }
 
-  // perimeter fence with a gap at the gate
-  const fx0 = 18;
-  const fx1 = W.w - 18;
-  const fy0 = 36;
-  const fy1 = W.gateY + 8;
-  const post = (x, y) => {
-    c.fillStyle = 'rgba(0,0,0,0.12)';
-    c.fillRect(x - 2, y - 1, 7, 4);
-    c.fillStyle = theme.fence;
-    c.fillRect(x - 2.5, y - 16, 5, 17);
-  };
-  const rail = (xa, ya, xb, yb) => {
-    c.strokeStyle = theme.fence;
-    c.lineWidth = 3;
-    c.beginPath();
-    c.moveTo(xa, ya - 12);
-    c.lineTo(xb, yb - 12);
-    c.moveTo(xa, ya - 6);
-    c.lineTo(xb, yb - 6);
-    c.stroke();
-  };
-  rail(fx0, fy0, fx1, fy0);
-  rail(fx0, fy0, fx0, fy1);
-  rail(fx1, fy0, fx1, fy1);
-  rail(fx0, fy1, W.aveX - 104, fy1);
-  rail(W.aveX + 104, fy1, fx1, fy1);
-  for (let x = fx0; x <= fx1; x += 30.1) {
-    post(x, fy0);
-    if (Math.abs(x - W.aveX) > 104) post(x, fy1);
-  }
-  for (let y = fy0; y <= fy1; y += 30.2) {
-    post(fx0, y);
-    post(fx1, y);
+  // the fence, with a gap at the gate
+  for (const run of L.fence) {
+    for (let i = 0; i < run.length - 1; i++) {
+      const [xa, ya] = run[i];
+      const [xb, yb] = run[i + 1];
+      c.strokeStyle = theme.fence;
+      c.lineWidth = 2.6;
+      c.beginPath();
+      c.moveTo(xa, ya - 12);
+      c.lineTo(xb, yb - 12);
+      c.moveTo(xa, ya - 6);
+      c.lineTo(xb, yb - 6);
+      c.stroke();
+      const n = Math.max(1, Math.round(Math.hypot(xb - xa, yb - ya) / 30));
+      for (let k = 0; k <= n; k++) {
+        const x = xa + ((xb - xa) * k) / n;
+        const y = ya + ((yb - ya) * k) / n;
+        c.fillStyle = 'rgba(15,30,30,0.14)';
+        c.fillRect(x - 1, y - 1, 9, 3.5);
+        c.fillStyle = theme.fence;
+        c.fillRect(x - 2.5, y - 16, 5, 17);
+      }
+    }
   }
 
   // trees just beyond the fence
   const outside = [];
-  for (let k = 0; k < 120; k++) {
+  for (let k = 0; k < 150; k++) {
     const x = -M + r() * (W.w + 2 * M);
     const y = -M + r() * (W.h + 2 * M);
-    const inside = x > fx0 - 34 && x < fx1 + 34 && y > fy0 - 10 && y < fy1 + 50;
-    const road = Math.abs(x - W.aveX) < W.aveHalf + 50 && y > fy1;
-    const water = theme.sea && y < 80;
-    if (inTreeBand(x, y) && !inside && !road && !water) outside.push({ x, y, v: Math.floor(r() * 8), s: 0.9 + r() * 0.5 });
+    const inside = x > -20 && x < W.w + 20 && y > 30 && y < W.gateY + 58;
+    const road = Math.abs(x - gx) < 96 && y > W.gateY;
+    if (inTreeBand(x, y) && !inside && !road && !L.wet(x, y) && !L.wet(x, y - 30)) outside.push({ x, y, v: Math.floor(r() * 8), s: 0.9 + r() * 0.5 });
   }
   outside.sort((p, q) => p.y - q.y);
-  for (const t of outside) A.drawTree(c, t.x, t.y, theme, t.v, t.s);
+  for (const t of outside) SC.drawTree(c, t.x, t.y, theme, t.v, t.s);
   return cv;
+}
+
+// Glints on open water, worked out once per map.
+function buildGlints(L, seed) {
+  const r = mulberry32(seed);
+  const glints = [];
+  for (const w of L.water) {
+    if (w.frozen || !w.sparkle) continue;
+    const [cx, cy, hw, hh] = w.sparkle;
+    for (let k = 0; k < 400 && glints.length < 90; k++) {
+      const x = cx + (r() - 0.5) * 2 * hw;
+      const y = cy + (r() - 0.5) * 2 * hh;
+      if (L.wet(x, y) && L.wet(x - 22, y) && L.wet(x + 22, y) && L.wet(x, y + 10)) glints.push({ x, y, l: 4 + r() * 9, ph: r() * TAU });
+    }
+  }
+  return glints;
 }
 
 export function createRenderer(canvas, world, hooks = {}) {
@@ -242,6 +301,9 @@ export function createRenderer(canvas, world, hooks = {}) {
   let tile = null;
   let scenery = [];
   let fixed = [];
+  let L = layoutFor(world.state.town);
+  let glints = [];
+  let shore = null; // the sea's edge, for the surf
   let selected = -1;
   let pointer = -1;
   let sheetCover = 0;
@@ -267,14 +329,26 @@ export function createRenderer(canvas, world, hooks = {}) {
     const seed = 1000 + town * 77;
     const rebuild = info.theme !== theme;
     theme = info.theme;
+    L = layoutFor(town);
     if (rebuild || !ground) {
-      ground = buildGround(theme, seed);
-      tile = ctx.createPattern(buildTile(theme, seed + 3), 'repeat');
+      ground = buildGround(L, theme, seed);
+      tile = ctx.createPattern(buildTile(theme, seed + 3, L.paved), 'repeat');
       if (tile.setTransform) tile.setTransform(new DOMMatrix().scale(1 / GROUND_SCALE));
+      glints = buildGlints(L, seed + 11);
+      const sea = L.water.find((w) => w.kind === 'sea');
+      shore = sea ? sea.pts.filter((pt) => pt[1] > sea.shoreY - 40) : null;
+      for (const w of L.water) {
+        let [y0, y1] = [Infinity, -Infinity];
+        for (const pt of w.pts) {
+          y0 = Math.min(y0, pt[1]);
+          y1 = Math.max(y1, pt[1]);
+        }
+        w.span = [Math.max(y0, -260), y1];
+      }
     }
-    scenery = buildScenery(seed + 5);
+    scenery = buildScenery(L, theme, seed + 5);
     fixed = scenery.map((s) => ({ y: s.y, s }));
-    for (const p of PLOTS) fixed.push({ y: p.y - 4, k: p.index });
+    for (const p of L.plots) fixed.push({ y: p.y - 4, k: p.index });
     fixed.sort((p, q) => p.y - q.y);
     weather.length = 0;
     if (theme.weather) {
@@ -318,11 +392,17 @@ export function createRenderer(canvas, world, hooks = {}) {
     clampCam();
   }
 
+  // the opening view: the gate and the first attractions, low in the frame
+  function homeY() {
+    return W.gateY - 90 - (usableH() / cam.zoom) * 0.2;
+  }
+
   function resetView() {
     resize();
-    cam.zoom = clamp(Math.min(usableW() / 880, usableH() / 900), cam.minZoom, 0.85);
+    // fit the park's width on a phone; on a wide screen settle for a good slice of it
+    cam.zoom = clamp(Math.max(Math.min(usableW() / 1010, usableH() / 1000), usableW() / 1900), cam.minZoom, 0.85);
     cam.x = W.w / 2;
-    cam.y = W.rowY[0] + 60 - (usableH() / cam.zoom) * 0.2;
+    cam.y = homeY();
     cam.tx = cam.ty = null;
     introT = -1;
     clampCam();
@@ -331,12 +411,12 @@ export function createRenderer(canvas, world, hooks = {}) {
   // Glide so plot k sits in the clear space above any open sheet.
   function focus(k) {
     if (introT >= 0) { introT = -1; cam.zoom = introTo; }
-    const p = PLOTS[k];
+    const p = L.plots[k];
     const d = designAt(world.state, k);
     const clearBottom = vh - Math.max(insets.bottom, sheetCover);
     const wantY = (insets.top + clearBottom) / 2 + 20;
-    const fits = usableW() / 2 / cam.zoom >= Math.abs(p.x - W.aveX) + d.w / 2 + 16;
-    cam.tx = fits ? W.w / 2 : p.x + (W.aveX - p.x) * 0.35;
+    const fits = usableW() / 2 / cam.zoom >= Math.abs(p.x - W.w / 2) + d.w / 2 + 16;
+    cam.tx = fits ? W.w / 2 : p.x + (W.w / 2 - p.x) * 0.35;
     cam.ty = p.y - d.h * 0.42 - (wantY - centreY()) / cam.zoom;
   }
 
@@ -344,7 +424,6 @@ export function createRenderer(canvas, world, hooks = {}) {
   let introT = -1;
   let introFrom = 0;
   let introTo = 0;
-  const homeY = () => W.rowY[0] + 60 - (usableH() / cam.zoom) * 0.2;
   function intro() {
     resetView();
     introTo = cam.zoom;
@@ -460,7 +539,7 @@ export function createRenderer(canvas, world, hooks = {}) {
     const w = toWorld(sx, sy);
     let best = -1;
     let bestD = Infinity;
-    for (const p of PLOTS) {
+    for (const p of L.plots) {
       const built = world.state.plots[p.index].stage > 0;
       const d = designAt(world.state, p.index);
       const top = built ? p.y - d.h - 30 : p.y - 110;
@@ -583,20 +662,48 @@ export function createRenderer(canvas, world, hooks = {}) {
   function drawFixed(item, dark) {
     const s = item.s;
     if (s) {
+      const lit = dark > 0.3;
       switch (s.kind) {
-        case 'tree': A.drawTree(ctx, s.x, s.y, theme, s.v, s.s); break;
-        case 'lamp': A.drawLamp(ctx, s.x, s.y, dark > 0.3); break;
+        case 'tree': SC.drawTree(ctx, s.x, s.y, theme, s.v, s.s); break;
+        case 'lamp': SC.drawLamp(ctx, s.x, s.y, lit); break;
         case 'bench': A.drawBench(ctx, s.x, s.y); break;
-        case 'bunting': A.drawBunting(ctx, s.x - W.aveHalf - 14, s.y - 72, s.x + W.aveHalf + 14, s.y - 72, 7, time); break;
+        case 'bunting': A.drawBunting(ctx, s.x - s.half, s.y - 72, s.x + s.half, s.y - 72, 9, time); break;
         case 'gate': A.drawGate(ctx, s.x, s.y, GAME_TITLE, time); break;
         case 'booth': A.drawTicketBooth(ctx, s.x, s.y); break;
         case 'bandstand': A.drawBandstand(ctx, s.x, s.y, time); break;
+        case 'pavilion':
+          ctx.save();
+          ctx.translate(s.x, s.y);
+          ctx.scale(1.25, 1.25);
+          A.drawBandstand(ctx, 0, 0, time);
+          ctx.restore();
+          break;
+        case 'fountain': SC.drawFountain(ctx, s.x, s.y, time); break;
+        case 'bonfire': SC.drawBonfire(ctx, s.x, s.y, time); break;
+        case 'fir': SC.drawFir(ctx, s.x, s.y, time); break;
+        case 'topiary': SC.drawTopiary(ctx, s.x, s.y, theme); break;
+        case 'boat': SC.drawBoat(ctx, s.x, s.y, time, s.hue, s.drift); break;
+        case 'ducks': SC.drawDucks(ctx, s.x, s.y, time); break;
+        case 'skaters': SC.drawSkaters(ctx, s.x, s.y, time); break;
+        case 'buoy': SC.drawBuoy(ctx, s.x, s.y, time); break;
+        case 'parasol': SC.drawParasol(ctx, s.x, s.y, s.hue); break;
+        case 'bales': SC.drawBales(ctx, s.x, s.y); break;
+        case 'lanterns': SC.drawLanterns(ctx, s.x, s.y, s.half, time, lit); break;
+        case 'barge': {
+          // barges work up and down the canal for ever
+          const canal = L.water[0];
+          const span = W.w + 2 * M;
+          const u = (((s.t0 + (time * s.speed) / span) % 1) + 1) % 1;
+          const x = -M + u * span;
+          SC.drawBarge(ctx, x, canal.mid(x), time, s.hue, Math.sign(s.speed));
+          break;
+        }
         default: break;
       }
       return;
     }
     const k = item.k;
-    const p = PLOTS[k];
+    const p = L.plots[k];
     const plot = world.state.plots[k];
     if (plot.stage === 0) {
       A.drawForSale(ctx, p.x, p.y - 28, world.state.coins >= E.stageCost(world.state.town, k, 1) ? 'afford' : 'open');
@@ -631,34 +738,44 @@ export function createRenderer(canvas, world, hooks = {}) {
     ctx.restore();
   }
 
-  function pill(x, y, text, bg, fg, size, progress = -1) {
-    ctx.font = A.displayFont(size);
-    const w = ctx.measureText(text).width + size * 1.3;
-    const h = size * 1.75;
+  // A small label on the map: dark glass, hairline edge, one accent colour.
+  function pill(x, y, text, tone, size, progress = -1) {
+    ctx.font = A.uiFont(size, 700);
+    const w = ctx.measureText(text).width + size * 1.5;
+    const h = size * 1.9;
     ctx.beginPath();
     ctx.roundRect(x - w / 2, y - h / 2, w, h, h / 2);
-    ctx.fillStyle = bg;
+    ctx.fillStyle = tone.bg;
     ctx.fill();
+    ctx.strokeStyle = tone.edge;
+    ctx.lineWidth = 1;
+    ctx.stroke();
     if (progress >= 0) {
       ctx.save();
       ctx.clip();
-      ctx.fillStyle = 'rgba(255,197,61,0.9)';
-      ctx.fillRect(x - w / 2, y + h / 2 - 3, w * progress, 3);
+      ctx.fillStyle = 'rgba(224,190,120,0.95)';
+      ctx.fillRect(x - w / 2, y + h / 2 - 2.5, w * progress, 2.5);
       ctx.restore();
     }
-    ctx.fillStyle = fg;
+    ctx.fillStyle = tone.fg;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(text, x, y + 0.5);
     return w;
   }
+  const TONE = {
+    plain: { bg: 'rgba(14,22,34,0.82)', edge: 'rgba(224,190,120,0.45)', fg: '#f0dcae' },
+    go: { bg: 'rgba(24,104,78,0.94)', edge: 'rgba(190,240,215,0.6)', fg: '#ffffff' },
+    done: { bg: 'rgba(196,158,86,0.96)', edge: 'rgba(255,244,214,0.8)', fg: '#1d1608' },
+    alert: { bg: 'rgba(168,44,58,0.95)', edge: 'rgba(255,214,214,0.6)', fg: '#ffffff' },
+  };
 
   function drawOverlays() {
     const s = world.state;
     const z = cam.zoom;
-    const size = clamp(8 + z * 7, 10, 14);
+    const size = clamp(8 + z * 7, 10, 13.5);
     const right = usableW();
-    for (const p of PLOTS) {
+    for (const p of L.plots) {
       const k = p.index;
       const plot = s.plots[k];
       const sx = toScreenX(p.x);
@@ -666,7 +783,7 @@ export function createRenderer(canvas, world, hooks = {}) {
       if (sx < -160 || sx > vw + 160 || sy < -80 || sy > vh + 320) continue;
       if (plot.stage === 0) {
         const cost = E.stageCost(s.town, k, 1);
-        pill(sx, toScreenY(p.y - 6) + size, money(cost), s.coins >= cost ? '#2f9e44' : 'rgba(27,31,74,0.85)', '#fff', size + 1);
+        pill(sx, toScreenY(p.y - 6) + size, money(cost), s.coins >= cost ? TONE.go : TONE.plain, size + 1);
         continue;
       }
       const d = designAt(s, k);
@@ -675,30 +792,29 @@ export function createRenderer(canvas, world, hooks = {}) {
       const px = clamp(toScreenX(p.x + p.side * (d.w / 2 - 44)), Math.min(edge, sx), Math.max(right - edge, sx));
       const py = toScreenY(p.y + 18) + size;
       if (plot.splat) {
-        pill(px, py, 'Clean up ' + money(E.repairCost(s.town, k, plot.stage)), '#e5484d', '#fff', size);
+        pill(px, py, 'Clean up ' + money(E.repairCost(s.town, k, plot.stage)), TONE.alert, size);
         continue;
       }
       const done = plot.stage >= STAGES;
       const can = !done && s.coins >= E.stageCost(s.town, k, plot.stage + 1);
-      pill(px, py, `${can ? '▲ ' : ''}★ ${plot.stage}/${STAGES}`, can ? '#2f9e44' : done ? '#b8860b' : 'rgba(27,31,74,0.82)', can || done ? '#fff' : '#ffd75e', size,
-        rt.phase === 'run' ? rt.t / rt.dur : -1);
+      pill(px, py, `${can ? '▲ ' : ''}★ ${plot.stage}/${STAGES}`, can ? TONE.go : done ? TONE.done : TONE.plain, size, rt.phase === 'run' ? rt.t / rt.dur : -1);
     }
     if (pointer >= 0) {
-      const p = PLOTS[pointer];
+      const p = L.plots[pointer];
       const built = s.plots[pointer].stage > 0;
       const d = designAt(s, pointer);
       const top = toScreenY(built ? p.y - d.h - 6 : p.y - 96) - 14;
       const by = top - Math.abs(Math.sin(time * 3.2)) * 10;
       const sx = toScreenX(p.x);
       ctx.beginPath();
-      ctx.moveTo(sx - 13, by - 20);
-      ctx.lineTo(sx + 13, by - 20);
+      ctx.moveTo(sx - 12, by - 19);
+      ctx.lineTo(sx + 12, by - 19);
       ctx.lineTo(sx, by);
       ctx.closePath();
-      ctx.fillStyle = '#ffc53d';
+      ctx.fillStyle = '#e0be78';
       ctx.fill();
-      ctx.strokeStyle = '#1b1f4a';
-      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#0e1622';
+      ctx.lineWidth = 2.5;
       ctx.lineJoin = 'round';
       ctx.stroke();
     }
@@ -729,6 +845,71 @@ export function createRenderer(canvas, world, hooks = {}) {
     }
   }
 
+  // Water beyond the cached layer, so a lake or the sea runs on to the horizon.
+  function drawFarWater(view) {
+    for (const w of L.water) {
+      const [deep, shallow] = theme.water;
+      if (w.kind === 'canal') {
+        ctx.fillStyle = deep;
+        for (const [xa, xb] of [[view.x0, -M + 4], [W.w + M - 4, view.x1]]) {
+          if (xb <= xa) continue;
+          ctx.beginPath();
+          ctx.moveTo(xa, w.mid(xa) - w.half);
+          ctx.lineTo(xb, w.mid(xb) - w.half);
+          ctx.lineTo(xb, w.mid(xb) + w.half);
+          ctx.lineTo(xa, w.mid(xa) + w.half);
+          ctx.fill();
+        }
+        continue;
+      }
+      const edge = w.kind === 'sea' ? w.shoreY : 250;
+      if (view.y0 > edge) continue;
+      const grad = ctx.createLinearGradient(0, w.span[0], 0, w.span[1]);
+      grad.addColorStop(0, deep);
+      grad.addColorStop(w.kind === 'sea' ? 0.72 : 1, shallow);
+      if (w.kind === 'sea') grad.addColorStop(1, theme.foam);
+      ctx.fillStyle = grad;
+      ctx.fillRect(view.x0, view.y0, view.x1 - view.x0, edge - view.y0);
+    }
+  }
+
+  // Light on the water: glints that come and go, and surf along a beach.
+  function drawWaterLife(view, dark) {
+    if (glints.length) {
+      ctx.lineCap = 'round';
+      ctx.lineWidth = 1.6;
+      ctx.strokeStyle = dark > 0.6 ? 'rgba(255,226,170,0.9)' : 'rgba(255,255,255,0.9)';
+      for (const g of glints) {
+        if (g.y < view.y0 || g.y > view.y1) continue;
+        const a = 0.5 + 0.5 * Math.sin(time * 1.4 + g.ph);
+        if (a < 0.15) continue;
+        const x = g.x + Math.sin(time * 0.5 + g.ph) * 8;
+        ctx.globalAlpha = a * 0.5;
+        ctx.beginPath();
+        ctx.moveTo(x - g.l, g.y);
+        ctx.lineTo(x + g.l, g.y);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      ctx.lineCap = 'butt';
+    }
+    if (shore) {
+      for (let k = 0; k < 2; k++) {
+        const wash = Math.sin(time * 0.7 + k * 1.8);
+        ctx.beginPath();
+        for (let i = 0; i < shore.length; i++) {
+          const [x, y] = shore[i];
+          const yy = y - 6 - k * 16 + wash * (5 - k * 2) + Math.sin(x * 0.05 + time * 1.1) * 2;
+          if (i) ctx.lineTo(x, yy);
+          else ctx.moveTo(x, yy);
+        }
+        ctx.strokeStyle = `rgba(255,255,255,${k ? 0.32 : 0.75})`;
+        ctx.lineWidth = k ? 2 : 4;
+        ctx.stroke();
+      }
+    }
+  }
+
   const sorted = [];
 
   function draw(dt) {
@@ -755,41 +936,44 @@ export function createRenderer(canvas, world, hooks = {}) {
     const view = { x0: -ox / z - 180, x1: (vw - ox) / z + 180, y0: -oy / z - 40, y1: (vh - oy) / z + 300 };
     ctx.fillStyle = tile;
     ctx.fillRect(view.x0, view.y0, view.x1 - view.x0, view.y1 - view.y0);
-    if (theme.sea && view.y0 < 30) {
-      const grad = ctx.createLinearGradient(0, -400, 0, 20);
-      grad.addColorStop(0, '#2f8fd0');
-      grad.addColorStop(1, '#6fd0e8');
-      ctx.fillStyle = grad;
-      ctx.fillRect(view.x0, view.y0, view.x1 - view.x0, 12 - view.y0);
-      ctx.fillStyle = 'rgba(255,255,255,0.85)';
-      for (let x = Math.floor(view.x0 / 44) * 44; x < view.x1; x += 44) {
-        ctx.beginPath();
-        ctx.ellipse(x + 22 + Math.sin(time * 0.8 + x) * 5, 12, 26, 7, 0, 0, TAU);
-        ctx.fill();
-      }
-    }
-    // distant trees, only where the view reaches past the cached layer
-    if (view.x0 < -M + 50 || view.x1 > W.w + M - 50 || view.y0 < -M + 110) {
+    const beyond = view.x0 < -M + 50 || view.x1 > W.w + M - 50 || view.y0 < -M + 110;
+    if (beyond) {
+      drawFarWater(view);
+      // distant trees, only where the view reaches past the cached layer
       for (let gy = Math.floor(view.y0 / FAR_CELL); gy * FAR_CELL < view.y1; gy++) {
         for (let gx = Math.floor(view.x0 / FAR_CELL); gx * FAR_CELL < view.x1; gx++) {
           const hsh = cellHash(gx, gy);
           if (hsh > 0.4) continue;
           const x = (gx + ((hsh * 13.7) % 1)) * FAR_CELL;
           const y = (gy + ((hsh * 7.3) % 1)) * FAR_CELL;
-          if (inTreeBand(x, y) || (theme.sea && y < 80)) continue;
-          A.drawTree(ctx, x, y, theme, Math.floor(hsh * 97) % 8, 0.9 + ((hsh * 31) % 1) * 0.5);
+          if (inTreeBand(x, y) || L.wet(x, y) || L.wet(x, y - 30)) continue;
+          SC.drawTree(ctx, x, y, theme, Math.floor(hsh * 97) % 8, 0.9 + ((hsh * 31) % 1) * 0.5);
         }
       }
     }
     ctx.drawImage(ground, -M, -M, W.w + 2 * M, W.h + 2 * M);
+    drawWaterLife(view, dark);
+
+    // long evening shadows, thrown to the right of everything that stands up
+    const lowSun = clamp(dark / 0.45, 0, 1);
+    const shade = 0.17 * (1 - clamp((dark - 0.5) / 0.4, 0, 1) * 0.7);
+    ctx.fillStyle = `rgba(14,26,40,${shade})`;
+    for (const p of L.plots) {
+      if (s.plots[p.index].stage === 0) continue;
+      const d = designAt(s, p.index);
+      const reach = d.h * (0.34 + lowSun * 0.4);
+      ctx.beginPath();
+      ctx.ellipse(p.x + reach * 0.5, p.y + 4 + reach * 0.07, d.w * 0.5 + reach * 0.5, 15 + reach * 0.06, 0.05, 0, TAU);
+      ctx.fill();
+    }
 
     if (selected >= 0) {
-      const p = PLOTS[selected];
+      const p = L.plots[selected];
       const d = designAt(s, selected);
       ctx.beginPath();
       ctx.ellipse(p.x, p.y - 4, d.w / 2 + 14, 30, 0, 0, TAU);
-      ctx.strokeStyle = `rgba(255,255,255,${0.55 + Math.sin(time * 4) * 0.25})`;
-      ctx.lineWidth = 5;
+      ctx.strokeStyle = `rgba(255,236,190,${0.6 + Math.sin(time * 4) * 0.25})`;
+      ctx.lineWidth = 4;
       ctx.setLineDash([14, 10]);
       ctx.lineDashOffset = -time * 30;
       ctx.stroke();
@@ -853,20 +1037,29 @@ export function createRenderer(canvas, world, hooks = {}) {
         const cx = ((phase * span + time * pace) % span) - M - 400;
         const cy = -80 + row * (W.h + 160) + Math.sin(time * 0.05 + phase * 9) * 40;
         if (cx + width < view.x0 || cx - width > view.x1) continue;
-        ctx.globalAlpha = 0.2 * (1 - dark / 0.6);
+        ctx.globalAlpha = 0.16 * (1 - dark / 0.6);
         ctx.drawImage(cloud, cx - width, cy - width * 0.42, width * 2, width * 0.84);
       }
       ctx.globalAlpha = 1;
     }
 
-    // night: darken everything, then add the lights back
+    // The light. A warm wash from the sun's side at every hour, deepening to
+    // gold and then to blue dusk, with the lamps coming on as it goes.
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const sun = ctx.createLinearGradient(0, 0, vw, vh);
+    sun.addColorStop(0, `rgba(255,232,188,${0.3 + lowSun * 0.2})`);
+    sun.addColorStop(0.55, 'rgba(255,240,220,0)');
+    sun.addColorStop(1, `rgba(34,52,96,${0.22 + lowSun * 0.14})`);
+    ctx.globalCompositeOperation = 'soft-light';
+    ctx.fillStyle = sun;
+    ctx.fillRect(0, 0, vw, vh);
+    ctx.globalCompositeOperation = 'source-over';
     if (dark > 0.01) {
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       const k = clamp(dark / 0.45, 0, 1);
       const n = clamp((dark - 0.45) / 0.55, 0, 1);
-      const cr = Math.round(lerp(lerp(255, 255, k), 84, n));
-      const cg = Math.round(lerp(lerp(255, 196, k), 92, n));
-      const cb = Math.round(lerp(lerp(255, 160, k), 162, n));
+      const cr = Math.round(lerp(lerp(255, 255, k), 98, n));
+      const cg = Math.round(lerp(lerp(255, 216, k), 110, n));
+      const cb = Math.round(lerp(lerp(255, 182, k), 172, n));
       ctx.globalCompositeOperation = 'multiply';
       ctx.fillStyle = `rgb(${cr},${cg},${cb})`;
       ctx.fillRect(0, 0, vw, vh);
@@ -879,22 +1072,37 @@ export function createRenderer(canvas, world, hooks = {}) {
       };
       const lit = clamp((dark - 0.25) / 0.5, 0, 1);
       for (const sc of scenery) {
-        if (sc.kind === 'lamp') {
-          glow(sc.x, sc.y - 66, 70, 0, 0.75 * lit);
-          glow(sc.x, sc.y, 96, 0, 0.38 * lit, 0.42);
-        } else if (sc.kind === 'gate') {
-          glow(sc.x, sc.y - 124, 150, 0, 0.5 * lit, 0.6);
-        } else if (sc.kind === 'bandstand') {
-          glow(sc.x, sc.y - 50, 120, 0, 0.55 * lit);
+        switch (sc.kind) {
+          case 'lamp':
+            glow(sc.x, sc.y - 56, 66, 0, 0.9 * lit);
+            glow(sc.x, sc.y + 2, 120, 0, 0.5 * lit, 0.42);
+            break;
+          case 'gate': glow(sc.x, sc.y - 124, 160, 0, 0.5 * lit, 0.6); break;
+          case 'bandstand': glow(sc.x, sc.y - 50, 130, 0, 0.6 * lit); break;
+          case 'pavilion': glow(sc.x, sc.y - 60, 170, 0, 0.6 * lit); break;
+          case 'bonfire': {
+            const flick = 0.85 + Math.sin(time * 9) * 0.08 + Math.sin(time * 14.3) * 0.06;
+            glow(sc.x, sc.y - 26, 190, 0, 0.75 * flick * Math.max(lit, 0.35));
+            glow(sc.x, sc.y + 4, 240, 0, 0.3 * flick * Math.max(lit, 0.35), 0.4);
+            break;
+          }
+          case 'fir': glow(sc.x, sc.y - 80, 130, 2, 0.4 * lit); break;
+          case 'fountain': glow(sc.x, sc.y - 40, 90, 2, 0.35 * lit); break;
+          case 'lanterns': glow(sc.x, sc.y - 10, 86, 0, 0.55 * lit, 0.9); break;
+          case 'boat': glow(sc.x + Math.sin(time * 0.13 + sc.hue * 2) * sc.drift, sc.y - 14, 40, 0, 0.4 * lit); break;
+          default: break;
         }
       }
-      for (const p of PLOTS) {
+      for (const p of L.plots) {
         if (!isOpen(s, p.index)) continue;
         const d = designAt(s, p.index);
         const stage = s.plots[p.index].stage;
         const flick = 0.9 + Math.sin(time * 5 + p.index) * 0.06;
-        const strength = (0.36 + 0.05 * stage) * lit * flick;
+        const strength = (0.5 + 0.06 * stage) * lit * flick;
         for (const [lx, ly, lr, tint] of A.LIGHTS[d.index]) glow(p.x + lx, p.y + ly, lr, tint, strength);
+        // a pool of light spilling on to the ground in front
+        glow(p.x, p.y - d.h * 0.4, Math.max(d.w, d.h) * 0.75, 0, 0.3 * lit);
+        glow(p.x, p.y + 14, d.w * 0.9, 0, 0.34 * lit, 0.3);
         if (stage >= 3) glow(p.x, p.y - 140, d.w * 0.7, 1, 0.3 * lit, 0.35);
       }
       ctx.globalAlpha = 1;
@@ -915,9 +1123,9 @@ export function createRenderer(canvas, world, hooks = {}) {
     // screen space from here on
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     // a soft vignette pulls the eye to the middle of the park
-    const vg = ctx.createRadialGradient(usableW() / 2, vh * 0.46, Math.min(vw, vh) * 0.38, usableW() / 2, vh * 0.46, Math.max(vw, vh) * 0.78);
-    vg.addColorStop(0, 'rgba(20,22,60,0)');
-    vg.addColorStop(1, 'rgba(20,22,60,0.26)');
+    const vg = ctx.createRadialGradient(usableW() / 2, vh * 0.46, Math.min(vw, vh) * 0.36, usableW() / 2, vh * 0.46, Math.max(vw, vh) * 0.78);
+    vg.addColorStop(0, 'rgba(10,18,30,0)');
+    vg.addColorStop(1, 'rgba(10,18,30,0.34)');
     ctx.fillStyle = vg;
     ctx.fillRect(0, 0, vw, vh);
     drawOverlays();
@@ -926,12 +1134,12 @@ export function createRenderer(canvas, world, hooks = {}) {
       const x = toScreenX(p.x);
       const y = toScreenY(p.y) - u * 46;
       ctx.globalAlpha = clamp((1 - u) * 2.2, 0, 1);
-      ctx.font = A.displayFont(Math.round(p.size * clamp(0.6 + cam.zoom * 0.8, 0.75, 1.2) * 1.1));
+      ctx.font = A.uiFont(Math.round(p.size * clamp(0.6 + cam.zoom * 0.8, 0.75, 1.2) * 1.05), 800);
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.lineWidth = 4;
+      ctx.lineWidth = 3.5;
       ctx.lineJoin = 'round';
-      ctx.strokeStyle = 'rgba(27,31,74,0.9)';
+      ctx.strokeStyle = 'rgba(10,18,30,0.9)';
       ctx.strokeText(p.text, x, y);
       ctx.fillStyle = p.color;
       ctx.fillText(p.text, x, y);

@@ -6,7 +6,7 @@ It follows the "spin and build" formula of mobile games such as Carnival Tycoon,
 
 Play it at `https://antfraser89.github.io/park/` once this folder is on the default branch.
 
-No build step and no dependencies: the art is drawn with canvas paths and the audio is synthesised with Web Audio. The only thing fetched from elsewhere is the typeface (Lilita One and Nunito, from Google Fonts); without it the game falls back to system fonts. The folder is self-contained, so it can be moved to its own repository as-is.
+No build step and no dependencies: the art is drawn with canvas paths and the audio is synthesised with Web Audio. The only thing fetched from elsewhere is the type (Playfair Display and Jost, from Google Fonts); without it the game falls back to system fonts. The folder is self-contained, so it can be moved to its own repository as-is.
 
 ## Run it locally
 
@@ -25,12 +25,30 @@ A tab bar runs along the bottom of the screen.
 | Tab | What is there |
 | --- | --- |
 | Slots | The lucky machine, on a page of its own: three tall reels, the token meter set into the cabinet, the bet, and the spin button. The sign on top shows the jackpot and counts up each win. This is where the game opens. |
-| Park | The living park. Tap an attraction or the Build button to spend coins; Chips and the rivals' news are here too. |
+| Park | The living park, on a map that changes with the town. Tap an attraction or the Build button to spend coins; Chips and the rivals' news are here too. |
 | Album | Card packs, the six sets and the star vault. Tap a card for a closer look. |
 | Events | The spin event's prizes and the daily league table. |
 | Shop | Tokens, bundles and the free-token advert. |
 
 Coins, padlocks and the current mission stay on screen everywhere. On a wide screen the same pages simply get more room, and a phone on its side puts the reels beside the controls.
+
+## The parks
+
+Each kind of town has its own map, and guests really walk it: they follow the paths from the gate, keep to the right, queue along the promenade and step off rides into an exit lane.
+
+| Town | The map |
+| --- | --- |
+| Village green | A promenade looping round a formal garden with a fountain, and a lake across the top with a bandstand on an island. |
+| Seaside | Two attractions on the sand and four out on the arms of a pier, with a pavilion at the pier head, surf on the beach and boats offshore. |
+| Common | The same loop with a bonfire at its heart, an orchard and a bandstand lawn in place of the lake. |
+| Winter | A frozen lake with skaters, and a lit fir where the fountain would be. |
+| Canal town | Cobbled quays either side of a canal, two bridges, strings of paper lanterns and barges working up and down. |
+
+The day runs from soft daylight through a long golden hour to a lamp-lit night. Shadows lengthen as the sun drops and every lamp, ride and lantern throws its own light after dark.
+
+## The look
+
+Ink, brass and ivory: dark glass panels with fine brass edges, a serif display face, small-capital labels and one red button. The slot machine is a green lacquer cabinet with a brass inlay, and the eight reel symbols share one style (lit from the upper left, fine dark outline). The colours, type and radii all come from the variables at the top of `css/style.css`.
 
 ## How the game works
 
@@ -81,13 +99,15 @@ css/style.css         HUD, tab bar, the machine page, the park page, sheets, min
 js/config.js          all game data and tuning numbers
 js/economy.js         pure maths: units, costs, bets, the gate
 js/rules.js           spins, rivals, building, cards, pet, events, league, daily gift
+js/layout.js          the map for each kind of town: paths, plots, water, and the guests' route network
 js/sim.js             the living park: guests, queues, rides, balloons
 js/goals.js           missions
 js/state.js           save state, validation, export codes
 js/format.js          number and time formatting
-js/art.js             attractions, scenery, slot symbols, decorations
+js/art.js             attractions, slot symbols, decorations
+js/scenery.js         landscape: water, bridges, piers, gardens, trees, boats, lamps
 js/cardart.js         the 54 card paintings and the card frame
-js/render.js          the park canvas: camera, lighting, particles, labels
+js/render.js          the park canvas: camera, ground, water, evening light, particles, labels
 js/slotview.js        the reels
 js/fx.js              the coin shower
 js/ui.js              HUD, tab bar, the machine and park pages, sheets, mini-games, shop, modals
@@ -97,7 +117,7 @@ tests/                unit tests for the rules
 tools/balance.mjs     a bot that plays the real rules to check pacing
 ```
 
-Everything except `render.js`, `slotview.js`, `fx.js`, `ui.js`, `cardart.js`, `audio.js` and `main.js` runs without a browser, which is what lets the tests and the balance bot use the real rules.
+Everything except `render.js`, `scenery.js`, `slotview.js`, `fx.js`, `ui.js`, `cardart.js`, `audio.js` and `main.js` runs without a browser, which is what lets the tests and the balance bot use the real rules.
 
 ## How the numbers hang together
 

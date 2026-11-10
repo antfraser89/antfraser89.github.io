@@ -2,13 +2,14 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
-  CARDS, CARD_SETS, DAILY, EVENT_MILESTONES, OPENING_SPINS, OUTCOMES, PACKS, PLOTS, RIVALS, STAGES, TUNING, VAULT, townInfo,
+  CARDS, CARD_SETS, DAILY, EVENT_MILESTONES, OPENING_SPINS, OUTCOMES, PACKS, PLOTS, RIVALS, STAGES, THEMES, TUNING, VAULT, WORLD, townInfo,
 } from '../js/config.js';
 import * as E from '../js/economy.js';
 import { fmt, fmtClock, fmtTime, money } from '../js/format.js';
 import { MISSIONS, currentMission } from '../js/goals.js';
 import * as R from '../js/rules.js';
 import * as S from '../js/sim.js';
+import { layoutFor, nearestNode, nodeRoute } from '../js/layout.js';
 import { exportCode, hydrate, importCode, newState, parseSave, serialize } from '../js/state.js';
 
 const T0 = 1.8e12; // a fixed "now" in milliseconds
@@ -478,7 +479,7 @@ test('guests visit open attractions, pay into the till, and avoid closed ones', 
   assert.ok(peak > 15 && peak <= TUNING.maxGuests, `peak ${peak}`);
   assert.ok(state.coins > 0);
   assert.ok(state.plots.every((p) => p.served > 0));
-  for (const g of world.guests) assert.ok(g.x > 60 && g.x < 940 && Number.isFinite(g.y));
+  for (const g of world.guests) assert.ok(g.x > 40 && g.x < 1040 && Number.isFinite(g.y)); // inside the fence
   assert.ok(E.idleRate(state) > 0);
 
   state.plots[2].splat = true;
@@ -597,4 +598,33 @@ test('a completed purchase hands over its contents; one-time items only once', a
   assert.equal(R.adTokensLeft(state, noon), 0);
   assert.equal(R.claimAdTokens(state, noon + HOUR), null);
   assert.equal(R.adTokensLeft(state, noon + 24 * HOUR), ADS.perDay);
+});
+
+test('every kind of town has a map the guests can walk', () => {
+  const seen = new Set();
+  for (let town = 0; town < THEMES.length; town++) {
+    const L = layoutFor(town);
+    seen.add(L.key);
+    assert.equal(L.plots.length, PLOTS.length);
+    assert.equal(layoutFor(town + THEMES.length), L, 'towns of the same kind share a map');
+    // the walkways are one connected network
+    for (let k = 0; k < L.nodes.length; k++) assert.equal(nodeRoute(L, L.gateNode, k).at(-1), k, `${L.key}: node ${k} is cut off`);
+    const gate = L.nodes[L.gateNode];
+    assert.ok(Math.hypot(gate.x - L.gate.x, gate.y - L.gate.y) < 90);
+    for (const p of L.plots) {
+      assert.ok(p.x > 100 && p.x < WORLD.w - 100 && p.y > 300 && p.y < WORLD.gateY, `${L.key}: plot ${p.index} is off the map`);
+      // nobody queues in the water, and the queue is within reach of a path
+      for (let n = 0; n < TUNING.queueLimit; n++) {
+        const slot = S.queueSlot(L, p.index, n);
+        assert.ok(!L.wet(slot.x, slot.y), `${L.key}: plot ${p.index} queues in the water`);
+        const node = L.nodes[nearestNode(L, slot.x, slot.y)];
+        assert.ok(Math.hypot(node.x - slot.x, node.y - slot.y) < 70, `${L.key}: plot ${p.index} queue is off the paths`);
+      }
+      const out = S.exitPoint(L, p.index, 3);
+      assert.ok(!L.wet(out.x, out.y));
+    }
+    // plots do not sit on top of one another
+    for (const a of L.plots) for (const b of L.plots) if (a.index < b.index) assert.ok(Math.abs(a.x - b.x) > 250 || Math.abs(a.y - b.y) > 150, `${L.key}: plots ${a.index} and ${b.index} overlap`);
+  }
+  assert.ok(seen.size >= 5);
 });

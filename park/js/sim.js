@@ -3,6 +3,7 @@
 // No DOM in here, so the same code runs headless in tests.
 import { ATTRACTIONS, GUEST_LOOKS, PLOTS, TUNING as T, WORLD as W, townInfo } from './config.js';
 import * as E from './economy.js';
+import { along, layoutFor, nearestNode, nodeRoute } from './layout.js';
 import { advanceMission, currentMission } from './goals.js';
 import { grant } from './rules.js';
 
@@ -47,21 +48,36 @@ export const capacity = (def, stage) => def.cap + Math.floor(def.cap * 0.15 * Ma
 export const cycleTime = (def, stage) => def.cycle * (1 - 0.04 * Math.max(0, stage - 1));
 
 // ---- geometry -------------------------------------------------------------
+// All of it comes from the town's layout: see layout.js.
 
-export function queueSlot(k, n) {
-  const p = PLOTS[k];
-  return { x: W.aveX + p.side * (W.entranceOffset - n * W.queueGap), y: p.y + 10 };
+const lay = (world) => layoutFor(world.state.town);
+
+// Where the nth person in the queue stands.
+export function queueSlot(L, k, n) {
+  return along(L.plots[k].q, n * W.queueGap);
 }
 
-export function serveSlot(k, n, cap) {
-  const p = PLOTS[k];
+export function serveSlot(L, k, n, cap) {
+  const p = L.plots[k];
   const gap = Math.min(17, 96 / Math.max(1, cap - 1));
   return { x: p.x + (n - (cap - 1) / 2) * gap, y: p.y + 5 };
 }
 
-export function exitPoint(k, n = 0) {
-  const p = PLOTS[k];
-  return { x: W.aveX + p.side * (W.entranceOffset - 14 - (n % 6) * 9), y: p.y + 34 + (n % 2) * 5 };
+// Riders step off into a lane beside the queue, on the side nearer the viewer.
+export function exitPoint(L, k, n = 0) {
+  const [a, b] = L.plots[k].q;
+  const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+  const dx = (b[0] - a[0]) / len;
+  const dy = (b[1] - a[1]) / len;
+  let px = -dy;
+  let py = dx;
+  if (py < 0) {
+    px = -px;
+    py = -py;
+  }
+  const d = 14 + (n % 6) * 9;
+  const o = 24 + (n % 2) * 5;
+  return { x: a[0] + dx * d + px * o, y: a[1] + dy * d + py * o };
 }
 
 function moveToward(g, x, y, step) {
@@ -81,17 +97,27 @@ function moveToward(g, x, y, step) {
   return false;
 }
 
-function route(g, dest) {
+// Along the walkways from wherever the guest is to `dest`, keeping right so
+// that people going opposite ways pass each other.
+function route(L, g, dest) {
+  if (Math.hypot(dest.x - g.x, dest.y - g.y) < 64) return [dest];
+  const ids = nodeRoute(L, nearestNode(L, g.x, g.y), nearestNode(L, dest.x, dest.y));
+  const lane = 9 + g.jx * 0.55;
   const pts = [];
-  const dy = dest.y - g.y;
-  const lane = W.aveX + (dy < 0 ? 15 : -15) + g.jx;
-  const sameSide = (g.x - W.aveX) * (dest.x - W.aveX) > 0;
-  if (sameSide && Math.abs(dy) < 60 && Math.abs(g.x - W.aveX) > W.aveHalf) {
-    pts.push({ x: dest.x, y: g.y }); // back round to the same queue
-  } else {
-    if (Math.abs(g.x - W.aveX) > W.aveHalf) pts.push({ x: lane, y: g.y });
-    pts.push({ x: lane, y: dest.y });
+  for (let i = 0; i < ids.length; i++) {
+    const n = L.nodes[ids[i]];
+    const p = L.nodes[ids[Math.max(0, i - 1)]];
+    const q = L.nodes[ids[Math.min(ids.length - 1, i + 1)]];
+    const dx = q.x - p.x;
+    const dy = q.y - p.y;
+    const len = Math.hypot(dx, dy);
+    if (len < 0.01) pts.push({ x: n.x, y: n.y });
+    else pts.push({ x: n.x - (dy / len) * lane, y: n.y + (dx / len) * lane });
   }
+  // no doubling back to a node we are already past
+  while (pts.length > 1 && Math.hypot(pts[1].x - g.x, pts[1].y - g.y) < Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y)) pts.shift();
+  const last = pts[pts.length - 1];
+  if (pts.length > 1 && Math.hypot(dest.x - pts[pts.length - 2].x, dest.y - pts[pts.length - 2].y) < Math.hypot(last.x - pts[pts.length - 2].x, last.y - pts[pts.length - 2].y)) pts.pop();
   pts.push(dest);
   return pts;
 }
@@ -106,7 +132,7 @@ function spawnGuest(world) {
   const r = world.rand;
   const g = {
     id: world.nextId++,
-    x: W.aveX + 15 + (r() - 0.5) * 30,
+    x: lay(world).gate.x + 15 + (r() - 0.5) * 30,
     y: W.spawnY + r() * 24,
     jx: (r() - 0.5) * 22,
     path: null,
@@ -165,22 +191,24 @@ function sendTo(world, g, k) {
   const rt = world.rt[k];
   g.target = k;
   g.mode = 'walk';
-  g.path = route(g, queueSlot(k, Math.min(rt.queue.length + rt.inbound, T.queueLimit - 1)));
+  const L = lay(world);
+  g.path = route(L, g, queueSlot(L, k, Math.min(rt.queue.length + rt.inbound, T.queueLimit - 1)));
   g.pi = 0;
   rt.inbound++;
 }
 
-function sendHome(g) {
+function sendHome(world, g) {
+  const L = lay(world);
   g.target = -1;
   g.mode = 'leave';
-  g.path = route(g, { x: W.aveX - 15 + g.jx, y: W.spawnY + 40 });
+  g.path = route(L, g, { x: L.gate.x - 15 + g.jx, y: W.spawnY + 40 });
   g.pi = 0;
 }
 
 function moveOn(world, g, exclude) {
   const next = g.visits > 0 ? chooseTarget(world, g, exclude) : -1;
   if (next >= 0) sendTo(world, g, next);
-  else sendHome(g);
+  else sendHome(world, g);
 }
 
 function onArrive(world, g) {
@@ -202,7 +230,7 @@ function onArrive(world, g) {
   } else {
     g.emote = 'sad';
     g.emoteT = 1.6;
-    sendHome(g);
+    sendHome(world, g);
   }
 }
 
@@ -243,21 +271,17 @@ function updateGuests(world, dt) {
 const EMOTES = ['heart', 'smile', 'star', 'note', 'smile', 'heart'];
 
 function release(world, g, k, n, def) {
+  const L = lay(world);
   if (def.kind === 'ride') {
-    const p = exitPoint(k, n);
+    const p = exitPoint(L, k, n);
     g.x = p.x;
     g.y = p.y;
     g.alpha = 0;
   }
   // Customers at a counter step back to the exit lane first, so they walk
   // round the queue rather than through it.
-  const counterY = g.y;
-  if (def.kind !== 'ride') g.y = PLOTS[k].y + 34;
   moveOn(world, g, -1);
-  if (def.kind !== 'ride') {
-    g.path.unshift({ x: g.x, y: g.y });
-    g.y = counterY;
-  }
+  if (def.kind !== 'ride') g.path.unshift({ x: g.x, y: L.plots[k].y + 34 });
 }
 
 function finishRide(world, k) {
@@ -302,6 +326,7 @@ function clearOut(world, k) {
 
 function updateAttractions(world, dt) {
   const s = world.state;
+  const L = lay(world);
   const decay = Math.exp(-dt / T.flowTau);
   for (let k = 0; k < PLOTS.length; k++) {
     const plot = s.plots[k];
@@ -317,7 +342,7 @@ function updateAttractions(world, dt) {
     let frontReady = false;
     for (let n = 0; n < rt.queue.length; n++) {
       const g = rt.queue[n];
-      const slot = queueSlot(k, n);
+      const slot = queueSlot(L, k, n);
       g.moving = false;
       const there = moveToward(g, slot.x, slot.y, T.walkSpeed * g.sp * dt);
       if (n === 0) frontReady = there;
@@ -333,7 +358,7 @@ function updateAttractions(world, dt) {
         if (def.kind === 'ride') {
           g.mode = 'ride';
         } else {
-          const p = serveSlot(k, seat, cap);
+          const p = serveSlot(L, k, seat, cap);
           g.mode = 'serve';
           g.sx = p.x;
           g.sy = p.y;

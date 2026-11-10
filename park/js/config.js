@@ -2,31 +2,23 @@
 // game, the tests and the balance tool all read the same numbers.
 
 export const GAME_TITLE = 'Park!';
-export const VERSION = '3.1.0';
+export const VERSION = '4.0.0';
 export const SAVE_KEY = 'park.save.v1';
 // saves written under an earlier name are picked up once and carried over
 export const LEGACY_SAVE_KEYS = ['starlight-funfair.save.v2'];
 export const CURRENCY = '£';
 
-// One avenue running north from the gate, three rows of two plots.
+// The park's ground. Where the paths and plots go is in layout.js: each kind
+// of town has its own map. The gate is always at the bottom, in the middle.
 export const WORLD = {
-  w: 1000,
-  h: 1200,
-  aveX: 500,
-  aveHalf: 46,
-  gateY: 1090,
-  spawnY: 1200,
-  rowY: [900, 660, 420],
-  plotOffset: 292,
-  entranceOffset: 164,
+  w: 1080,
+  h: 1480,
+  gateY: 1390,
+  spawnY: 1500,
   queueGap: 12,
 };
 
-export const PLOTS = [0, 1, 2, 3, 4, 5].map((k) => {
-  const row = k >> 1;
-  const side = k % 2 ? 1 : -1;
-  return { index: k, row, side, x: WORLD.aveX + side * WORLD.plotOffset, y: WORLD.rowY[row] };
-});
+export const PLOTS = [0, 1, 2, 3, 4, 5].map((k) => ({ index: k }));
 
 export const STAGES = 5;
 
@@ -131,26 +123,36 @@ const LINEUPS = [
   ['ducks', 'dodgems', 'carousel', 'ghost', 'waltzer', 'coaster'],
 ].map((row) => row.map(idx));
 
+// Each kind of town: its palette, its weather, and (in layout.js) its map.
+const BASE = {
+  board: '#b88d60', boardEdge: '#7f5c3a', stone: '#c9c0ae', stoneEdge: '#8e8676', soil: '#5e4a36',
+  blooms: ['#e8607a', '#f2c14e', '#f7f3e8', '#b98ad6', '#ef8a4a'], foam: '#d8f1ee', weather: null,
+};
 export const THEMES = [
   {
-    key: 'green', ground: '#7cc46a', ground2: '#6db85c', tuft: '#5aa64d', path: '#e8d3a2', pathEdge: '#cdb685',
-    plot: '#8fd07c', tree: ['#3f9b4b', '#4fb25a', '#2f8540'], trunk: '#7a5230', fence: '#f4ead0', weather: null,
+    ...BASE, key: 'green', ground: '#6c9c58', ground2: '#618f4e', tuft: '#527c41', path: '#e7d9b6', pathEdge: '#bfae87',
+    plot: '#83b267', tree: ['#3f7d47', '#5d9c56', '#2a5c3a'], trunk: '#5c4630', fence: '#efe6cf', bank: '#9aa66a',
+    water: ['#2b7186', '#4fa3ad'], fruit: '#f2c14e',
   },
   {
-    key: 'sand', ground: '#f1dc9e', ground2: '#e9d08a', tuft: '#d9bd72', path: '#c9a878', pathEdge: '#a98a5c',
-    plot: '#f6e6b4', tree: ['#3fae7a', '#55c28c', '#2f9466'], trunk: '#8a6238', fence: '#ffffff', weather: null, sea: true,
+    ...BASE, key: 'sand', ground: '#e8d6a8', ground2: '#decb96', tuft: '#cbb37b', path: '#dccbaa', pathEdge: '#b7a37c',
+    plot: '#f0e2bb', tree: ['#3a8a6a', '#58a983', '#27694f'], trunk: '#7a5a38', fence: '#f7f1e1', bank: '#d3bd88',
+    water: ['#1f6d93', '#49b3bf'], stone: '#e3d8c0', stoneEdge: '#b3a481',
   },
   {
-    key: 'autumn', ground: '#b9b25a', ground2: '#aaa44e', tuft: '#958f3f', path: '#dcc7a0', pathEdge: '#b9a37b',
-    plot: '#c8c26c', tree: ['#e0832b', '#f0a53a', '#c7521f'], trunk: '#5f3f24', fence: '#f0e2c0', weather: 'leaves',
+    ...BASE, key: 'autumn', ground: '#a39652', ground2: '#958847', tuft: '#82763a', path: '#decca5', pathEdge: '#b6a279',
+    plot: '#b3a860', tree: ['#c8742c', '#e09b3a', '#9c4722'], trunk: '#553a24', fence: '#efe0be', bank: '#8f8348',
+    water: ['#3b6f78', '#5f9a98'], weather: 'leaves', fruit: '#b3343c', blooms: ['#c8742c', '#e09b3a', '#8f2f2a', '#f2c14e', '#6b3a5c'],
   },
   {
-    key: 'snow', ground: '#eef4fb', ground2: '#e0eaf5', tuft: '#cbd9ea', path: '#b9c6d6', pathEdge: '#98a8bc',
-    plot: '#f7fbff', tree: ['#2f7d68', '#3c917a', '#eaf3fb'], trunk: '#5b4632', fence: '#c94f4f', weather: 'snow',
+    ...BASE, key: 'snow', ground: '#e8eef5', ground2: '#dae4ee', tuft: '#c3d1e0', path: '#b7c2cf', pathEdge: '#93a2b4',
+    plot: '#f4f8fc', tree: ['#2c6b5b', '#eef4fa', '#1f5347'], trunk: '#54412f', fence: '#b8454a', bank: '#f7fafd',
+    water: ['#b9d6e6', '#dcedf5'], weather: 'snow', soil: '#cfdbe6',
   },
   {
-    key: 'city', ground: '#8f93a8', ground2: '#858aa0', tuft: '#777c93', path: '#c5b8a6', pathEdge: '#9d917f',
-    plot: '#9ea2b6', tree: ['#d35d8c', '#e67aa4', '#b9457a'], trunk: '#4d3a3a', fence: '#2d3152', weather: 'petals',
+    ...BASE, key: 'city', ground: '#7b8395', ground2: '#727a8d', tuft: '#666e83', path: '#b8ad9b', pathEdge: '#8d8272',
+    plot: '#8d94a6', tree: ['#c5698d', '#dc8fac', '#9f4a72'], trunk: '#4a3838', fence: '#2a3142', bank: '#8e8676',
+    water: ['#1c4f63', '#2f7482'], weather: 'petals', stone: '#aba392', stoneEdge: '#7d7566',
   },
 ];
 

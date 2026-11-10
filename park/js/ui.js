@@ -6,6 +6,7 @@ import {
   ADS, CARDS, CARD_SETS, CURRENCY, DAILY, EVENT_MILESTONES, GAME_TITLE, GUEST_LOOKS, LEAGUE_PRIZES, PACKS, PAY, PET, PLOTS, STAGES,
   PRODUCTS, STORE_PREVIEW, TOWN_REWARD, TUNING, UPGRADE_REWARDS, VAULT, VERSION, setUnlockTown, townInfo,
 } from './config.js';
+import { plotAt } from './layout.js';
 import * as A from './art.js';
 import { cardImage, symbolImage } from './cardart.js';
 import * as E from './economy.js';
@@ -772,7 +773,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
   }
 
   function onUpgrade(k, up) {
-    const p = PLOTS[k];
+    const p = plotAt(st().town, k);
     const d = S.designAt(st(), k);
     audio.play(up.stage === 1 ? 'build' : up.stage === STAGES ? 'milestone' : 'upgrade');
     if (current && current.key === 'build') {
@@ -1644,7 +1645,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
             : `<img src="${LOCK}" alt="">` });
       const wide = p.group !== 'tokens';
       const el = wide
-        ? h('div', { class: 'product wide' }, art, h('div', { class: 'meta' }, h('div', { class: 'name', style: 'color:var(--ink);font-size:14px' }, p.name), what), btn, p.tag ? h('div', { class: 'ribbon', style: 'left:auto;right:10px;transform:none' }, p.tag) : null)
+        ? h('div', { class: 'product wide' }, art, h('div', { class: 'meta' }, h('div', { class: 'name' }, p.name), what), btn, p.tag ? h('div', { class: 'ribbon', style: 'left:auto;right:10px;transform:none' }, p.tag) : null)
         : h('div', { class: 'product' }, p.tag ? h('div', { class: 'ribbon' }, p.tag) : null, art, what, h('div', { class: 'name' }, p.name), btn);
       return { p, el, btn, what, wide };
     });
@@ -1654,7 +1655,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
         ? 'Preview shop: no payment or advert provider is connected yet, so purchases are free and adverts are stand-ins.'
         : 'The shop opens soon.') : null,
       h('h5', null, 'Free'),
-      h('div', { class: 'product wide' }, h('div', { class: 'art', html: TOKEN }), h('div', { class: 'meta' }, h('div', { class: 'name', style: 'color:var(--ink);font-size:14px' }, `${ADS.tokens} free tokens`), adSub), adBtn),
+      h('div', { class: 'product wide' }, h('div', { class: 'art', html: TOKEN }), h('div', { class: 'meta' }, h('div', { class: 'name' }, `${ADS.tokens} free tokens`), adSub), adBtn),
       h('h5', null, 'Tokens'),
       h('div', { class: 'shop-grid' }, group('tokens')),
       h('h5', null, 'Bundles'),

@@ -2,6 +2,7 @@
 import { setDisplayFont } from './art.js';
 import { createAudio } from './audio.js';
 import { GAME_TITLE, LEGACY_SAVE_KEYS, OPENING_SPINS, PLOTS, SAVE_KEY, TUNING } from './config.js';
+import { plotAt } from './layout.js';
 import * as E from './economy.js';
 import { money } from './format.js';
 import { createRenderer } from './render.js';
@@ -33,7 +34,10 @@ function readSave() {
 // Give the display typeface a moment to arrive so signs and cards are drawn
 // with it; if it does not come, carry on with the system font.
 const fontReady = await Promise.race([
-  document.fonts && document.fonts.load ? document.fonts.load('400 20px "Lilita One"').then((faces) => faces.length > 0, () => false) : false,
+  document.fonts && document.fonts.load
+    ? Promise.all([document.fonts.load('800 20px "Playfair Display"'), document.fonts.load('italic 900 20px "Playfair Display"'), document.fonts.load('700 14px "Jost"')])
+      .then((sets) => sets[0].length > 0, () => false)
+    : false,
   new Promise((resolve) => setTimeout(() => resolve(false), 1800)),
 ]);
 if (fontReady) {
@@ -98,7 +102,7 @@ function handleEvents() {
   for (const ev of world.events) {
     if (ev.type === 'pay') {
       if (!ui.parkVisible) continue; // nobody is looking at the park
-      const p = PLOTS[ev.k];
+      const p = plotAt(world.state.town, ev.k);
       const d = S.designAt(world.state, ev.k);
       renderer.popText(p.x, p.y - d.h * 0.62, '+' + money(ev.amount));
       renderer.coins(p.x, p.y - d.h * 0.5, Math.min(5, 1 + ev.n));
@@ -123,7 +127,7 @@ function announce(item) {
     ui.toast(`${who} threw a pie. Your padlock stopped it!`);
     return;
   }
-  const p = PLOTS[item.plot];
+  const p = plotAt(world.state.town, item.plot);
   const d = S.designAt(world.state, item.plot);
   audio.play('splat');
   if (ui.parkVisible) renderer.custard(p.x, p.y - d.h * 0.5);

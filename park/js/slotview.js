@@ -37,7 +37,23 @@ export function createSlotView(canvas, hooks = {}) {
   // start on a tidy non-winning line
   ['coin', 'star', 'token'].forEach((s, i) => { reels[i].ring[reels[i].pos % RING] = s; });
 
+  // Each symbol is painted once at reel size and stamped from then on.
+  const sprites = new Map();
+  let spriteSize = 0;
+  function stamp(sym, cx, cy, size) {
+    let cv = sprites.get(sym);
+    if (!cv) {
+      cv = document.createElement('canvas');
+      cv.width = cv.height = Math.ceil(spriteSize * dpr * 1.25);
+      drawSymbol(cv.getContext('2d'), sym, cv.width / 2, cv.height / 2, cv.width * 0.86);
+      sprites.set(sym, cv);
+    }
+    const d = size / 0.86;
+    ctx.drawImage(cv, cx - d / 2, cy - d / 2, d, d);
+  }
+
   function resize() {
+    sprites.clear();
     dpr = Math.min(window.devicePixelRatio || 1, 2);
     w = canvas.clientWidth || 300;
     h = canvas.clientHeight || 120;
@@ -135,6 +151,10 @@ export function createSlotView(canvas, hooks = {}) {
     // three rows when the window is tall, one and a bit when it is short
     const cell = Math.max(Math.min(rw * 0.9, h * 0.58), Math.min(h / 3, rw * 1.15));
     const symSize = Math.min(cell * 0.86, rw * 0.84);
+    if (Math.abs(symSize - spriteSize) > 1) {
+      spriteSize = symSize;
+      sprites.clear();
+    }
     const rows = Math.ceil(h / cell / 2) + 1;
     const cy = h / 2;
     const flashing = time < flashUntil;
@@ -144,23 +164,23 @@ export function createSlotView(canvas, hooks = {}) {
       const x = i * (rw + gap);
       ctx.save();
       ctx.beginPath();
-      ctx.roundRect(x, 0, rw, h, 14);
+      ctx.roundRect(x, 0, rw, h, 9);
       ctx.clip();
       const bg = ctx.createLinearGradient(0, 0, 0, h);
-      bg.addColorStop(0, '#cdbf9c');
-      bg.addColorStop(0.2, '#fff7e6');
-      bg.addColorStop(0.5, '#fffdf6');
-      bg.addColorStop(0.8, '#fff7e6');
-      bg.addColorStop(1, '#cdbf9c');
+      bg.addColorStop(0, '#b9ad92');
+      bg.addColorStop(0.22, '#f6efde');
+      bg.addColorStop(0.5, '#fdf9ee');
+      bg.addColorStop(0.78, '#f6efde');
+      bg.addColorStop(1, '#b9ad92');
       ctx.fillStyle = bg;
       ctx.fillRect(x, 0, rw, h);
       // the pay line: a warm band behind the middle row
       const band = ctx.createLinearGradient(0, cy - cell / 2, 0, cy + cell / 2);
-      band.addColorStop(0, 'rgba(255,197,61,0)');
-      band.addColorStop(0.12, 'rgba(255,205,90,0.3)');
-      band.addColorStop(0.5, 'rgba(255,226,140,0.42)');
-      band.addColorStop(0.88, 'rgba(255,205,90,0.3)');
-      band.addColorStop(1, 'rgba(255,197,61,0)');
+      band.addColorStop(0, 'rgba(217,185,118,0)');
+      band.addColorStop(0.1, 'rgba(217,185,118,0.26)');
+      band.addColorStop(0.5, 'rgba(245,230,189,0.36)');
+      band.addColorStop(0.9, 'rgba(217,185,118,0.26)');
+      band.addColorStop(1, 'rgba(217,185,118,0)');
       ctx.fillStyle = band;
       ctx.fillRect(x, cy - cell / 2, rw, cell);
       const base = Math.floor(r.pos);
@@ -182,10 +202,10 @@ export function createSlotView(canvas, hooks = {}) {
           ctx.save();
           ctx.translate(x + rw / 2, y);
           ctx.scale(1, 1 + blur * 1.3);
-          drawSymbol(ctx, sym, 0, 0, size);
+          stamp(sym, 0, 0, size);
           ctx.restore();
         } else {
-          drawSymbol(ctx, sym, x + rw / 2, y, size);
+          stamp(sym, x + rw / 2, y, size);
         }
       }
       ctx.globalAlpha = 1;
@@ -195,7 +215,7 @@ export function createSlotView(canvas, hooks = {}) {
       }
       if (teasing && i < 2) {
         const glow = 0.5 + Math.sin(time * 16) * 0.5;
-        ctx.strokeStyle = `rgba(255,197,61,${0.45 + glow * 0.5})`;
+        ctx.strokeStyle = `rgba(227,197,131,${0.45 + glow * 0.5})`;
         ctx.lineWidth = 4 + glow * 3;
         ctx.beginPath();
         ctx.roundRect(x + 3, cy - cell / 2 + 2, rw - 6, cell - 4, 12);
@@ -224,7 +244,7 @@ export function createSlotView(canvas, hooks = {}) {
       ctx.fillStyle = sheen;
       ctx.fillRect(x, 0, rw, h);
       if (flashing && flashMask[i]) {
-        ctx.strokeStyle = `rgba(255,197,61,${0.55 + beat * 0.4})`;
+        ctx.strokeStyle = `rgba(227,197,131,${0.55 + beat * 0.4})`;
         ctx.lineWidth = 5;
         ctx.beginPath();
         ctx.roundRect(x + 2.5, cy - cell / 2 + 2, rw - 5, cell - 4, 12);
@@ -242,9 +262,9 @@ export function createSlotView(canvas, hooks = {}) {
       ctx.lineTo(x + dir * (mk + 2), cy);
       ctx.lineTo(x, cy + mk);
       ctx.closePath();
-      ctx.fillStyle = '#ffc53d';
+      ctx.fillStyle = '#e3c583';
       ctx.fill();
-      ctx.strokeStyle = '#a86a00';
+      ctx.strokeStyle = '#5e4619';
       ctx.lineWidth = 1.5;
       ctx.stroke();
     }

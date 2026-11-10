@@ -1,29 +1,26 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#1b1f4a"/>
-  <g fill="#fff6e0">
-    <circle cx="78" cy="96" r="5"/><circle cx="430" cy="74" r="6"/><circle cx="452" cy="210" r="4"/>
-    <circle cx="60" cy="250" r="4"/><circle cx="150" cy="56" r="3"/><circle cx="380" cy="150" r="3"/>
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="34%" r="80%">
+      <stop offset="0" stop-color="#1d4046"/><stop offset=".55" stop-color="#102532"/><stop offset="1" stop-color="#080d14"/>
+    </radialGradient>
+    <linearGradient id="foil" x1="0" y1="0" x2="0" y2="1">
+      <stop offset=".1" stop-color="#fbf1d2"/><stop offset=".46" stop-color="#e3c583"/><stop offset=".9" stop-color="#b48a3c"/>
+    </linearGradient>
+    <linearGradient id="red" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f08a8f"/><stop offset=".6" stop-color="#b8303f"/><stop offset="1" stop-color="#8a1f2c"/>
+    </linearGradient>
+    <clipPath id="tile"><rect width="512" height="512"/></clipPath>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <g clip-path="url(#tile)" fill="none" stroke="#d9b976" stroke-opacity=".3" stroke-width="3">
+    <circle cx="256" cy="590" r="170"/><circle cx="256" cy="590" r="215"/><circle cx="256" cy="590" r="260"/>
+    <circle cx="256" cy="590" r="305"/><circle cx="256" cy="590" r="350"/><circle cx="256" cy="590" r="395"/>
+    <circle cx="256" cy="590" r="440"/><circle cx="256" cy="590" r="485"/><circle cx="256" cy="590" r="530"/>
   </g>
-  <path d="M176 420 256 236 336 420" fill="none" stroke="#c9ced6" stroke-width="20" stroke-linecap="round"/>
-  <g fill="none" stroke-linecap="round">
-    <circle cx="256" cy="236" r="150" stroke="#e5484d" stroke-width="16"/>
-    <circle cx="256" cy="236" r="126" stroke="#ffc53d" stroke-width="7"/>
-    <g stroke="#fff6e0" stroke-width="6">
-      <path d="M256 86v300M106 236h300M150 130l212 212M362 130 150 342"/>
-    </g>
+  <rect x="34" y="34" width="444" height="444" rx="92" fill="none" stroke="url(#foil)" stroke-width="7"/>
+  <g font-family="'Playfair Display', Georgia, 'Times New Roman', serif" font-style="italic" font-weight="900" font-size="340" text-anchor="middle">
+    <text x="226" y="372" fill="#3a2a10" opacity=".8">P</text>
+    <text x="220" y="364" fill="url(#foil)">P</text>
+    <text x="392" y="364" fill="url(#red)">!</text>
   </g>
-  <g>
-    <rect x="232" y="64" width="48" height="40" rx="12" fill="#ffc53d"/>
-    <rect x="232" y="368" width="48" height="40" rx="12" fill="#3e63dd"/>
-    <rect x="82" y="216" width="48" height="40" rx="12" fill="#46a758"/>
-    <rect x="382" y="216" width="48" height="40" rx="12" fill="#e93d82"/>
-    <rect x="126" y="110" width="48" height="40" rx="12" fill="#5cc8f0"/>
-    <rect x="338" y="110" width="48" height="40" rx="12" fill="#f76b15"/>
-    <rect x="126" y="322" width="48" height="40" rx="12" fill="#8e4ec6"/>
-    <rect x="338" y="322" width="48" height="40" rx="12" fill="#e5484d"/>
-  </g>
-  <circle cx="256" cy="236" r="26" fill="#ffc53d"/>
-  <path d="m256 216 5.9 12 13.2 1.8-9.6 9.2 2.3 13L256 245.800l-11.800 6.200 2.300-13-9.600-9.200 13.200-1.800z" fill="#fff6e0"/>
-  <rect x="150" y="408" width="212" height="40" rx="14" fill="#3e63dd"/>
-  <rect x="150" y="408" width="212" height="14" rx="7" fill="#6f8cf0"/>
 </svg>

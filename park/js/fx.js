@@ -27,7 +27,7 @@ export function createFx(canvas) {
         vy: 240 + Math.random() * 300,
         rot: Math.random() * TAU,
         vr: (Math.random() - 0.5) * 16,
-        size: 11 + Math.random() * 13,
+        size: 8 + Math.random() * 10,
         star: Math.random() < 0.12,
       });
     }
@@ -60,7 +60,7 @@ export function createFx(canvas) {
       ctx.translate(p.x, p.y);
       if (p.star) {
         ctx.rotate(p.rot * 0.4);
-        ctx.fillStyle = '#fff3b0';
+        ctx.fillStyle = '#fbf1d2';
         ctx.beginPath();
         for (let i = 0; i < 10; i++) {
           const r = i % 2 ? p.size * 0.45 : p.size;
@@ -70,22 +70,29 @@ export function createFx(canvas) {
         ctx.closePath();
         ctx.fill();
       } else {
+        // a struck gold coin, turning as it falls
         ctx.rotate(p.rot * 0.15);
-        ctx.fillStyle = '#d99a16';
+        const rx = p.size * squash + 1.2;
         ctx.beginPath();
-        ctx.ellipse(0, 2, p.size * squash + 1.5, p.size, 0, 0, TAU);
+        ctx.ellipse(0, 1.5, rx, p.size, 0, 0, TAU);
+        ctx.fillStyle = '#6e4a0c';
         ctx.fill();
-        ctx.fillStyle = '#ffc53d';
+        const g = ctx.createLinearGradient(-rx, -p.size, rx, p.size);
+        g.addColorStop(0, '#fdeeb5');
+        g.addColorStop(0.5, '#e6ba4f');
+        g.addColorStop(1, '#a06e16');
         ctx.beginPath();
-        ctx.ellipse(0, 0, p.size * squash + 1.5, p.size, 0, 0, TAU);
+        ctx.ellipse(0, 0, rx, p.size, 0, 0, TAU);
+        ctx.fillStyle = g;
         ctx.fill();
-        ctx.fillStyle = '#ffe58a';
         ctx.beginPath();
-        ctx.ellipse(0, 0, Math.max(0.5, p.size * squash * 0.68), p.size * 0.7, 0, 0, TAU);
-        ctx.fill();
-        ctx.fillStyle = 'rgba(255,255,255,0.55)';
+        ctx.ellipse(0, 0, Math.max(0.5, rx * 0.7), p.size * 0.72, 0, 0, TAU);
+        ctx.strokeStyle = 'rgba(110,74,12,0.6)';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
         ctx.beginPath();
-        ctx.ellipse(-p.size * squash * 0.3, -p.size * 0.42, Math.max(0.5, p.size * squash * 0.22), p.size * 0.14, 0, 0, TAU);
+        ctx.ellipse(-rx * 0.3, -p.size * 0.42, Math.max(0.5, rx * 0.2), p.size * 0.13, 0, 0, TAU);
+        ctx.fillStyle = 'rgba(255,255,255,0.7)';
         ctx.fill();
       }
       ctx.restore();
