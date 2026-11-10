@@ -1312,3 +1312,361 @@ export function drawBalloon(c, x, y, col, t) {
   ell(c, x - 8, y - 10, 5, 8, 'rgba(255,255,255,0.4)');
   star(c, x + 2, y + 2, 8, 'rgba(255,255,255,0.85)');
 }
+
+// ---- shared with the card painter ---------------------------------------------
+
+export const prim = { rect, rr, circ, ell, line, poly, star, label, head, shadow, cloud, TAU };
+
+// ---- slot machine symbols -------------------------------------------------------
+// Drawn in a 100 x 100 box centred on the origin.
+
+function symCoin(c) {
+  ell(c, 0, 5, 38, 38, P.goldDark);
+  circ(c, 0, 0, 38, P.gold);
+  circ(c, 0, 0, 30, '#ffd75e');
+  c.beginPath();
+  c.arc(0, 0, 30, 0, TAU);
+  c.strokeStyle = P.goldDark;
+  c.lineWidth = 2.5;
+  c.stroke();
+  label(c, '£', 0, 2, 40, '#b87a08');
+  ell(c, -14, -18, 9, 5, 'rgba(255,255,255,0.55)');
+}
+
+function symSack(c) {
+  ell(c, 0, 38, 36, 7, 'rgba(0,0,0,0.18)');
+  c.beginPath();
+  c.moveTo(-14, -26);
+  c.bezierCurveTo(-52, -6, -44, 40, 0, 40);
+  c.bezierCurveTo(44, 40, 52, -6, 14, -26);
+  c.closePath();
+  c.fillStyle = '#c9a15e';
+  c.fill();
+  c.save();
+  c.clip();
+  ell(c, 16, 10, 26, 34, 'rgba(0,0,0,0.1)');
+  c.restore();
+  poly(c, [-16, -26, -24, -44, -8, -38, 0, -46, 8, -38, 24, -44, 16, -26], '#b88d48');
+  rr(c, -17, -30, 34, 8, 4, P.red);
+  label(c, '£', 0, 10, 34, '#7a5320');
+  circ(c, -30, 34, 9, P.gold);
+  circ(c, -30, 32, 9, '#ffd75e');
+  circ(c, 32, 36, 7, P.gold);
+  circ(c, 32, 34.5, 7, '#ffd75e');
+}
+
+function symPie(c) {
+  ell(c, 0, 34, 40, 7, 'rgba(0,0,0,0.18)');
+  poly(c, [-42, 6, 42, 6, 32, 32, -32, 32], P.steel);
+  poly(c, [-42, 6, -20, 6, -22, 32, -32, 32], '#e3e7ec');
+  for (let k = -3; k <= 3; k++) line(c, k * 11, 9, k * 9.4, 30, P.steelDark, 1.6);
+  rr(c, -46, 0, 92, 9, 4.5, '#e3e7ec');
+  for (let k = 0; k < 5; k++) circ(c, -30 + k * 15, -6, 13, '#fff6e0');
+  for (let k = 0; k < 4; k++) circ(c, -22 + k * 15, -17, 11, '#fffaf0');
+  circ(c, -6, -27, 10, '#fffaf0');
+  circ(c, 9, -27, 10, '#fff6e0');
+  circ(c, 2, -38, 8, P.red);
+  circ(c, -1, -41, 2.4, 'rgba(255,255,255,0.7)');
+  line(c, 2, -45, 8, -52, P.greenDark, 2.4);
+}
+
+function symBarrel(c) {
+  ell(c, 0, 38, 36, 7, 'rgba(0,0,0,0.18)');
+  c.beginPath();
+  c.moveTo(-30, -14);
+  c.quadraticCurveTo(-40, 12, -30, 38);
+  c.lineTo(30, 38);
+  c.quadraticCurveTo(40, 12, 30, -14);
+  c.closePath();
+  c.fillStyle = P.wood;
+  c.fill();
+  c.save();
+  c.clip();
+  for (let k = -2; k <= 2; k++) rect(c, k * 14 - 1, -20, 2, 60, P.woodDark);
+  rect(c, -40, -4, 80, 7, P.steelDark);
+  rect(c, -40, 24, 80, 7, P.steelDark);
+  c.restore();
+  ell(c, 0, -14, 30, 9, '#7a4a22');
+  for (let k = 0; k < 7; k++) circ(c, -22 + k * 7.4, -18 - Math.sin(k * 1.3) * 4 - 3, 8, '#f1d9a0');
+  circ(c, 0, -30, 10, '#f1d9a0');
+  circ(c, 0, -26, 15, '#fff6e0');
+  label(c, '?', 0, -25, 22, P.red);
+}
+
+function symLock(c) {
+  ell(c, 0, 40, 30, 6, 'rgba(0,0,0,0.18)');
+  c.beginPath();
+  c.arc(0, -12, 19, Math.PI, 0);
+  c.lineTo(19, 4);
+  c.moveTo(-19, -12);
+  c.lineTo(-19, 4);
+  c.strokeStyle = P.steel;
+  c.lineWidth = 10;
+  c.stroke();
+  c.strokeStyle = '#eef1f5';
+  c.lineWidth = 3;
+  c.beginPath();
+  c.arc(0, -12, 21, Math.PI * 1.1, Math.PI * 1.5);
+  c.stroke();
+  rr(c, -32, -2, 64, 42, 10, P.goldDark);
+  rr(c, -32, -5, 64, 42, 10, P.gold);
+  rr(c, -26, 0, 52, 8, 4, 'rgba(255,255,255,0.4)');
+  circ(c, 0, 14, 7.5, '#7a4d00');
+  poly(c, [-4, 16, 4, 16, 6, 30, -6, 30], '#7a4d00');
+}
+
+function symToken(c) {
+  ell(c, 0, 5, 38, 38, '#4a2a8a');
+  circ(c, 0, 0, 38, '#8e4ec6');
+  for (let k = 0; k < 16; k++) {
+    const a = (k * TAU) / 16;
+    circ(c, Math.cos(a) * 33, Math.sin(a) * 33, 2.4, '#c9a5f0');
+  }
+  circ(c, 0, 0, 26, '#6f3ab0');
+  star(c, 0, 1, 19, '#ffd75e');
+  star(c, 0, 1, 9, '#fff3b0');
+  ell(c, -15, -19, 9, 5, 'rgba(255,255,255,0.4)');
+}
+
+function symStar(c) {
+  star(c, 0, 5, 44, P.goldDark);
+  star(c, 0, 0, 44, P.gold);
+  star(c, 0, 0, 28, '#ffe58a');
+  star(c, 0, 0, 12, '#fffbe0');
+  for (const [x, y, r] of [[-34, -30, 6], [36, -22, 5], [30, 34, 4], [-36, 28, 4]]) {
+    c.beginPath();
+    c.moveTo(x, y - r);
+    c.lineTo(x + r * 0.3, y - r * 0.3);
+    c.lineTo(x + r, y);
+    c.lineTo(x + r * 0.3, y + r * 0.3);
+    c.lineTo(x, y + r);
+    c.lineTo(x - r * 0.3, y + r * 0.3);
+    c.lineTo(x - r, y);
+    c.lineTo(x - r * 0.3, y - r * 0.3);
+    c.closePath();
+    c.fillStyle = '#ffffff';
+    c.fill();
+  }
+}
+
+function symChips(c) {
+  for (const [x, top, tilt] of [[-18, -40, -0.2], [-6, -46, -0.05], [8, -44, 0.12], [20, -36, 0.3], [0, -34, 0]]) {
+    c.save();
+    c.translate(x, 0);
+    c.rotate(tilt);
+    rr(c, -5, top, 10, 44, 3, '#f2b93b');
+    rr(c, -5, top, 4, 44, 2, '#ffd56b');
+    c.restore();
+  }
+  c.save();
+  c.beginPath();
+  c.moveTo(-32, -8);
+  c.lineTo(32, -8);
+  c.lineTo(6, 44);
+  c.lineTo(-6, 44);
+  c.closePath();
+  c.fillStyle = '#fff6e0';
+  c.fill();
+  c.clip();
+  for (let k = -3; k <= 3; k += 2) poly(c, [k * 10 - 5, -8, k * 10 + 5, -8, k * 2 + 1, 44, k * 2 - 1, 44], P.red);
+  c.restore();
+  rr(c, -34, -12, 68, 8, 4, '#f3e3bd');
+}
+
+const SYMBOL = { coin: symCoin, sack: symSack, pie: symPie, barrel: symBarrel, lock: symLock, token: symToken, star: symStar, chips: symChips };
+
+export function drawSymbol(c, id, x, y, size) {
+  c.save();
+  c.translate(x, y);
+  c.scale(size / 100, size / 100);
+  SYMBOL[id](c);
+  c.restore();
+}
+
+// ---- what each star adds to a plot ---------------------------------------------
+
+function planter(c, x, y) {
+  rr(c, x - 15, y - 12, 30, 12, 3, '#8a5a2b');
+  rect(c, x - 15, y - 12, 30, 3, '#a8733a');
+  const cols = ['#ff6b8b', '#ffd75e', '#ffffff', '#ff9a4d'];
+  for (let k = 0; k < 4; k++) {
+    circ(c, x - 10 + k * 6.7, y - 15, 3.4, '#3f9b4b');
+    circ(c, x - 10 + k * 6.7, y - 17.5, 3, cols[k]);
+  }
+}
+
+// Decor behind the attraction (drawn before it).
+export function drawPlotBack(c, w, stage, t) {
+  if (stage >= 3) {
+    const hw = w / 2 + 12;
+    for (const s of [-1, 1]) {
+      rect(c, s * hw - 2, -150, 4, 150, '#3b3350');
+      circ(c, s * hw, -152, 4, P.gold);
+    }
+    c.beginPath();
+    c.moveTo(-hw, -150);
+    c.quadraticCurveTo(0, -128, hw, -150);
+    c.strokeStyle = 'rgba(60,50,70,0.75)';
+    c.lineWidth = 1.2;
+    c.stroke();
+    const n = 9;
+    const phase = Math.floor(t * 2.5);
+    for (let k = 0; k <= n; k++) {
+      const u = k / n;
+      const x = -hw + 2 * hw * u;
+      const y = -150 + 44 * u * (1 - u);
+      circ(c, x, y + 3, 3, (k + phase) % 3 ? ['#fff3b0', '#ff9ab0', '#9ad7ff'][k % 3] : '#b9a37b');
+    }
+  }
+}
+
+// Decor in front of the attraction (drawn after it).
+export function drawPlotFront(c, w, side, stage, t) {
+  const hw = w / 2;
+  if (stage >= 2) {
+    // a picket fence either side of the way in
+    for (const s of [-1, 1]) {
+      const x0 = s * hw * 0.44;
+      const x1 = s * (hw + 6);
+      rect(c, Math.min(x0, x1), 9, Math.abs(x1 - x0), 3, '#fffaf0');
+      rect(c, Math.min(x0, x1), 16, Math.abs(x1 - x0), 3, '#fffaf0');
+      const n = Math.max(3, Math.round(Math.abs(x1 - x0) / 11));
+      for (let k = 0; k <= n; k++) {
+        const x = x0 + ((x1 - x0) * k) / n;
+        poly(c, [x - 3, 22, x - 3, 5, x, 1, x + 3, 5, x + 3, 22], '#fffaf0');
+      }
+      rr(c, x0 - 4, -2, 8, 26, 2, '#f1e3bf');
+      circ(c, x0, -4, 4.5, P.gold);
+    }
+  }
+  if (stage >= 3) {
+    planter(c, -hw - 4, 22);
+    planter(c, hw + 4, 22);
+  }
+  if (stage >= 4) {
+    for (const s of [-1, 1]) {
+      const x = s * (hw + 20);
+      shadow(c, x, 6, 7, 2.5);
+      rect(c, x - 1.6, -96, 3.2, 102, '#e8d9b5');
+      circ(c, x, -98, 4, P.gold);
+      const wave = Math.sin(t * 3 + s) * 2.5;
+      poly(c, [x, -94, x + s * 24, -88 + wave, x + s * 18, -78 + wave, x + s * 24, -68 + wave, x, -62], s < 0 ? P.red : P.blue);
+      star(c, x + s * 10, -78 + wave * 0.5, 4.5, P.gold);
+    }
+  }
+  if (stage >= 5) {
+    const x = side * (hw - 6);
+    shadow(c, x, 26, 12, 3.5);
+    rect(c, x - 2, -8, 4, 34, '#8a5a2b');
+    circ(c, x, -22, 17, P.goldDark);
+    circ(c, x, -24, 17, P.gold);
+    star(c, x, -24, 11, '#fffbe0', -Math.PI / 2 + Math.sin(t * 2) * 0.15);
+    for (let k = 0; k < 5; k++) {
+      const u = (t * 0.6 + k / 5) % 1;
+      const a = k * 2.4 + 1;
+      const px = Math.cos(a) * (hw * 0.9);
+      const py = -30 - ((k * 53) % 110) - u * 14;
+      c.globalAlpha = Math.sin(u * Math.PI) * 0.9;
+      star(c, px, py, 5, '#fff3b0', u * 3);
+      c.globalAlpha = 1;
+    }
+  }
+}
+
+// A custard pie has landed.
+export function drawSplat(c, w, h, t) {
+  const y = -h * 0.5;
+  const r = Math.min(w, h) * 0.3;
+  c.save();
+  c.translate(0, y);
+  for (let k = 0; k < 9; k++) {
+    const a = (k * TAU) / 9 + 0.3;
+    circ(c, Math.cos(a) * r * 0.82, Math.sin(a) * r * 0.7, r * (0.34 + ((k * 7) % 5) * 0.03), '#ffe9a6');
+  }
+  circ(c, 0, 0, r * 0.8, '#fff3c4');
+  for (const [dx, len] of [[-0.5, 1.5], [0.1, 2.1], [0.55, 1.2]]) {
+    rr(c, dx * r - r * 0.1, r * 0.3, r * 0.2, r * len * (0.85 + Math.sin(t * 1.5 + dx) * 0.05), r * 0.1, '#ffe9a6');
+  }
+  circ(c, -r * 0.25, -r * 0.2, r * 0.22, 'rgba(255,255,255,0.7)');
+  ell(c, r * 0.1, r * 0.1, r * 0.34, r * 0.1, P.steel);
+  c.restore();
+  rr(c, -34, -30, 68, 22, 4, '#fff6e0');
+  c.beginPath();
+  c.roundRect(-34, -30, 68, 22, 4);
+  c.strokeStyle = P.red;
+  c.lineWidth = 3;
+  c.stroke();
+  label(c, 'CLOSED', 0, -18.5, 13, P.red);
+}
+
+// ---- Chips the gull ---------------------------------------------------------
+
+export function drawGull(c, x, y, s, t, happy = false) {
+  c.save();
+  c.translate(x, y);
+  c.scale(s, s);
+  const bob = Math.sin(t * 3) * 2;
+  ell(c, 0, 4, 34, 7, 'rgba(0,0,0,0.16)');
+  line(c, -8, -12, -10, 2, P.orange, 4);
+  line(c, 8, -12, 10, 2, P.orange, 4);
+  poly(c, [-18, 2, -4, 2, -10, -3], P.orange);
+  poly(c, [4, 2, 18, 2, 10, -3], P.orange);
+  c.translate(0, bob);
+  poly(c, [-30, -34, -52, -30, -34, -22], '#9aa3ad');
+  ell(c, 0, -34, 34, 24, '#ffffff');
+  c.beginPath();
+  c.ellipse(-8, -34, 24, 15, 0.25, 0, TAU);
+  c.fillStyle = '#aab3bd';
+  c.fill();
+  poly(c, [-30, -30, -40, -22, -24, -24], '#3b3f4a');
+  circ(c, 24, -62, 19, '#ffffff');
+  poly(c, [38, -64, 62, -58, 38, -52], P.gold);
+  poly(c, [38, -58, 62, -58, 38, -52], P.goldDark);
+  circ(c, 52, -56, 2.2, P.red);
+  circ(c, 28, -66, 4.4, P.ink);
+  circ(c, 29.4, -67.4, 1.5, '#ffffff');
+  if (happy) {
+    line(c, 20, -74, 30, -76, P.ink, 2.4);
+    rr(c, 58, -64, 22, 6, 2, '#f2b93b');
+  } else {
+    line(c, 20, -76, 31, -73, P.ink, 2.4);
+  }
+  c.restore();
+}
+
+// A lucky-dip tub for the raid screen, open or still full of sawdust.
+export function drawTub(c, x, y, s, open, found) {
+  c.save();
+  c.translate(x, y);
+  c.scale(s, s);
+  symBarrel(c);
+  if (open) {
+    ell(c, 0, -14, 30, 9, '#5a3416');
+    if (found) {
+      for (const [dx, dy] of [[-12, -16], [10, -18], [0, -26], [-4, -12], [14, -10]]) {
+        circ(c, dx, dy + 2, 9, P.goldDark);
+        circ(c, dx, dy, 9, '#ffd75e');
+      }
+    } else {
+      for (let k = 0; k < 5; k++) circ(c, -16 + k * 8, -15, 6, '#e6cf96');
+    }
+  }
+  c.restore();
+}
+
+export function drawPack(c, x, y, s, type) {
+  const col = { bronze: ['#c98a4e', '#9a5f2c', '#f0c49a'], silver: ['#c9ced6', '#8d96a3', '#f4f6f9'], gold: ['#ffc53d', '#d99a16', '#fff3b0'] }[type];
+  c.save();
+  c.translate(x, y);
+  c.scale(s, s);
+  ell(c, 0, 44, 30, 6, 'rgba(0,0,0,0.18)');
+  rr(c, -30, -42, 60, 84, 8, col[1]);
+  rr(c, -30, -45, 60, 84, 8, col[0]);
+  rr(c, -24, -39, 48, 72, 5, col[1]);
+  for (let k = 0; k < 7; k++) poly(c, [-30 + k * 8.6, -45, -26 + k * 8.6, -51, -22 + k * 8.6, -45], col[0]);
+  star(c, 0, -4, 17, col[2]);
+  star(c, 0, -4, 8, col[0]);
+  rr(c, -20, 20, 40, 7, 3.5, col[2]);
+  rr(c, -24, -39, 10, 72, 5, 'rgba(255,255,255,0.16)');
+  c.restore();
+}

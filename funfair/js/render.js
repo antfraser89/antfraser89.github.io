@@ -1,22 +1,18 @@
-// Canvas renderer: camera, the cached ground, depth-sorted sprites, the
-// day/night lighting pass, particles and the on-map labels.
-import { ATTRACTIONS, GAME_TITLE, TOWNS, WORLD as W } from './config.js';
+// Canvas renderer for the fair: camera, cached ground, depth-sorted sprites,
+// the day/night lighting pass, particles and the on-map labels.
+import { GAME_TITLE, PLOTS, STAGES, WORLD as W, townInfo } from './config.js';
 import * as A from './art.js';
 import * as E from './economy.js';
 import { money } from './format.js';
-import { isReady, mulberry32 } from './sim.js';
+import { designAt, isOpen, mulberry32 } from './sim.js';
 
 const TAU = Math.PI * 2;
-const M = 240; // ground painted this far beyond the world edge
+const M = 240; // ground detail is painted this far beyond the world edge
 const GROUND_SCALE = 1.25;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const lerp = (a, b, t) => a + (b - a) * t;
 
 const FONT = '"Trebuchet MS", "Segoe UI", system-ui, sans-serif';
-
-export function townFor(state) {
-  return TOWNS[state.tours % TOWNS.length];
-}
 
 // How dark it is, 0 (day) to 1 (night), from the state clock.
 export function darkness(clock) {
@@ -40,25 +36,23 @@ function makeGlow(r, g, b) {
 }
 
 // Static scenery that has to be depth-sorted against guests and attractions.
-function buildScenery(town, seed) {
+function buildScenery(seed) {
   const r = mulberry32(seed);
   const items = [];
-  const rows = W.rowY;
-  for (let k = 0; k < rows.length; k++) {
-    const y = rows[k] - 104;
+  W.rowY.forEach((rowY, k) => {
+    const y = rowY - 104;
     for (const s of [-1, 1]) items.push({ kind: 'lamp', x: W.aveX + s * (W.aveHalf + 14), y });
     items.push({ kind: 'bunting', x: W.aveX, y: y + 0.5 });
-    if (k % 2 === 0) items.push({ kind: 'bench', x: W.aveX + (k % 4 === 0 ? -1 : 1) * (W.aveHalf + 26), y: rows[k] - 150 });
+    if (k !== 1) items.push({ kind: 'bench', x: W.aveX + (k ? 1 : -1) * (W.aveHalf + 26), y: rowY - 150 });
     for (const s of [-1, 1]) {
-      items.push({ kind: 'tree', x: W.aveX + s * (458 - r() * 12), y: rows[k] - 96 - r() * 30, v: Math.floor(r() * 8), s: 0.85 + r() * 0.3 });
-      items.push({ kind: 'tree', x: W.aveX + s * (446 + r() * 14), y: rows[k] + 60 + r() * 30, v: Math.floor(r() * 8), s: 0.8 + r() * 0.3 });
+      items.push({ kind: 'tree', x: W.aveX + s * (458 - r() * 12), y: rowY - 96 - r() * 30, v: Math.floor(r() * 8), s: 0.85 + r() * 0.3 });
+      items.push({ kind: 'tree', x: W.aveX + s * (446 + r() * 14), y: rowY + 60 + r() * 30, v: Math.floor(r() * 8), s: 0.8 + r() * 0.3 });
     }
-  }
+  });
   for (const s of [-1, 1]) {
     items.push({ kind: 'lamp', x: W.aveX + s * 150, y: W.gateY - 60 });
     items.push({ kind: 'booth', x: W.aveX + s * 150, y: W.gateY + 2 });
-    items.push({ kind: 'tree', x: W.aveX + s * 300, y: 150 + r() * 30, v: 1, s: 1.1 });
-    items.push({ kind: 'tree', x: W.aveX + s * 390, y: 120 + r() * 40, v: 3, s: 0.95 });
+    items.push({ kind: 'tree', x: W.aveX + s * 440, y: 96 + r() * 30, v: 3, s: 0.95 });
     items.push({ kind: 'lamp', x: W.aveX + s * 110, y: 196 });
   }
   items.push({ kind: 'gate', x: W.aveX, y: W.gateY });
@@ -67,20 +61,20 @@ function buildScenery(town, seed) {
 }
 
 // A small repeating tile of grass (or sand, or snow) that fills the whole view.
-function buildTile(town, seed) {
+function buildTile(theme, seed) {
   const size = 320;
   const cv = document.createElement('canvas');
   cv.width = cv.height = Math.round(size * GROUND_SCALE);
   const c = cv.getContext('2d');
   c.scale(GROUND_SCALE, GROUND_SCALE);
   const r = mulberry32(seed);
-  c.fillStyle = town.ground;
+  c.fillStyle = theme.ground;
   c.fillRect(0, 0, size, size);
   // draw each mark nine times, offset by the tile size, so the edges wrap
   const wrapped = (fn) => {
     for (const dx of [-size, 0, size]) for (const dy of [-size, 0, size]) fn(dx, dy);
   };
-  c.fillStyle = town.ground2;
+  c.fillStyle = theme.ground2;
   c.globalAlpha = 0.55;
   for (let k = 0; k < 7; k++) {
     const [x, y, rx, ry, rot] = [r() * size, r() * size, 30 + r() * 60, 14 + r() * 24, r() * 3];
@@ -91,7 +85,7 @@ function buildTile(town, seed) {
     });
   }
   c.globalAlpha = 1;
-  c.strokeStyle = town.tuft;
+  c.strokeStyle = theme.tuft;
   c.lineWidth = 1.6;
   c.lineCap = 'round';
   for (let k = 0; k < 22; k++) {
@@ -119,7 +113,7 @@ const cellHash = (gx, gy) => {
 const inTreeBand = (x, y) => x > -M + 50 && x < W.w + M - 50 && y > -M + 110 && y < W.h + M - 30;
 
 // Everything static inside and just around the fence, on a transparent layer.
-function buildGround(town, seed) {
+function buildGround(theme, seed) {
   const cv = document.createElement('canvas');
   cv.width = Math.round((W.w + 2 * M) * GROUND_SCALE);
   cv.height = Math.round((W.h + 2 * M) * GROUND_SCALE);
@@ -128,11 +122,10 @@ function buildGround(town, seed) {
   c.translate(M, M);
   const r = mulberry32(seed);
 
-  // plot pads
-  for (const d of ATTRACTIONS) {
+  for (const p of PLOTS) {
     c.beginPath();
-    c.roundRect(d.x - 138, d.y - 104, 276, 128, 26);
-    c.fillStyle = town.plot;
+    c.roundRect(p.x - 138, p.y - 104, 276, 128, 26);
+    c.fillStyle = theme.plot;
     c.fill();
     c.strokeStyle = 'rgba(0,0,0,0.06)';
     c.lineWidth = 3;
@@ -158,26 +151,24 @@ function buildGround(town, seed) {
     c.ellipse(W.aveX, W.gateY - 4, 132 + grow, 66 + grow, 0, 0, TAU);
     c.fill();
   };
-  paths(5, town.pathEdge);
-  paths(0, town.path);
+  paths(5, theme.pathEdge);
+  paths(0, theme.path);
   c.fillStyle = 'rgba(0,0,0,0.06)';
-  for (let k = 0; k < 260; k++) {
+  for (let k = 0; k < 180; k++) {
     const y = 160 + r() * (W.h + M - 170);
     c.fillRect(W.aveX - W.aveHalf + 6 + r() * (W.aveHalf * 2 - 22), y, 6 + r() * 8, 2.5);
   }
   for (const yRow of W.rowY) {
-    for (let k = 0; k < 26; k++) {
-      c.fillRect(W.aveX - reach + 8 + r() * (reach * 2 - 26), yRow + r() * 44, 6 + r() * 8, 2.5);
-    }
+    for (let k = 0; k < 26; k++) c.fillRect(W.aveX - reach + 8 + r() * (reach * 2 - 26), yRow + r() * 44, 6 + r() * 8, 2.5);
   }
 
   // flowers round the plots
   const blooms = ['#ff6b8b', '#ffd75e', '#ffffff', '#c98cff', '#ff9a4d'];
-  if (town.weather !== 'snow') {
-    for (const d of ATTRACTIONS) {
+  if (theme.weather !== 'snow') {
+    for (const p of PLOTS) {
       for (let k = 0; k < 16; k++) {
-        const fx = d.x + (r() - 0.5) * 250 + (r() < 0.5 ? -8 : 8);
-        const fy = d.y - 112 + r() * 12 + (k % 2) * 142;
+        const fx = p.x + (r() - 0.5) * 250 + (r() < 0.5 ? -8 : 8);
+        const fy = p.y - 112 + r() * 12 + (k % 2) * 142;
         if (Math.abs(fx - W.aveX) < reach + 14 && k % 2) continue;
         c.beginPath();
         c.arc(fx, fy, 2.6, 0, TAU);
@@ -195,11 +186,11 @@ function buildGround(town, seed) {
   const post = (x, y) => {
     c.fillStyle = 'rgba(0,0,0,0.12)';
     c.fillRect(x - 2, y - 1, 7, 4);
-    c.fillStyle = town.fence;
+    c.fillStyle = theme.fence;
     c.fillRect(x - 2.5, y - 16, 5, 17);
   };
   const rail = (xa, ya, xb, yb) => {
-    c.strokeStyle = town.fence;
+    c.strokeStyle = theme.fence;
     c.lineWidth = 3;
     c.beginPath();
     c.moveTo(xa, ya - 12);
@@ -224,28 +215,29 @@ function buildGround(town, seed) {
 
   // trees just beyond the fence
   const outside = [];
-  for (let k = 0; k < 150; k++) {
+  for (let k = 0; k < 120; k++) {
     const x = -M + r() * (W.w + 2 * M);
     const y = -M + r() * (W.h + 2 * M);
     const inside = x > fx0 - 34 && x < fx1 + 34 && y > fy0 - 10 && y < fy1 + 50;
     const road = Math.abs(x - W.aveX) < W.aveHalf + 50 && y > fy1;
-    const water = town.sea && y < 80;
+    const water = theme.sea && y < 80;
     if (inTreeBand(x, y) && !inside && !road && !water) outside.push({ x, y, v: Math.floor(r() * 8), s: 0.9 + r() * 0.5 });
   }
   outside.sort((p, q) => p.y - q.y);
-  for (const t of outside) A.drawTree(c, t.x, t.y, town, t.v, t.s);
+  for (const t of outside) A.drawTree(c, t.x, t.y, theme, t.v, t.s);
   return cv;
 }
 
 export function createRenderer(canvas, world, hooks = {}) {
   const ctx = canvas.getContext('2d');
   const cam = { x: W.w / 2, y: W.h, zoom: 0.5, tx: null, ty: null, minZoom: 0.3, maxZoom: 2.2 };
-  const insets = { top: 104, bottom: 84 };
+  const insets = { top: 104, bottom: 84, right: 0 };
   let vw = 300;
   let vh = 300;
   let dpr = 1;
   let time = 0;
-  let town = null;
+  let town = -1;
+  let theme = null;
   let ground = null;
   let tile = null;
   let scenery = [];
@@ -261,39 +253,47 @@ export function createRenderer(canvas, world, hooks = {}) {
   const sparks = [];
   const weather = [];
   let rocketIn = 0;
-  const animT = ATTRACTIONS.map(() => 0);
+  let showUntil = 0; // fireworks keep going until this time
+  const animT = PLOTS.map(() => 0);
 
   function setTown() {
-    const next = townFor(world.state);
-    if (next === town) return;
-    town = next;
-    const seed = 1000 + (world.state.tours % TOWNS.length) * 77;
-    ground = buildGround(town, seed);
-    tile = ctx.createPattern(buildTile(town, seed + 3), 'repeat');
-    if (tile.setTransform) tile.setTransform(new DOMMatrix().scale(1 / GROUND_SCALE));
-    scenery = buildScenery(town, seed + 5);
+    if (world.state.town === town) return;
+    town = world.state.town;
+    const info = townInfo(town);
+    const seed = 1000 + town * 77;
+    const rebuild = info.theme !== theme;
+    theme = info.theme;
+    if (rebuild || !ground) {
+      ground = buildGround(theme, seed);
+      tile = ctx.createPattern(buildTile(theme, seed + 3), 'repeat');
+      if (tile.setTransform) tile.setTransform(new DOMMatrix().scale(1 / GROUND_SCALE));
+    }
+    scenery = buildScenery(seed + 5);
     fixed = scenery.map((s) => ({ y: s.y, s }));
-    for (const d of ATTRACTIONS) fixed.push({ y: d.y - 4, a: d.index });
+    for (const p of PLOTS) fixed.push({ y: p.y - 4, k: p.index });
     fixed.sort((p, q) => p.y - q.y);
     weather.length = 0;
-    if (town.weather) {
+    if (theme.weather) {
       const r = mulberry32(seed + 9);
       for (let k = 0; k < 46; k++) weather.push({ x: r(), y: r(), z: 0.5 + r() * 0.8, ph: r() * TAU, k });
     }
+    animT.fill(0);
   }
 
   // ---- camera ------------------------------------------------------------
 
-  const usable = () => vh - insets.top - insets.bottom;
-  const centreY = () => insets.top + usable() / 2;
-  const toScreenX = (x) => vw / 2 + (x - cam.x) * cam.zoom;
+  const usableH = () => vh - insets.top - insets.bottom;
+  const usableW = () => vw - insets.right;
+  const centreX = () => usableW() / 2;
+  const centreY = () => insets.top + usableH() / 2;
+  const toScreenX = (x) => centreX() + (x - cam.x) * cam.zoom;
   const toScreenY = (y) => centreY() + (y - cam.y) * cam.zoom;
-  const toWorld = (sx, sy) => ({ x: cam.x + (sx - vw / 2) / cam.zoom, y: cam.y + (sy - centreY()) / cam.zoom });
+  const toWorld = (sx, sy) => ({ x: cam.x + (sx - centreX()) / cam.zoom, y: cam.y + (sy - centreY()) / cam.zoom });
 
   function clampCam() {
     cam.zoom = clamp(cam.zoom, cam.minZoom, cam.maxZoom);
-    const hw = vw / 2 / cam.zoom;
-    const hh = usable() / 2 / cam.zoom;
+    const hw = usableW() / 2 / cam.zoom;
+    const hh = usableH() / 2 / cam.zoom;
     const loX = -50 + hw;
     const hiX = W.w + 50 - hw;
     cam.x = loX > hiX ? W.w / 2 : clamp(cam.x, loX, hiX);
@@ -310,30 +310,28 @@ export function createRenderer(canvas, world, hooks = {}) {
     vh = canvas.clientHeight || window.innerHeight;
     canvas.width = Math.round(vw * dpr);
     canvas.height = Math.round(vh * dpr);
-    cam.minZoom = Math.min(vw / (W.w + 100), usable() / (W.h + 76));
+    cam.minZoom = Math.min(usableW() / (W.w + 100), usableH() / (W.h + 76));
     clampCam();
   }
 
   function resetView() {
     resize();
-    cam.zoom = clamp(vw / 880, cam.minZoom, 0.8);
+    cam.zoom = clamp(Math.min(usableW() / 880, usableH() / 900), cam.minZoom, 0.85);
     cam.x = W.w / 2;
-    // start on the first row of plots, as low as the view allows
-    cam.y = W.rowY[0] + 40 - (usable() / cam.zoom) * 0.25;
+    cam.y = W.rowY[0] + 60 - (usableH() / cam.zoom) * 0.2;
     cam.tx = cam.ty = null;
     clampCam();
   }
 
-  // Glide so attraction i sits in the clear space above any open sheet.
-  function focus(i) {
-    const d = ATTRACTIONS[i];
-    const clearTop = insets.top;
+  // Glide so plot k sits in the clear space above any open sheet.
+  function focus(k) {
+    const p = PLOTS[k];
+    const d = designAt(world.state, k);
     const clearBottom = vh - Math.max(insets.bottom, sheetCover);
-    const wantY = (clearTop + clearBottom) / 2 + 20;
-    // only pan sideways when the attraction would not otherwise fit in view
-    const fits = vw / 2 / cam.zoom >= Math.abs(d.x - W.aveX) + d.w / 2 + 16;
-    cam.tx = fits ? W.w / 2 : d.x + (W.aveX - d.x) * 0.35;
-    cam.ty = d.y - d.h * 0.42 - (wantY - centreY()) / cam.zoom;
+    const wantY = (insets.top + clearBottom) / 2 + 20;
+    const fits = usableW() / 2 / cam.zoom >= Math.abs(p.x - W.aveX) + d.w / 2 + 16;
+    cam.tx = fits ? W.w / 2 : p.x + (W.aveX - p.x) * 0.35;
+    cam.ty = p.y - d.h * 0.42 - (wantY - centreY()) / cam.zoom;
   }
 
   function updateCamera(dt) {
@@ -371,8 +369,7 @@ export function createRenderer(canvas, world, hooks = {}) {
     p.y = e.clientY;
     if (pointers.size === 2 && pinch) {
       const [a, b] = [...pointers.values()];
-      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-      zoomAt(mid.x, mid.y, (pinch.zoom * Math.hypot(a.x - b.x, a.y - b.y)) / Math.max(1, pinch.d));
+      zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, (pinch.zoom * Math.hypot(a.x - b.x, a.y - b.y)) / Math.max(1, pinch.d));
       return;
     }
     if (!drag) return;
@@ -423,26 +420,25 @@ export function createRenderer(canvas, world, hooks = {}) {
   // What is under a tap? Balloons first, then the nearest plot.
   function pick(sx, sy) {
     for (const b of world.balloons) {
-      const bx = toScreenX(b.x);
-      const by = toScreenY(b.y);
       const reach = Math.max(34, 36 * cam.zoom);
-      if (Math.hypot(sx - bx, sy - (by + 12 * cam.zoom)) < reach + 10) return { balloon: b };
+      if (Math.hypot(sx - toScreenX(b.x), sy - (toScreenY(b.y) + 12 * cam.zoom)) < reach + 10) return { balloon: b };
     }
-    const p = toWorld(sx, sy);
+    const w = toWorld(sx, sy);
     let best = -1;
     let bestD = Infinity;
-    for (const d of ATTRACTIONS) {
-      const built = world.state.attractions[d.index].built;
-      const top = built ? d.y - d.h - 46 : d.y - 96;
-      const half = built ? d.w / 2 + 12 : 82;
-      if (Math.abs(p.x - d.x) > half || p.y < top || p.y > d.y + 30) continue;
-      const dist = Math.abs(p.y - (d.y - 50)) + Math.abs(p.x - d.x) * 0.5;
+    for (const p of PLOTS) {
+      const built = world.state.plots[p.index].stage > 0;
+      const d = designAt(world.state, p.index);
+      const top = built ? p.y - d.h - 30 : p.y - 110;
+      const half = built ? d.w / 2 + 16 : 110;
+      if (Math.abs(w.x - p.x) > half || w.y < top || w.y > p.y + 34) continue;
+      const dist = Math.abs(w.y - (p.y - 50)) + Math.abs(w.x - p.x) * 0.5;
       if (dist < bestD) {
         bestD = dist;
-        best = d.index;
+        best = p.index;
       }
     }
-    return best >= 0 ? { attraction: best } : null;
+    return best >= 0 ? { plot: best } : null;
   }
 
   // ---- effects -----------------------------------------------------------
@@ -485,13 +481,15 @@ export function createRenderer(canvas, world, hooks = {}) {
   const CONFETTI = ['#e5484d', '#ffc53d', '#3e63dd', '#46a758', '#e93d82', '#fff6e0'];
   const confetti = (x, y, n = 36) => burst(x, y, n, CONFETTI, { up: true, speed: 260, life: 1.3, spread: 60 });
   const coins = (x, y, n = 4) => burst(x, y, n, ['#ffc53d', '#ffd75e'], { up: true, speed: 150, life: 0.75, shape: 'coin', size: 5 });
+  const custard = (x, y) => burst(x, y, 34, ['#fff3c4', '#ffe9a6', '#ffffff'], { speed: 260, life: 0.9, size: 9, shape: 'coin' });
 
   function launchRocket() {
     if (rockets.length > 6) return;
+    const w = usableW();
     rockets.push({
-      x: vw * (0.12 + Math.random() * 0.76),
-      y: vh + 10,
-      ty: vh * (0.14 + Math.random() * 0.3),
+      x: w * (0.12 + Math.random() * 0.76),
+      y: vh - insets.bottom + 10,
+      ty: insets.top + (vh - insets.top - insets.bottom) * (0.08 + Math.random() * 0.4),
       vy: -(vh * 0.9 + Math.random() * vh * 0.3),
       color: ['#ffd75e', '#ff7a9a', '#8fd3ff', '#b6f36b', '#ffb36b', '#d0a2ff'][Math.floor(Math.random() * 6)],
     });
@@ -509,10 +507,10 @@ export function createRenderer(canvas, world, hooks = {}) {
     for (const p of popups) p.t += dt;
     while (popups.length && popups[0].t > 1.3) popups.shift();
 
-    if (world.state.boosts.fireworks > 0) {
+    if (time < showUntil) {
       rocketIn -= dt;
       if (rocketIn <= 0) {
-        rocketIn = 0.32 + Math.random() * 0.4;
+        rocketIn = 0.28 + Math.random() * 0.4;
         launchRocket();
       }
     }
@@ -547,7 +545,7 @@ export function createRenderer(canvas, world, hooks = {}) {
     const s = item.s;
     if (s) {
       switch (s.kind) {
-        case 'tree': A.drawTree(ctx, s.x, s.y, town, s.v, s.s); break;
+        case 'tree': A.drawTree(ctx, s.x, s.y, theme, s.v, s.s); break;
         case 'lamp': A.drawLamp(ctx, s.x, s.y, dark > 0.3); break;
         case 'bench': A.drawBench(ctx, s.x, s.y); break;
         case 'bunting': A.drawBunting(ctx, s.x - W.aveHalf - 14, s.y - 72, s.x + W.aveHalf + 14, s.y - 72, 7, time); break;
@@ -558,29 +556,33 @@ export function createRenderer(canvas, world, hooks = {}) {
       }
       return;
     }
-    const i = item.a;
-    const d = ATTRACTIONS[i];
-    const st = world.state.attractions[i];
-    if (!st.built) {
-      const next = world.state.attractions.findIndex((a) => !a.built);
-      const mode = i !== next ? 'locked' : world.state.cash >= d.cost ? 'afford' : 'open';
-      A.drawForSale(ctx, d.x, d.y - 28, mode);
+    const k = item.k;
+    const p = PLOTS[k];
+    const plot = world.state.plots[k];
+    if (plot.stage === 0) {
+      A.drawForSale(ctx, p.x, p.y - 28, world.state.coins >= E.stageCost(world.state.town, k, 1) ? 'afford' : 'open');
       return;
     }
-    const rt = world.rt[i];
+    const d = designAt(world.state, k);
+    const rt = world.rt[k];
     ctx.save();
-    ctx.translate(d.x, d.y - 4);
+    ctx.translate(p.x, p.y - 4);
+    A.drawPlotBack(ctx, d.w, plot.stage, time + k);
+    ctx.save();
     if (rt.pulse > 0) {
-      const k = 1 + Math.sin(rt.pulse * Math.PI) * 0.025;
-      ctx.scale(k, 2 - k);
+      const squash = 1 + Math.sin(rt.pulse * Math.PI) * 0.025;
+      ctx.scale(squash, 2 - squash);
     }
-    A.drawAttraction(ctx, i, {
-      t: time + i * 1.7,
-      anim: animT[i],
+    A.drawAttraction(ctx, d.index, {
+      t: time + k * 1.7,
+      anim: animT[k],
       run: rt.phase === 'run',
       p: rt.phase === 'run' ? clamp(rt.t / rt.dur, 0, 1) : 0,
       riders: rt.riders.length,
     });
+    ctx.restore();
+    if (plot.splat) A.drawSplat(ctx, d.w, d.h, time);
+    A.drawPlotFront(ctx, d.w, p.side, plot.stage, time + k);
     ctx.restore();
   }
 
@@ -610,65 +612,39 @@ export function createRenderer(canvas, world, hooks = {}) {
     const s = world.state;
     const z = cam.zoom;
     const size = clamp(8 + z * 7, 10, 14);
-    const next = s.attractions.findIndex((a) => !a.built);
-    for (const d of ATTRACTIONS) {
-      const i = d.index;
-      const a = s.attractions[i];
-      const sx = toScreenX(d.x);
-      const sy = toScreenY(d.y);
+    const right = usableW();
+    for (const p of PLOTS) {
+      const k = p.index;
+      const plot = s.plots[k];
+      const sx = toScreenX(p.x);
+      const sy = toScreenY(p.y);
       if (sx < -160 || sx > vw + 160 || sy < -80 || sy > vh + 320) continue;
-      if (!a.built) {
-        if (i === next) {
-          const can = s.cash >= d.cost;
-          pill(sx, toScreenY(d.y - 6) + size, money(d.cost), can ? '#2f9e44' : 'rgba(27,31,74,0.85)', '#fff', size + 1);
-        }
+      if (plot.stage === 0) {
+        const cost = E.stageCost(s.town, k, 1);
+        pill(sx, toScreenY(p.y - 6) + size, money(cost), s.coins >= cost ? '#2f9e44' : 'rgba(27,31,74,0.85)', '#fff', size + 1);
         continue;
       }
-      const rt = world.rt[i];
-      const can = s.cash >= E.levelCost(d, a.level);
-      // nameplate at the outer front corner, clear of the queue and of the row below
-      const edge = size * 2.6;
-      const px = clamp(toScreenX(d.x + d.side * (d.w / 2 - 34)), Math.min(edge, sx), Math.max(vw - edge, sx));
-      const py = toScreenY(d.y + 14) + size;
-      const prog = rt.phase === 'run' ? rt.t / rt.dur : -1;
-      pill(px, py, (can ? '▲ ' : '') + 'Lv ' + a.level, can ? '#2f9e44' : 'rgba(27,31,74,0.82)', '#fff', size, prog);
-      if (isReady(world, i)) {
-        const full = rt.riders.length >= E.capacity(d, a.level);
-        const bounce = Math.abs(Math.sin(time * (full ? 6 : 4))) * 7;
-        const by = toScreenY(d.y - d.h - 6) - 20 - bounce;
-        const r = clamp(15 + z * 8, 17, 24);
-        ctx.beginPath();
-        ctx.arc(sx, by, r + 3, 0, TAU);
-        ctx.fillStyle = 'rgba(27,31,74,0.9)';
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(sx, by, r, 0, TAU);
-        ctx.fillStyle = '#ffc53d';
-        ctx.fill();
-        ctx.beginPath();
-        ctx.moveTo(sx - 6, by + r + 1);
-        ctx.lineTo(sx + 6, by + r + 1);
-        ctx.lineTo(sx, by + r + 9);
-        ctx.closePath();
-        ctx.fillStyle = 'rgba(27,31,74,0.9)';
-        ctx.fill();
-        ctx.font = `900 ${Math.round(r * 0.72)}px ${FONT}`;
-        ctx.fillStyle = '#1b1f4a';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('GO!', sx, by + 1);
-      } else if (!a.operator && rt.phase === 'idle') {
-        ctx.globalAlpha = 0.85;
-        pill(sx, toScreenY(d.y - d.h - 6) - 12, 'waiting for guests', 'rgba(27,31,74,0.7)', '#fff6e0', Math.max(9, size - 2));
-        ctx.globalAlpha = 1;
+      const d = designAt(s, k);
+      const rt = world.rt[k];
+      const edge = size * 3;
+      const px = clamp(toScreenX(p.x + p.side * (d.w / 2 - 44)), Math.min(edge, sx), Math.max(right - edge, sx));
+      const py = toScreenY(p.y + 18) + size;
+      if (plot.splat) {
+        pill(px, py, 'Clean up ' + money(E.repairCost(s.town, k, plot.stage)), '#e5484d', '#fff', size);
+        continue;
       }
+      const done = plot.stage >= STAGES;
+      const can = !done && s.coins >= E.stageCost(s.town, k, plot.stage + 1);
+      pill(px, py, `${can ? '▲ ' : ''}★ ${plot.stage}/${STAGES}`, can ? '#2f9e44' : done ? '#b8860b' : 'rgba(27,31,74,0.82)', can || done ? '#fff' : '#ffd75e', size,
+        rt.phase === 'run' ? rt.t / rt.dur : -1);
     }
     if (pointer >= 0) {
-      const d = ATTRACTIONS[pointer];
-      const built = s.attractions[pointer].built;
-      const sx = toScreenX(d.x);
-      const top = toScreenY(built ? d.y - d.h - 6 : d.y - 96) - (built && isReady(world, pointer) ? 62 : 14);
+      const p = PLOTS[pointer];
+      const built = s.plots[pointer].stage > 0;
+      const d = designAt(s, pointer);
+      const top = toScreenY(built ? p.y - d.h - 6 : p.y - 96) - 14;
       const by = top - Math.abs(Math.sin(time * 3.2)) * 10;
+      const sx = toScreenX(p.x);
       ctx.beginPath();
       ctx.moveTo(sx - 13, by - 20);
       ctx.lineTo(sx + 13, by - 20);
@@ -685,7 +661,7 @@ export function createRenderer(canvas, world, hooks = {}) {
 
   function drawWeather() {
     if (!weather.length) return;
-    const kind = town.weather;
+    const kind = theme.weather;
     for (const p of weather) {
       const fall = kind === 'snow' ? 34 : 46;
       const y = ((p.y * vh + time * fall * p.z) % (vh + 20)) - 10;
@@ -719,22 +695,22 @@ export function createRenderer(canvas, world, hooks = {}) {
     }
     updateCamera(dt);
     updateEffects(dt);
-    for (let i = 0; i < ATTRACTIONS.length; i++) if (world.rt[i].phase === 'run') animT[i] += dt;
+    for (const p of PLOTS) if (world.rt[p.index].phase === 'run') animT[p.index] += dt;
 
     const s = world.state;
     const dark = darkness(s.clock);
     const z = cam.zoom;
-    const ox = vw / 2 - cam.x * z;
+    const ox = centreX() - cam.x * z;
     const oy = centreY() - cam.y * z;
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = town.ground;
+    ctx.fillStyle = theme.ground;
     ctx.fillRect(0, 0, vw, vh);
     ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * ox, dpr * oy);
     const view = { x0: -ox / z - 180, x1: (vw - ox) / z + 180, y0: -oy / z - 40, y1: (vh - oy) / z + 300 };
     ctx.fillStyle = tile;
     ctx.fillRect(view.x0, view.y0, view.x1 - view.x0, view.y1 - view.y0);
-    if (town.sea && view.y0 < 30) {
+    if (theme.sea && view.y0 < 30) {
       const grad = ctx.createLinearGradient(0, -400, 0, 20);
       grad.addColorStop(0, '#2f8fd0');
       grad.addColorStop(1, '#6fd0e8');
@@ -755,17 +731,18 @@ export function createRenderer(canvas, world, hooks = {}) {
           if (hsh > 0.4) continue;
           const x = (gx + ((hsh * 13.7) % 1)) * FAR_CELL;
           const y = (gy + ((hsh * 7.3) % 1)) * FAR_CELL;
-          if (inTreeBand(x, y) || (town.sea && y < 80)) continue;
-          A.drawTree(ctx, x, y, town, Math.floor(hsh * 97) % 8, 0.9 + ((hsh * 31) % 1) * 0.5);
+          if (inTreeBand(x, y) || (theme.sea && y < 80)) continue;
+          A.drawTree(ctx, x, y, theme, Math.floor(hsh * 97) % 8, 0.9 + ((hsh * 31) % 1) * 0.5);
         }
       }
     }
     ctx.drawImage(ground, -M, -M, W.w + 2 * M, W.h + 2 * M);
 
     if (selected >= 0) {
-      const d = ATTRACTIONS[selected];
+      const p = PLOTS[selected];
+      const d = designAt(s, selected);
       ctx.beginPath();
-      ctx.ellipse(d.x, d.y - 4, d.w / 2 + 14, 30, 0, 0, TAU);
+      ctx.ellipse(p.x, p.y - 4, d.w / 2 + 14, 30, 0, 0, TAU);
       ctx.strokeStyle = `rgba(255,255,255,${0.55 + Math.sin(time * 4) * 0.25})`;
       ctx.lineWidth = 5;
       ctx.setLineDash([14, 10]);
@@ -848,10 +825,14 @@ export function createRenderer(canvas, world, hooks = {}) {
           glow(sc.x, sc.y - 50, 120, 0, 0.55 * lit);
         }
       }
-      for (const d of ATTRACTIONS) {
-        if (!s.attractions[d.index].built) continue;
-        const flick = 0.9 + Math.sin(time * 5 + d.index) * 0.06;
-        for (const [lx, ly, lr, tint] of A.LIGHTS[d.index]) glow(d.x + lx, d.y + ly, lr, tint, 0.5 * lit * flick);
+      for (const p of PLOTS) {
+        if (!isOpen(s, p.index)) continue;
+        const d = designAt(s, p.index);
+        const stage = s.plots[p.index].stage;
+        const flick = 0.9 + Math.sin(time * 5 + p.index) * 0.06;
+        const strength = (0.36 + 0.05 * stage) * lit * flick;
+        for (const [lx, ly, lr, tint] of A.LIGHTS[d.index]) glow(p.x + lx, p.y + ly, lr, tint, strength);
+        if (stage >= 3) glow(p.x, p.y - 140, d.w * 0.7, 1, 0.3 * lit, 0.35);
       }
       ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'source-over';
@@ -921,33 +902,35 @@ export function createRenderer(canvas, world, hooks = {}) {
     popText,
     confetti,
     coins,
+    custard,
     burst,
     cam,
     toScreenX,
     toScreenY,
-    setSelected: (i) => { selected = i; },
-    setPointer: (i) => { pointer = i; },
+    fireworks: (seconds = 5) => { showUntil = time + seconds; },
+    setSelected: (k) => { selected = k; },
+    setPointer: (k) => { pointer = k; },
     setSheetCover: (px) => { sheetCover = px; },
-    setInsets: (top, bottom) => {
+    setInsets: (top, bottom, right = 0) => {
+      if (insets.top === top && insets.bottom === bottom && insets.right === right) return;
       insets.top = top;
       insets.bottom = bottom;
+      insets.right = right;
       resize();
     },
     get time() { return time; },
   };
 }
 
-// A still picture of an attraction for menus.
-export function thumbnail(i, w = 88, h = 72, scale = 2) {
-  const d = ATTRACTIONS[i];
+// A still picture of an attraction design for menus.
+export function thumbnail(design, w = 88, h = 72, scale = 2) {
   const cv = document.createElement('canvas');
   cv.width = w * scale;
   cv.height = h * scale;
   const c = cv.getContext('2d');
-  const k = Math.min(w / (d.w + 16), h / (d.h + 24)) * scale;
+  const k = Math.min(w / (design.w + 16), h / (design.h + 24)) * scale;
   c.translate((w * scale) / 2, h * scale - 7 * scale);
   c.scale(k, k);
-  A.drawAttraction(c, i, { t: 0.4, anim: 0.6, run: false, p: 0, riders: 0 });
+  A.drawAttraction(c, design.index, { t: 0.4, anim: 0.6, run: false, p: 0, riders: 0 });
   return cv;
 }
-

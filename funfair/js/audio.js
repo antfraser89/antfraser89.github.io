@@ -98,7 +98,7 @@ export function createAudio(getSettings) {
     src.start(t0);
   }
 
-  const arp = (notes, step, opts) => notes.forEach((n, k) => tone(midi(n), { type: 'triangle', dur: 0.16, vol: 0.16, ...opts, at: k * step }));
+  const arp = (notes, step, opts = {}) => notes.forEach((n, k) => tone(midi(n), { type: 'triangle', dur: 0.16, vol: 0.16, ...opts, at: (opts.at || 0) + k * step }));
 
   const SFX = {
     click: () => tone(620, { type: 'triangle', dur: 0.04, vol: 0.1 }),
@@ -126,8 +126,47 @@ export function createAudio(getSettings) {
     whoosh: () => noise({ dur: 0.4, vol: 0.08, freq: 2400, q: 1.5 }),
     tour: () => arp([60, 64, 67, 72, 76, 79, 84], 0.09, { dur: 0.3, vol: 0.14 }),
     error: () => tone(170, { type: 'square', dur: 0.09, vol: 0.06 }),
+    // the machine
+    spin: () => {
+      noise({ dur: 0.22, vol: 0.07, freq: 900, q: 0.6 });
+      tone(220, { to: 440, type: 'triangle', dur: 0.2, vol: 0.07 });
+    },
+    tick: () => tone(1500, { type: 'square', dur: 0.018, vol: 0.022 }),
+    clunk: () => {
+      noise({ dur: 0.06, vol: 0.16, freq: 420, q: 0.7 });
+      tone(160, { to: 90, dur: 0.08, vol: 0.14 });
+    },
+    win: () => arp([72, 76, 79, 84], 0.07, { vol: 0.14 }),
+    bigwin: () => arp([72, 76, 79, 84, 88, 91, 96], 0.07, { dur: 0.22, vol: 0.15 }),
+    jackpot: () => {
+      arp([72, 79, 84, 88, 91, 96, 100, 103], 0.075, { dur: 0.3, vol: 0.15 });
+      arp([60, 64, 67, 72], 0.15, { type: 'square', dur: 0.4, vol: 0.05 });
+    },
+    lock: () => {
+      tone(900, { to: 1400, type: 'triangle', dur: 0.07, vol: 0.12 });
+      noise({ dur: 0.05, vol: 0.14, freq: 2600, q: 2, at: 0.07 });
+    },
+    token: () => arp([81, 88, 93], 0.06, { vol: 0.12 }),
+    fanfare: () => arp([67, 72, 76, 79, 76, 84], 0.085, { type: 'square', dur: 0.16, vol: 0.06 }),
+    splat: () => {
+      noise({ dur: 0.22, vol: 0.3, freq: 500, q: 0.5 });
+      tone(240, { to: 70, dur: 0.2, vol: 0.16 });
+    },
+    dig: () => {
+      noise({ dur: 0.12, vol: 0.16, freq: 1600, q: 0.8 });
+      arp([84, 88, 91], 0.05, { vol: 0.1, at: 0.08 });
+    },
+    card: () => noise({ dur: 0.07, vol: 0.12, freq: 3000, q: 1.2 }),
+    cardnew: () => {
+      noise({ dur: 0.07, vol: 0.12, freq: 3000, q: 1.2 });
+      arp([84, 91], 0.07, { vol: 0.12 });
+    },
+    pack: () => {
+      noise({ dur: 0.3, vol: 0.1, freq: 2200, q: 0.9 });
+      tone(300, { to: 900, type: 'triangle', dur: 0.3, vol: 0.08 });
+    },
   };
-  const MIN_GAP = { coin: 0.11, bang: 0.16, upgrade: 0.05, click: 0.03 };
+  const MIN_GAP = { coin: 0.11, bang: 0.16, upgrade: 0.05, click: 0.03, tick: 0.045, clunk: 0.05 };
 
   function play(name) {
     if (!getSettings().sfx || !SFX[name]) return;

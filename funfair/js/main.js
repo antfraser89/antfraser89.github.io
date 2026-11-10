@@ -1,15 +1,20 @@
-// Boot, the frame loop, saving, and turning simulation events into feedback.
+// Boot, the frame loop, saving, and turning what happens into feedback.
 import { createAudio } from './audio.js';
-import { ATTRACTIONS, GAME_TITLE, PARK, SAVE_KEY, SHOP, TUNING } from './config.js';
+import { GAME_TITLE, OPENING_SPINS, PLOTS, SAVE_KEY, TUNING } from './config.js';
 import * as E from './economy.js';
-import { fmt, money } from './format.js';
-import { createRenderer, townFor } from './render.js';
+import { money } from './format.js';
+import { createRenderer } from './render.js';
+import * as R from './rules.js';
 import * as S from './sim.js';
 import { newState, parseSave, serialize } from './state.js';
 import { createUI } from './ui.js';
 
 const params = new URLSearchParams(location.search);
-const speed = Math.max(0.1, Math.min(60, Number(params.get('speed')) || 1));
+const speed = Math.max(0.1, Math.min(600, Number(params.get('speed')) || 1));
+
+// The game clock is the wall clock, except when fast-forwarding for testing.
+let skew = 0;
+const clock = () => Date.now() + skew;
 
 function readSave() {
   try {
@@ -21,14 +26,14 @@ function readSave() {
 }
 
 const loaded = readSave();
-const state = loaded || newState();
+const state = loaded || newState(clock());
 const world = S.createWorld(state);
 let saving = true;
 
 function save() {
   if (!saving) return;
   try {
-    localStorage.setItem(SAVE_KEY, serialize(world.state));
+    localStorage.setItem(SAVE_KEY, serialize(world.state, clock()));
   } catch {
     /* storage full or unavailable */
   }
@@ -47,14 +52,12 @@ function replaceSave(next) {
 
 const audio = createAudio(() => world.state.settings);
 const canvas = document.getElementById('game');
-const renderer = createRenderer(canvas, world, {
-  onTap,
-  onBang: () => audio.play('bang'),
-});
+const renderer = createRenderer(canvas, world, { onTap, onBang: () => audio.play('bang') });
 const ui = createUI({
   world,
   renderer,
   audio,
+  clock,
   onSave: save,
   onReplaceSave: (next) => replaceSave(next),
   onReset: () => replaceSave(null),
@@ -71,106 +74,53 @@ function onTap(sx, sy) {
     S.popBalloon(world, hit.balloon);
     return;
   }
-  const i = hit.attraction;
-  if (S.tapAttraction(world, i)) {
-    const d = ATTRACTIONS[i];
-    audio.play('go');
-    renderer.burst(d.x, d.y - d.h - 30, 8, ['#ffc53d', '#fff6e0'], { speed: 120, life: 0.5, size: 4 });
-    return;
-  }
   audio.play('click');
-  if (ui.sheetKey === 'attraction:' + i) ui.closeSheet();
-  else ui.openAttraction(i);
+  ui.openBuild(hit.plot);
 }
 
-const STAR = '<span class="star">★</span>';
-
 function handleEvents() {
-  const s = world.state;
   for (const ev of world.events) {
-    switch (ev.type) {
-      case 'pay': {
-        const d = ATTRACTIONS[ev.i];
-        const boosted = E.boostMult(s) > 1;
-        renderer.popText(d.x, d.y - d.h * 0.62, '+' + money(ev.amount), boosted ? '#ffc53d' : '#fff6e0');
-        renderer.coins(d.x, d.y - d.h * 0.5, Math.min(6, 2 + ev.n));
-        audio.play('coin');
-        break;
-      }
-      case 'build': {
-        const d = ATTRACTIONS[ev.i];
-        renderer.confetti(d.x, d.y - d.h * 0.5, 44);
-        audio.play('build');
-        ui.toast(`<b>${d.name}</b> is open for business!`);
-        break;
-      }
-      case 'upgrade': {
-        const d = ATTRACTIONS[ev.i];
-        renderer.burst(d.x, d.y - d.h * 0.4, 6, ['#b6f36b', '#fff6e0'], { up: true, speed: 140, life: 0.6, size: 4, spread: d.w * 0.6 });
-        audio.play('upgrade');
-        break;
-      }
-      case 'milestone': {
-        const d = ATTRACTIONS[ev.i];
-        renderer.confetti(d.x, d.y - d.h * 0.5, 60);
-        audio.play('milestone');
-        ui.toast(`${d.name} hit level ${s.attractions[ev.i].level}: tickets ×2!` + (ev.stars ? ` +${STAR}${ev.stars}` : ''), 'gold');
-        break;
-      }
-      case 'hire': {
-        audio.play('hire');
-        ui.toast(`An operator now runs the <b>${ATTRACTIONS[ev.i].name}</b>.`);
-        break;
-      }
-      case 'park':
-        audio.play('upgrade');
-        ui.toast(`${PARK[ev.key].name} improved.`);
-        break;
-      case 'shop':
-        audio.play('milestone');
-        ui.toast(ev.key === 'warp' ? `Time warp: +${money(ev.amount)}` : `${SHOP[ev.key].name} upgraded.`, 'gold');
-        save();
-        break;
-      case 'balloon': {
-        audio.play('pop');
-        renderer.burst(ev.x, ev.y, 16, [ev.color, '#fff6e0'], { speed: 220, life: 0.6, size: 6 });
-        const r = ev.reward;
-        if (r.kind === 'cash') {
-          renderer.popText(ev.x, ev.y, '+' + money(r.amount), '#ffc53d', 18);
-          ui.toast(`Prize balloon: +${money(r.amount)}`);
-        } else if (r.kind === 'star') {
-          renderer.popText(ev.x, ev.y, '+★', '#ffc53d', 20);
-          ui.toast(`Prize balloon: +${STAR}1`, 'gold');
-        } else {
-          ui.toast(`Rush hour! Takings ×${TUNING.rushMult} for ${r.amount}s`, 'gold');
-        }
-        break;
-      }
-      case 'fireworks':
-        audio.play('whoosh');
-        ui.toast(`Fireworks! Takings ×${TUNING.fireworksMult} for ${TUNING.fireworksDuration}s`, 'gold');
-        break;
-      case 'goal':
-        audio.play('claim');
-        ui.toast(`Goal complete: +${STAR}${ev.stars}`, 'gold');
-        break;
-      case 'tour':
-        ui.toast(`Welcome to <b>${townFor(s).name}</b>! +${fmt(ev.gain)} fame`, 'gold');
-        break;
-      default:
-        break;
+    if (ev.type === 'pay') {
+      const p = PLOTS[ev.k];
+      const d = S.designAt(world.state, ev.k);
+      renderer.popText(p.x, p.y - d.h * 0.62, '+' + money(ev.amount));
+      renderer.coins(p.x, p.y - d.h * 0.5, Math.min(5, 1 + ev.n));
+    } else if (ev.type === 'balloon') {
+      audio.play('pop');
+      renderer.burst(ev.x, ev.y, 16, [ev.color, '#fff6e0'], { speed: 220, life: 0.6, size: 6 });
+      ui.toast(`Prize balloon: ${ui.describe(ev.reward)}`, 'gold');
+    } else if (ev.type === 'mission') {
+      audio.play('claim');
+      ui.toast(`Mission complete: ${ui.describe(ev.reward)}`, 'gold');
+      save();
     }
   }
   world.events.length = 0;
 }
 
-// Credit time spent with the tab closed or hidden.
-function creditAway(seconds, announce) {
+// A rival's pie arriving while you are playing.
+function announce(item) {
+  const who = R.rivalName(item.rival);
+  if (item.blocked) {
+    audio.play('lock');
+    ui.toast(`${who} threw a pie. Your padlock stopped it!`);
+    return;
+  }
+  const p = PLOTS[item.plot];
+  const d = S.designAt(world.state, item.plot);
+  audio.play('splat');
+  renderer.custard(p.x, p.y - d.h * 0.5);
+  ui.toast(`<b>${who} pied your ${d.name}!</b> Clean it up to reopen.`);
+}
+
+// Catch up after time away: the gate's takings, the token meter, the rivals.
+function comeBack(seconds, announceIt) {
   if (!(seconds > 5)) return;
-  const res = S.applyOffline(world, seconds);
-  if (res.amount <= 0) return;
-  if (announce && seconds >= TUNING.offlineMinSeconds) ui.showAway(res, seconds);
-  else ui.toast(`While you were away: +${money(res.amount)}`);
+  const till = S.applyOffline(world, seconds);
+  const res = R.tick(world.state, clock(), Math.random, TUNING.incomingMaxAway);
+  if (announceIt && seconds >= TUNING.offlineMinSeconds) ui.showAway(seconds, till, res.tokens, res.incidents);
+  else res.incidents.forEach(announce);
+  ui.showLeague(res.league);
 }
 
 // ---- loop -----------------------------------------------------------------
@@ -178,27 +128,37 @@ function creditAway(seconds, announce) {
 let last = performance.now();
 let uiClock = 0;
 let saveClock = 0;
+let tickClock = 0;
 let hiddenAt = 0;
 
 function frame(now) {
   let dt = (now - last) / 1000;
   last = now;
   if (dt > 5) {
-    creditAway(dt, false); // a long stall (sleep, throttled tab) counts as time away
+    comeBack(dt, false); // a long stall (sleep, throttled tab) counts as time away
     dt = 0.05;
   }
   dt = Math.max(0, Math.min(dt, 0.25));
+  skew += dt * 1000 * (speed - 1);
 
-  let simTime = dt * speed;
-  const stepSize = speed > 4 ? 0.1 : 0.05;
+  let simTime = dt * Math.min(speed, 12);
   while (simTime > 1e-6) {
-    const h = Math.min(stepSize, simTime);
-    S.step(world, h);
-    simTime -= h;
+    const step = Math.min(0.05, simTime);
+    S.step(world, step);
+    simTime -= step;
   }
   handleEvents();
   renderer.draw(dt);
+  ui.frame(dt);
 
+  tickClock += dt;
+  if (tickClock >= 1) {
+    tickClock = 0;
+    const res = R.tick(world.state, clock(), Math.random, 1);
+    res.incidents.forEach(announce);
+    ui.showLeague(res.league);
+    if (!ui.busy && world.state.stats.spins >= OPENING_SPINS.length) ui.showDaily();
+  }
   uiClock += dt;
   if (uiClock >= 0.1) {
     uiClock = 0;
@@ -220,19 +180,24 @@ document.addEventListener('visibilitychange', () => {
     const away = (Date.now() - hiddenAt) / 1000;
     hiddenAt = 0;
     last = performance.now();
-    creditAway(away, true);
+    comeBack(away, true);
   }
   audio.sync();
 });
 window.addEventListener('pagehide', save);
 window.addEventListener('resize', () => {
-  renderer.resize();
   ui.measure();
+  renderer.resize();
 });
 window.addEventListener('pointerdown', () => audio.unlock(), { passive: true });
 window.addEventListener('keydown', (e) => {
   audio.unlock();
   if (e.key === 'Escape') ui.closeSheet();
+  // space bar spins, unless a button or text box has the focus
+  if (e.key === ' ' && !e.repeat && !/^(BUTTON|TEXTAREA|INPUT)$/.test(e.target.tagName)) {
+    e.preventDefault();
+    ui.spin();
+  }
 });
 
 document.title = GAME_TITLE;
@@ -243,7 +208,8 @@ renderer.resetView();
 if (!loaded) {
   ui.showWelcome();
 } else if (state.lastSaved > 0) {
-  creditAway((Date.now() - state.lastSaved) / 1000, true);
+  comeBack((clock() - state.lastSaved) / 1000, true);
+  ui.showDaily();
 }
 
 requestAnimationFrame((t) => {
@@ -252,4 +218,4 @@ requestAnimationFrame((t) => {
 });
 
 // Handy for poking at the game from the console and for automated checks.
-window.funfair = { world, sim: S, economy: E, renderer, ui, save };
+window.funfair = { world, state, rules: R, sim: S, economy: E, renderer, ui, save, clock };
