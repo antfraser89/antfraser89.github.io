@@ -1,7 +1,6 @@
 // The three reels, drawn on their own small canvas. The result is decided by
 // the rules before the reels move; this only shows it.
-import { SYMBOLS } from './config.js';
-import { drawSymbol } from './art.js';
+import { SYMBOLS, SYMBOL_ART } from './config.js';
 
 const RING = 24;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -35,25 +34,26 @@ export function createSlotView(canvas, hooks = {}) {
     lastTick: 0,
   }));
   // start on a tidy non-winning line
-  ['coin', 'star', 'token'].forEach((s, i) => { reels[i].ring[reels[i].pos % RING] = s; });
+  ['coin', 'fish', 'star'].forEach((s, i) => { reels[i].ring[reels[i].pos % RING] = s; });
 
-  // Each symbol is painted once at reel size and stamped from then on.
+  // The symbols are pictures; each is loaded once.
+  const ART = (name) => (window.PARK_ART && window.PARK_ART[name]) || `img/${name}.webp`;
   const sprites = new Map();
+  for (const [sym, file] of Object.entries(SYMBOL_ART)) {
+    const img = new Image();
+    img.src = ART(file);
+    sprites.set(sym, img);
+  }
   let spriteSize = 0;
   function stamp(sym, cx, cy, size) {
-    let cv = sprites.get(sym);
-    if (!cv) {
-      cv = document.createElement('canvas');
-      cv.width = cv.height = Math.ceil(spriteSize * dpr * 1.25);
-      drawSymbol(cv.getContext('2d'), sym, cv.width / 2, cv.height / 2, cv.width * 0.86);
-      sprites.set(sym, cv);
-    }
-    const d = size / 0.86;
-    ctx.drawImage(cv, cx - d / 2, cy - d / 2, d, d);
+    const img = sprites.get(sym);
+    if (!img || !img.complete || !img.naturalWidth) return;
+    const k = size / Math.max(img.naturalWidth, img.naturalHeight * 1.08);
+    const [w2, h2] = [img.naturalWidth * k, img.naturalHeight * k];
+    ctx.drawImage(img, cx - w2 / 2, cy - h2 / 2, w2, h2);
   }
 
   function resize() {
-    sprites.clear();
     dpr = Math.min(window.devicePixelRatio || 1, 2);
     w = canvas.clientWidth || 300;
     h = canvas.clientHeight || 120;
@@ -149,15 +149,15 @@ export function createSlotView(canvas, hooks = {}) {
     const gap = Math.max(6, Math.round(w * 0.022));
     const rw = (w - gap * 2) / 3;
     // three rows when the window is tall, one and a bit when it is short
-    const cell = Math.max(Math.min(rw * 0.9, h * 0.58), Math.min(h / 3, rw * 1.15));
-    const symSize = Math.min(cell * 0.86, rw * 0.84);
+    // three rows in view, as on the machine's painted window
+    const cell = h / 3.3;
+    const symSize = Math.min(cell * 0.98, rw * 0.74);
     if (Math.abs(symSize - spriteSize) > 1) {
       spriteSize = symSize;
-      sprites.clear();
     }
     const cy = h / 2;
     // each reel is a drum: symbols ride round it, foreshortening as they turn away
-    const R = h * 0.57;
+    const R = h * 1.05;
     const arc = cell / R; // the angle between one symbol and the next
     const rows = Math.ceil(1.5 / arc);
     const flashing = time < flashUntil;
@@ -167,7 +167,7 @@ export function createSlotView(canvas, hooks = {}) {
       const x = i * (rw + gap);
       ctx.save();
       ctx.beginPath();
-      ctx.roundRect(x, 0, rw, h, 9);
+      ctx.roundRect(x, 0, rw, h, 7);
       ctx.clip();
       const bg = ctx.createLinearGradient(0, 0, 0, h);
       bg.addColorStop(0, '#b9ad92');
@@ -199,7 +199,7 @@ export function createSlotView(canvas, hooks = {}) {
         const centre = Math.abs(idx - r.pos) < 0.02;
         let size = symSize;
         if (flashing && centre && flashMask[i]) size *= 1.08 + beat * 0.08;
-        ctx.globalAlpha = (r.spinning ? 1 - blur * 0.45 : centre ? 1 : 0.72) * Math.min(1, facing * 1.6);
+        ctx.globalAlpha = (r.spinning ? 1 - blur * 0.45 : centre ? 1 : 0.86) * Math.min(1, facing * 1.6);
         ctx.save();
         ctx.translate(x + rw / 2, y);
         // squashed by the curve of the drum, and smeared along its travel at speed

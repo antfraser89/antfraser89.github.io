@@ -1,11 +1,11 @@
 {
   "name": "park",
-  "version": "6.1.0",
+  "version": "7.0.0",
   "private": true,
   "type": "module",
   "description": "Park! - a spin-and-build theme park game for the browser",
   "scripts": {
-    "test": "node --test",
+    "test": "node --test --test-timeout=20000",
     "balance": "node tools/balance.mjs",
     "serve": "python3 -m http.server 8080"
   }

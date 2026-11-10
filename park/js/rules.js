@@ -2,7 +2,7 @@
 // timed events. Everything here works on plain state with the clock and the
 // random source passed in, so it runs the same in the browser and in tests.
 import {
-  ADS, ALBUM_REWARD, CARDS, CARD_SETS, DAILY, EVENT_MILESTONES, EVENT_POINTS, EVENT_THEMES, LEAGUE_POINTS, LEAGUE_PRIZES,
+  ADS, ALBUM_REWARD, CARDS, CARD_SETS, DAILY, EVENT_MILESTONES, EVENT_POINTS, EVENT_THEMES, LEAGUE_POINTS, LEAGUE_PRIZES, WHEEL,
   MIXED_WEIGHTS, OPENING_SPINS, OUTCOMES, PACKS, PAY, PET, PLOTS, PRODUCTS, RIVALS, STAGES, TOWN_REWARD, TRIPLE, TUNING as T,
   UPGRADE_REWARDS, VAULT, setUnlockTown, townInfo,
 } from './config.js';
@@ -142,7 +142,7 @@ export function spin(state, rand, now) {
   const kind = n < OPENING_SPINS.length ? OPENING_SPINS[n] : weighted(rand, OUTCOMES.map((o) => [o.kind, o.w]));
   const reels = kind === 'mixed' ? mixedReels(rand) : [TRIPLE[kind], TRIPLE[kind], TRIPLE[kind]];
   const u = E.unit(state.town);
-  const out = { ok: true, kind, reels, bet, coins: 0, tokens: 0, treats: 0, shield: 0, overflow: false, pack: null, pending: null };
+  const out = { ok: true, kind, reels, bet, coins: 0, tokens: 0, treats: 0, wheel: 0, pack: null, pending: null };
   let points = EVENT_POINTS.spin;
 
   switch (kind) {
@@ -161,14 +161,9 @@ export function spin(state, rand, now) {
       state.stats.jackpots++;
       points += EVENT_POINTS.jackpot;
       break;
-    case 'shield':
-      if (state.shields < T.maxShields) {
-        state.shields++;
-        out.shield = 1;
-      } else {
-        out.overflow = true;
-        out.coins = PAY.shieldOverflow * u * bet;
-      }
+    case 'wheel':
+      out.wheel = bet;
+      state.wheel.tickets += bet;
       points += EVENT_POINTS.triple;
       break;
     case 'tokens':
@@ -180,10 +175,6 @@ export function spin(state, rand, now) {
       out.treats = PAY.treats * bet;
       state.pet.treats += out.treats;
       points += EVENT_POINTS.triple;
-      break;
-    case 'attack':
-      state.pending = { type: 'attack', bet, revenge: false, rival: makeRival(state, rand) };
-      points += EVENT_POINTS.attack;
       break;
     case 'raid': {
       const stash = u * bet * (PAY.raidStash[0] + (PAY.raidStash[1] - PAY.raidStash[0]) * rand()) * E.raidBonus(state);
@@ -296,15 +287,28 @@ export function startRevenge(state, item, rand) {
 
 // ---- building ---------------------------------------------------------------
 
+// Buy the next star for a site or, once it has all ten, its capacity upgrade.
 export function upgradePlot(state, k) {
   const p = state.plots[k];
-  if (!p || p.stage >= STAGES || p.splat) return null;
-  const cost = E.stageCost(state.town, k, p.stage + 1);
+  if (!p || (p.stage >= STAGES && p.cap)) return null;
+  const next = p.stage >= STAGES ? STAGES + 1 : p.stage + 1;
+  const cost = E.stageCost(state.town, k, next);
   if (state.coins < cost) return null;
   state.coins -= cost;
-  p.stage++;
+  if (next > STAGES) p.cap = true;
+  else p.stage++;
   state.stats.upgrades++;
-  return { stage: p.stage, cost, reward: UPGRADE_REWARDS[p.stage] ? grant(state, UPGRADE_REWARDS[p.stage]) : null, complete: E.townComplete(state) };
+  return { stage: p.stage, cap: p.cap, cost, reward: UPGRADE_REWARDS[next] ? grant(state, UPGRADE_REWARDS[next]) : null, complete: E.townComplete(state) };
+}
+
+// One turn of the prize wheel.
+export function wheelSpin(state, rand) {
+  if (state.wheel.tickets < 1) return null;
+  state.wheel.tickets--;
+  state.wheel.spun++;
+  const index = weighted(rand, WHEEL.map((wedge, i) => [i, wedge.w]));
+  state.league.points += LEAGUE_POINTS.wheel;
+  return { index, reward: grant(state, WHEEL[index].reward) };
 }
 
 export function repairPlot(state, k) {
@@ -326,6 +330,7 @@ export function travel(state) {
   state.stats.towns++;
   for (const p of state.plots) {
     p.stage = 0;
+    p.cap = false;
     p.splat = false;
     p.flow = 0;
     p.served = 0;
@@ -592,6 +597,5 @@ export function tick(state, now, rand, maxIncoming = 1) {
   const tokens = regenTokens(state, now);
   eventInfo(state, now);
   const league = leagueInfo(state, now).settled;
-  const incidents = processIncoming(state, now, rand, maxIncoming);
-  return { tokens, league, incidents };
+  return { tokens, league, incidents: [] }; // nobody attacks anybody in this game
 }

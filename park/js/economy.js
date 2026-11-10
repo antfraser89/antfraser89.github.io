@@ -9,7 +9,8 @@ export function nice(n) {
 }
 
 // The coin "unit" for a town: every payout and price in that town scales with it.
-export const unit = (town) => nice(T.unitBase * Math.pow(T.unitGrowth, town));
+// Prices are capped: after a while a new park costs what the last one did.
+export const unit = (town) => nice(T.unitBase * Math.pow(T.unitGrowth, Math.min(town, T.unitCapPark)));
 
 const sum = (list) => list.reduce((a, b) => a + b, 0);
 const OUTCOME_TOTAL = sum(OUTCOMES.map((o) => o.w));
@@ -20,24 +21,23 @@ export function spinEV() {
   const mixedTotal = sum(Object.values(MIXED_WEIGHTS));
   const perReel = (MIXED_WEIGHTS.coin * PAY.coin + MIXED_WEIGHTS.sack * PAY.sack) / mixedTotal;
   const raid = ((PAY.raidStash[0] + PAY.raidStash[1]) / 2) * 0.75; // three picks out of four tubs
-  const attack = (1 - T.rivalShieldChance) * PAY.attackHit + T.rivalShieldChance * PAY.attackBlocked;
   return (
     outcomeChance('coins3') * PAY.coins3 +
     outcomeChance('sacks3') * PAY.sacks3 +
     outcomeChance('jackpot') * PAY.jackpot +
-    outcomeChance('attack') * attack +
     outcomeChance('raid') * raid +
     outcomeChance('mixed') * perReel * 3
   );
 }
 
 // How many bet-one spins a town is meant to take from empty field to finished.
-export const townSpins = (town) => 40 + 60 * town + 10 * town * town;
+export const townSpins = (town) => Math.min(90 + 80 * town + 10 * town * town, T.spinsCap);
 
 const SLOT_SUM = sum(T.slotWeights);
 const STAGE_SUM = sum(T.stageWeights);
 
-// Coins to take plot `slot` up to `stage` (1..5) in a given town.
+// Coins to take site `slot` up to `stage` in a given park: 1 to STAGES are
+// the stars, STAGES + 1 is the capacity upgrade that finishes it.
 export function stageCost(town, slot, stage) {
   const total = spinEV() * unit(town) * townSpins(town);
   return nice((total * T.slotWeights[slot] * T.stageWeights[stage - 1]) / (SLOT_SUM * STAGE_SUM));
@@ -45,7 +45,7 @@ export function stageCost(town, slot, stage) {
 
 export function townCost(town) {
   let total = 0;
-  for (const p of PLOTS) for (let s = 1; s <= STAGES; s++) total += stageCost(town, p.index, s);
+  for (const p of PLOTS) for (let s = 1; s <= STAGES + 1; s++) total += stageCost(town, p.index, s);
   return total;
 }
 
@@ -61,12 +61,12 @@ export function availableBets(state) {
   return T.bets.filter((b) => b === 1 || state.tokens >= b * T.betNeedsTokens);
 }
 
-// What each rider pays into the till.
-export const ticket = (town, stage) => unit(town) * T.ticketRate * stage;
-
+// What a site takes at the gate, in coins a second. Visitors are decoration:
+// the takings follow the stars, with half as much again once capacity is bought.
+export const ticket = (town, stage) => unit(town) * T.gateRate * stage;
 export function plotRate(state, k) {
   const p = state.plots[k];
-  return p.stage > 0 && !p.splat ? p.flow * ticket(state.town, p.stage) : 0;
+  return p.stage > 0 ? ticket(state.town, p.stage) * (p.cap ? 1.5 : 1) : 0;
 }
 export const idleRate = (state) => state.plots.reduce((n, _, k) => n + plotRate(state, k), 0);
 
@@ -76,5 +76,6 @@ export function offlineEarnings(state, seconds) {
 
 export const packPrice = (town, type) => unit(town) * PACKS[type].price;
 
-export const stagesBuilt = (state) => state.plots.reduce((n, p) => n + p.stage, 0);
-export const townComplete = (state) => state.plots.every((p) => p.stage >= STAGES);
+export const PARK_STARS = PLOTS.length * (STAGES + 1);
+export const stagesBuilt = (state) => state.plots.reduce((n, p) => n + p.stage + (p.cap ? 1 : 0), 0);
+export const townComplete = (state) => state.plots.every((p) => p.stage >= STAGES && p.cap);

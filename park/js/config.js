@@ -2,10 +2,10 @@
 // game, the tests and the balance tool all read the same numbers.
 
 export const GAME_TITLE = 'Park!';
-export const VERSION = '6.1.0';
-export const SAVE_KEY = 'park.save.v1';
+export const VERSION = '7.0.0';
+export const SAVE_KEY = 'park.save.v3';
 // saves written under an earlier name are picked up once and carried over
-export const LEGACY_SAVE_KEYS = ['starlight-funfair.save.v2'];
+export const LEGACY_SAVE_KEYS = []; // earlier saves used a different park and cannot be carried over
 export const CURRENCY = '£';
 
 // The park's ground. Where the paths and plots go is in layout.js: each kind
@@ -18,9 +18,14 @@ export const WORLD = {
   queueGap: 12,
 };
 
-export const PLOTS = [0, 1, 2, 3, 4, 5].map((k) => ({ index: k }));
+// Every park has the same eight things to build: four rides, then the
+// entrance, the car park, the restrooms and the food stalls.
+export const PLOTS = [0, 1, 2, 3, 4, 5, 6, 7].map((k) => ({ index: k, kind: k < 4 ? 'ride' : 'facility' }));
 
-export const STAGES = 5;
+// Ten stars each, a star every ten levels (so level 100 at the top), and then
+// one last purchase of extra capacity.
+export const STAGES = 10;
+export const LEVELS_PER_STAGE = 10;
 
 export const TUNING = {
   // spins
@@ -33,8 +38,11 @@ export const TUNING = {
   // coins
   unitBase: 1000,
   unitGrowth: 1.55,
-  slotWeights: [0.6, 0.8, 1.0, 1.1, 1.2, 1.3],
-  stageWeights: [1, 1.6, 2.4, 3.4, 4.6],
+  slotWeights: [1.0, 1.25, 1.5, 1.8, 0.7, 0.8, 0.6, 0.75],
+  stageWeights: [1, 1.2, 1.45, 1.7, 2, 2.3, 2.7, 3.1, 3.6, 4.2, 3], // ten stars, then the capacity upgrade
+  gateRate: 0.00022, // coins a second, per star, as a share of the park's unit
+  unitCapPark: 14, // prices stop climbing after this park
+  spinsCap: 1800, // and no park takes more spins than this
   repairShare: 0.2,
   ticketRate: 0.0014, // coins per rider, in units, per stage
   offlineCapHours: 3,
@@ -60,20 +68,24 @@ export const TUNING = {
 
 // What one spin can land on. Weights are per cent of spins.
 export const OUTCOMES = [
-  { kind: 'coins3', w: 6.0 },
-  { kind: 'sacks3', w: 2.6 },
-  { kind: 'jackpot', w: 0.7 },
-  { kind: 'attack', w: 7.0 },
-  { kind: 'raid', w: 4.5 },
-  { kind: 'shield', w: 6.0 },
-  { kind: 'tokens', w: 3.0 },
+  { kind: 'coins3', w: 7.5 },
+  { kind: 'sacks3', w: 3.2 },
+  { kind: 'jackpot', w: 0.8 },
+  { kind: 'raid', w: 5.0 },
+  { kind: 'wheel', w: 6.0 },
+  { kind: 'tokens', w: 3.5 },
   { kind: 'treats', w: 4.0 },
-  { kind: 'mixed', w: 66.2 },
+  { kind: 'mixed', w: 70.0 },
 ];
 
-export const SYMBOLS = ['coin', 'sack', 'pie', 'barrel', 'lock', 'token', 'star', 'chips'];
-export const TRIPLE = { coins3: 'coin', sacks3: 'sack', jackpot: 'star', attack: 'pie', raid: 'barrel', shield: 'lock', tokens: 'token', treats: 'chips' };
-export const MIXED_WEIGHTS = { coin: 30, sack: 12, pie: 14, barrel: 9, lock: 12, token: 9, star: 5, chips: 9 };
+// No attacks and no shields: three balls win a turn on the prize wheel, three
+// shells open the pearl dive.
+export const SYMBOLS = ['coin', 'sack', 'barrel', 'token', 'star', 'chips', 'ball', 'fish'];
+// The picture for each reel symbol (in img/). 'fish' is the starfish: it fills
+// out the reels and pays nothing.
+export const SYMBOL_ART = { coin: 'sym-coin', sack: 'sym-chest', barrel: 'sym-shell', token: 'ico-ticket', star: 'sym-bell', chips: 'sym-cherry', ball: 'sym-ball', fish: 'sym-star' };
+export const TRIPLE = { coins3: 'coin', sacks3: 'sack', jackpot: 'star', raid: 'barrel', wheel: 'ball', tokens: 'token', treats: 'chips' };
+export const MIXED_WEIGHTS = { coin: 30, sack: 12, barrel: 10, token: 9, star: 6, chips: 9, ball: 10, fish: 14 };
 
 // Payouts in "units" (see economy.unit), before the bet multiplier.
 export const PAY = {
@@ -92,7 +104,7 @@ export const PAY = {
 };
 
 // The first spins of a new game follow a script so every mechanic turns up early.
-export const OPENING_SPINS = ['coins3', 'mixed', 'sacks3', 'mixed', 'attack', 'mixed', 'shield', 'raid', 'treats', 'mixed', 'tokens'];
+export const OPENING_SPINS = ['coins3', 'mixed', 'sacks3', 'mixed', 'wheel', 'mixed', 'coins3', 'raid', 'treats', 'mixed', 'tokens'];
 
 const A = (id, name, kind, cap, cycle, blurb, w, h) => ({ id, name, kind, cap, cycle, blurb, w, h });
 
@@ -114,78 +126,41 @@ ATTRACTIONS.forEach((d, i) => { d.index = i; });
 const idx = (id) => ATTRACTIONS.findIndex((d) => d.id === id);
 
 // Which six attractions each park has, by plot. The tall ones sit in the back row.
-const LINEUPS = [
-  ['toffee', 'ducks', 'teacups', 'coconut', 'floss', 'helter'],
-  ['coconut', 'floss', 'dodgems', 'carousel', 'ghost', 'wheel'],
-  ['toffee', 'teacups', 'waltzer', 'dodgems', 'helter', 'coaster'],
-  ['ducks', 'floss', 'carousel', 'ghost', 'wheel', 'coaster'],
-  ['toffee', 'coconut', 'teacups', 'waltzer', 'helter', 'wheel'],
-  ['ducks', 'dodgems', 'carousel', 'ghost', 'waltzer', 'coaster'],
-].map((row) => row.map(idx));
-
-// Each kind of town: its palette, its weather, and (in layout.js) its map.
-const BASE = {
-  board: '#c99a66', boardEdge: '#8a6238', stone: '#c9c0ae', stoneEdge: '#8e8676', soil: '#6a4a30',
-  blooms: ['#ff5b8f', '#ffcf2e', '#ffffff', '#8b66ff', '#ff7a3b'], foam: '#e3f7f6', weather: null,
-};
-export const THEMES = [
-  {
-    ...BASE, key: 'green', ground: '#6fc455', ground2: '#63b84b', tuft: '#52a23f', path: '#f1d6c2', pathEdge: '#c9a58c',
-    plot: '#8fdc6c', tree: ['#3fa648', '#7ed957', '#2b8a3c'], trunk: '#6a4a2c', fence: '#ffffff', bank: '#a9c56a',
-    water: ['#1f8fd6', '#45c8ea'], fruit: '#ffcf2e',
-  },
-  {
-    ...BASE, key: 'sand', ground: '#f3dfab', ground2: '#ead29a', tuft: '#d6ba7c', path: '#f1d6c2', pathEdge: '#c9a58c',
-    plot: '#f8e9c0', tree: ['#35a86e', '#62cf8f', '#23804f'], trunk: '#7a5a38', fence: '#ffffff', bank: '#e0c890',
-    water: ['#1795d8', '#4fd3e6'], stone: '#f1d6c2', stoneEdge: '#c9a58c',
-  },
-  {
-    ...BASE, key: 'autumn', ground: '#a39652', ground2: '#958847', tuft: '#82763a', path: '#decca5', pathEdge: '#b6a279',
-    plot: '#b3a860', tree: ['#c8742c', '#e09b3a', '#9c4722'], trunk: '#553a24', fence: '#efe0be', bank: '#8f8348',
-    water: ['#3b6f78', '#5f9a98'], weather: 'leaves', fruit: '#b3343c', blooms: ['#c8742c', '#e09b3a', '#8f2f2a', '#f2c14e', '#6b3a5c'],
-  },
-  {
-    ...BASE, key: 'snow', ground: '#e8eef5', ground2: '#dae4ee', tuft: '#c3d1e0', path: '#b7c2cf', pathEdge: '#93a2b4',
-    plot: '#f4f8fc', tree: ['#2c6b5b', '#eef4fa', '#1f5347'], trunk: '#54412f', fence: '#b8454a', bank: '#f7fafd',
-    water: ['#b9d6e6', '#dcedf5'], weather: 'snow', soil: '#cfdbe6',
-  },
-  {
-    ...BASE, key: 'city', ground: '#7b8395', ground2: '#727a8d', tuft: '#666e83', path: '#b8ad9b', pathEdge: '#8d8272',
-    plot: '#8d94a6', tree: ['#c5698d', '#dc8fac', '#9f4a72'], trunk: '#4a3838', fence: '#2a3142', bank: '#8e8676',
-    water: ['#1c4f63', '#2f7482'], weather: 'petals', stone: '#aba392', stoneEdge: '#7d7566',
-  },
+// The parks. Each theme is one painted backdrop with the same layout, so the
+// same eight sites sit in the same places; the rides change their names.
+export const PARKS_TOTAL = 100;
+export const PARK_THEMES = [
+  { key: 'coral', name: 'Coral Cove', tag: 'Shells, pearls and warm shallows', rides: ['Jellyfish Swing', 'Pearl Spinner', 'Reef Runner', 'Tide Wheel'] },
+  { key: 'pirate', name: 'Pirate Harbour', tag: 'Sails, maps and buried treasure', rides: ['Crow\u2019s Nest Swing', 'Compass Spinner', 'Plank Runner', 'Harbour Wheel'] },
+  { key: 'jungle', name: 'Jungle Falls', tag: 'Vines, lotus pools and warm rain', rides: ['Canopy Swing', 'Lotus Spinner', 'Vine Runner', 'Falls Wheel'] },
+  { key: 'winter', name: 'Snowlight Village', tag: 'Lanterns, pines and fresh snow', rides: ['Frost Swing', 'Snowflake Spinner', 'Sleigh Runner', 'Aurora Wheel'] },
 ];
-
-const TOWN_NAMES = [
-  ['Puddlewick Green', 'A sleepy village green'],
-  ['Saltmarsh Sands', 'Deckchairs and sea air'],
-  ['Coppermill Common', 'Bonfire smoke and falling leaves'],
-  ['Frostholm', 'Mittens, mulled apple and snow'],
-  ['Lanternport', 'Cobbles, canals and paper lanterns'],
-  ['Bramblecombe', 'Hedgerows heavy with blackberries'],
-  ['Gullhaven Pier', 'Chips, gulls and a brass band'],
-  ['Emberwick', 'Chestnuts roasting on every corner'],
-  ['Snowmere', 'A frozen lake and a thousand lanterns'],
-  ['Glimmergate', 'The city that never dims'],
-  ['Thistledown', 'Morris dancers and maypoles'],
-  ['Shellborough', 'Rock pools and striped windbreaks'],
-  ['Russetford', 'Cider presses and conker fights'],
-  ['Icicle Cross', 'Sleigh bells on the high street'],
-  ['Moonquay', 'Harbour lights and midnight markets'],
+const RIDE_BLURBS = ['Round and round over the water.', 'The showpiece in the middle of the park.', 'Fast, loud and over too soon.', 'The whole park laid out below you.'];
+export const FACILITIES = [
+  { id: 'entrance', name: 'Entrance', blurb: 'More gates, shorter queues.', cap: 'Gates' },
+  { id: 'parking', name: 'Parking', blurb: 'Somewhere for everyone to leave the car.', cap: 'Parking spaces' },
+  { id: 'restrooms', name: 'Restrooms', blurb: 'Nobody enjoys a park without them.', cap: 'Toilets' },
+  { id: 'food', name: 'Food Stalls', blurb: 'Hot chips, cold drinks, sticky fingers.', cap: 'Stalls' },
 ];
-
-// Towns go on for ever: names and looks cycle, prices keep climbing.
-export function townInfo(t) {
-  const [base, tag] = TOWN_NAMES[t % TOWN_NAMES.length];
-  const lap = Math.floor(t / TOWN_NAMES.length);
-  return {
-    index: t,
-    name: lap ? `${base} ${['II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'][Math.min(lap - 1, 8)]}` : base,
-    tag,
-    theme: THEMES[t % THEMES.length],
-    lineup: LINEUPS[t % LINEUPS.length],
-  };
+// What stands on site k in park t.
+export function buildingAt(t, k) {
+  const theme = PARK_THEMES[t % PARK_THEMES.length];
+  if (k < 4) return { index: k, id: 'ride' + k, name: theme.rides[k], kind: 'ride', blurb: RIDE_BLURBS[k], cap: 'Seats' };
+  return { index: k, kind: 'facility', ...FACILITIES[k - 4] };
 }
+
+// Parks go on past the hundredth: looks cycle, prices are capped.
+export function townInfo(t) {
+  const theme = PARK_THEMES[t % PARK_THEMES.length];
+  const lap = Math.floor(t / PARK_THEMES.length);
+  return { index: t, number: t + 1, name: lap ? `${theme.name} ${lap + 1}` : theme.name, tag: theme.tag, theme, lineup: [0, 1, 2, 3, 4, 5, 6, 7] };
+}
+
+// The prize wheel: eight wedges, weighted.
+export const WHEEL = [
+  { reward: { coins: 15 }, w: 22 }, { reward: { tokens: 5 }, w: 18 }, { reward: { coins: 40 }, w: 16 }, { reward: { treats: 4 }, w: 14 },
+  { reward: { tokens: 12 }, w: 10 }, { reward: { pack: 'bronze' }, w: 10 }, { reward: { coins: 120 }, w: 6 }, { reward: { pack: 'silver' }, w: 4 },
+];
 
 // ---- rivals -----------------------------------------------------------------
 
@@ -223,7 +198,7 @@ export const PRODUCTS = [
     desc: 'Removes the adverts between towns. Adverts you choose to watch for a reward stay.',
   },
 ];
-export const ADS = { tokens: 10, perDay: 5 };
+export const ADS = { tokens: 25, perDay: 6 };
 
 // ---- cards ------------------------------------------------------------------
 
@@ -328,7 +303,7 @@ export const EVENT_MILESTONES = [
   { at: 2000, reward: { tokens: 200, pack: 'gold' } },
 ];
 
-export const LEAGUE_POINTS = { hit: 10, blocked: 5, barrel: 4, sweep: 6 };
+export const LEAGUE_POINTS = { hit: 10, blocked: 5, barrel: 4, sweep: 6, wheel: 8 };
 export const LEAGUE_PRIZES = [
   { upTo: 1, reward: { tokens: 100, pack: 'gold' } },
   { upTo: 3, reward: { tokens: 50, pack: 'silver' } },
@@ -346,7 +321,7 @@ export const DAILY = [
   { tokens: 100, pack: 'gold' },
 ];
 
-export const UPGRADE_REWARDS = { 3: { tokens: 3 }, 5: { pack: 'bronze' } };
+export const UPGRADE_REWARDS = { 5: { tokens: 2 }, 10: { pack: 'bronze' } };
 export const TOWN_REWARD = { tokens: 25, pack: 'gold' };
 
 export const GUEST_LOOKS = {

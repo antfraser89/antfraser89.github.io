@@ -23,7 +23,7 @@ const tally = { fromRegen: 0, sessions: 0 };
 // The till: measure what a finished fair takes per hour, in units.
 {
   const probe = newState(now);
-  probe.plots.forEach((p) => { p.stage = STAGES; });
+  probe.plots.forEach((p) => { p.stage = STAGES; p.cap = true; });
   const w = S.createWorld(probe, S.mulberry32(3));
   for (let t = 0; t < 900; t += 0.1) S.step(w, 0.1);
   w.events.length = 0;
@@ -49,8 +49,8 @@ function spendCoins() {
         R.repairPlot(state, p.index);
         continue;
       }
-      if (plot.stage >= STAGES) continue;
-      const cost = E.stageCost(state.town, p.index, plot.stage + 1);
+      if (plot.stage >= STAGES && plot.cap) continue;
+      const cost = E.stageCost(state.town, p.index, Math.min(plot.stage, STAGES) + 1);
       if (cost < bestCost) {
         bestCost = cost;
         best = p.index;
@@ -67,6 +67,7 @@ function housekeeping() {
   if (R.albumComplete(state)) R.claimAlbum(state);
   for (const id of ['grand', 'big', 'small']) while (R.vaultBuy(state, id, rand)) { /* spend stars */ }
   R.feedPet(state);
+  while (state.wheel.tickets > 0) R.wheelSpin(state, rand);
   while (currentMission(state).done) S.claimMission(world);
   world.events.length = 0;
 }

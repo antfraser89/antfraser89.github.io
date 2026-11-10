@@ -1,7 +1,7 @@
 // The persistent game state, plus save / load / validation.
 import { CARD_BY_ID, CARD_SETS, PACKS, PLOTS, PRODUCTS, STAGES, TUNING, VERSION } from './config.js';
 
-const newPlot = () => ({ stage: 0, splat: false, flow: 0, served: 0 });
+const newPlot = () => ({ stage: 0, cap: false, splat: false, flow: 0, served: 0 });
 
 export function newState(now = 0) {
   return {
@@ -31,6 +31,7 @@ export function newState(now = 0) {
     mission: { index: 0, extra: null },
     shop: { noAds: false, owned: {}, adDay: -1, adCount: 0, bought: 0 },
     news: [],
+    wheel: { tickets: 1, spun: 0, day: 0 },
     nextAttackAt: 0,
     stats: {
       spins: 0, tokensSpent: 0, coinsWon: 0, attacks: 0, blocked: 0, raids: 0, sweeps: 0, jackpots: 0, upgrades: 0,
@@ -86,6 +87,7 @@ export function hydrate(raw) {
       const r = raw.plots[k];
       if (!r || typeof r !== 'object') return;
       p.stage = Math.min(int(r.stage), STAGES);
+      p.cap = p.stage >= STAGES && !!r.cap;
       p.splat = p.stage > 0 && !!r.splat;
       p.flow = p.stage > 0 ? Math.min(num(r.flow), 20) : 0;
       p.served = int(r.served);
@@ -147,6 +149,7 @@ export function hydrate(raw) {
     }));
   }
   s.nextAttackAt = num(raw.nextAttackAt);
+  if (raw.wheel && typeof raw.wheel === 'object') s.wheel = { tickets: Math.min(int(raw.wheel.tickets), 9999), spun: int(raw.wheel.spun), day: int(raw.wheel.day) };
   if (raw.stats) for (const k of Object.keys(s.stats)) s.stats[k] = num(raw.stats[k]);
   if (raw.settings) {
     for (const k of Object.keys(s.settings)) s.settings[k] = raw.settings[k] !== false;

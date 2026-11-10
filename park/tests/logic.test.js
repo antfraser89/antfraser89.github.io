@@ -2,14 +2,13 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
-  CARDS, CARD_SETS, DAILY, EVENT_MILESTONES, OPENING_SPINS, OUTCOMES, PACKS, PLOTS, RIVALS, STAGES, THEMES, TUNING, VAULT, WORLD, townInfo,
+  CARDS, CARD_SETS, DAILY, EVENT_MILESTONES, OPENING_SPINS, OUTCOMES, PACKS, PLOTS, RIVALS, STAGES, TUNING, VAULT, WHEEL, townInfo,
 } from '../js/config.js';
 import * as E from '../js/economy.js';
 import { fmt, fmtClock, fmtTime, money } from '../js/format.js';
 import { MISSIONS, currentMission } from '../js/goals.js';
 import * as R from '../js/rules.js';
 import * as S from '../js/sim.js';
-import { layoutFor, nearestNode, nodeRoute } from '../js/layout.js';
 import { exportCode, hydrate, importCode, newState, parseSave, serialize } from '../js/state.js';
 
 const T0 = 1.8e12; // a fixed "now" in milliseconds
@@ -28,9 +27,6 @@ const seasoned = (seed = 1) => {
   return g;
 };
 const playOut = (state, rand) => {
-  if (state.pending?.type === 'attack') {
-    return R.resolveAttack(state, PLOTS.findIndex((p) => !state.pending.rival.splats[p.index]));
-  }
   let last = null;
   if (state.pending?.type === 'raid') for (const tub of [0, 1, 2]) last = R.raidPick(state, tub);
   return last;
@@ -69,27 +65,16 @@ test('outcome weights add up and the average spin is worth what the costs assume
   assert.ok(Math.abs(measured - E.spinEV()) / E.spinEV() < 0.06, `measured ${measured.toFixed(2)} vs ${E.spinEV().toFixed(2)}`);
 });
 
-test('a town costs about its target number of spins, and each town costs more', () => {
+test('a park costs about its target number of spins, and early parks each cost more', () => {
   for (let t = 0; t < 30; t++) {
     const spins = E.townCost(t) / (E.spinEV() * E.unit(t));
-    assert.ok(Math.abs(spins - E.townSpins(t)) / E.townSpins(t) < 0.05, `town ${t}: ${spins}`);
-    assert.ok(E.townCost(t + 1) > E.townCost(t) * 1.5);
+    assert.ok(Math.abs(spins - E.townSpins(t)) / E.townSpins(t) < 0.05, `park ${t}: ${spins}`);
+    if (t < 8) assert.ok(E.townCost(t + 1) > E.townCost(t) * 1.3);
   }
   for (const p of PLOTS) {
     for (let s = 1; s < STAGES; s++) assert.ok(E.stageCost(0, p.index, s + 1) > E.stageCost(0, p.index, s));
   }
 });
-
-test('every town has six attractions with the tall ones at the back', () => {
-  for (let t = 0; t < 40; t++) {
-    const info = townInfo(t);
-    assert.equal(new Set(info.lineup).size, PLOTS.length);
-    assert.ok(info.name.length > 0 && info.theme.ground);
-  }
-  assert.notEqual(townInfo(0).name, townInfo(15).name);
-});
-
-// ---- tokens --------------------------------------------------------------
 
 test('tokens trickle back up to the cap and no further', () => {
   const { state } = fresh();
@@ -131,10 +116,8 @@ test('the opening spins follow the script and teach every mechanic', () => {
     assert.equal(r.bet, 1);
     seen.push(r.kind);
     prizeTokens += r.tokens + r.milestones.reduce((n, m) => n + m.tokens, 0);
-    if (r.kind === 'attack') {
-      assert.equal(R.spin(state, rand, T0).why, 'pending', 'cannot spin with a pie in hand');
-      assert.ok(playOut(state, rand).coins > 0);
-    } else if (r.kind === 'raid') {
+    if (r.kind === 'raid') {
+      assert.equal(R.spin(state, rand, T0).why, 'pending', 'cannot spin in the middle of a dive');
       const end = playOut(state, rand);
       assert.equal(end.done, true);
       assert.ok(end.total >= 0);
@@ -143,7 +126,7 @@ test('the opening spins follow the script and teach every mechanic', () => {
   assert.deepEqual(seen, OPENING_SPINS);
   assert.ok(prizeTokens >= 6, 'the script includes a token win');
   assert.equal(state.tokens, TUNING.startTokens - OPENING_SPINS.length + prizeTokens);
-  assert.equal(state.shields, 1);
+  assert.equal(state.wheel.tickets, 2, 'the script wins a turn on the wheel');
   assert.equal(state.pet.treats, 3);
   assert.ok(state.coins > 0);
 });
@@ -185,106 +168,6 @@ test('reels show three of a kind exactly when the spin is a triple', () => {
   }
   assert.equal(kinds.size, OUTCOMES.length);
 });
-
-test('padlocks stack to three, then pay coins instead', () => {
-  const { state } = seasoned();
-  state.tokens = 100;
-  const always = (kind) => () => (OUTCOMES.slice(0, OUTCOMES.findIndex((o) => o.kind === kind)).reduce((n, o) => n + o.w, 0) + 0.01) / 100;
-  for (let i = 0; i < TUNING.maxShields; i++) assert.equal(R.spin(state, always('shield'), T0).shield, 1);
-  const coins = state.coins;
-  const over = R.spin(state, always('shield'), T0);
-  assert.equal(over.overflow, true);
-  assert.equal(state.shields, TUNING.maxShields);
-  assert.ok(state.coins > coins);
-});
-
-// ---- rivals --------------------------------------------------------------
-
-test('a pie pays more when the rival has no padlock; a lucky dip is three goes at four tubs', () => {
-  const { state, rand } = seasoned(6);
-  state.pending = { type: 'attack', bet: 2, revenge: false, rival: { id: 1, town: 0, shield: false, stages: [3, 3, 3, 3, 3, 3], splats: [true, false, false, false, false, false] } };
-  assert.equal(R.resolveAttack(state, 0), null, 'that one is already splatted');
-  const hit = R.resolveAttack(state, 2);
-  assert.equal(hit.blocked, false);
-  state.pending = { type: 'attack', bet: 2, revenge: false, rival: { id: 1, town: 0, shield: true, stages: [3, 3, 3, 3, 3, 3], splats: PLOTS.map(() => false) } };
-  const blocked = R.resolveAttack(state, 2);
-  assert.equal(blocked.blocked, true);
-  assert.ok(hit.coins > blocked.coins && blocked.coins > 0);
-  assert.equal(state.pending, null);
-  assert.equal(state.stats.attacks, 2);
-
-  state.pending = { type: 'raid', bet: 1, revenge: false, rival: { id: 2, town: 0, shield: false, stages: [], splats: [] }, tubs: [500, 0, 300, 200], picks: [] };
-  const before = state.coins;
-  assert.equal(R.raidPick(state, 0).amount, 500);
-  assert.equal(R.raidPick(state, 0), null, 'same tub twice');
-  assert.equal(R.raidPick(state, 2).done, false);
-  const end = R.raidPick(state, 3);
-  assert.deepEqual([end.done, end.total, end.sweep], [true, 1000, true]);
-  assert.equal(state.coins - before, 1000);
-  assert.equal(state.pending, null);
-  assert.equal(R.raidPick(state, 1), null);
-});
-
-test('rivals throw pies back: padlocks block them, otherwise an attraction closes until cleaned', () => {
-  const { state, rand } = seasoned(8);
-  state.stats.spins = 50;
-  state.plots[0].stage = 3;
-  state.plots[1].stage = 2;
-  state.shields = 1;
-  assert.deepEqual(R.processIncoming(state, T0, rand), [], 'first call only sets the timer');
-  assert.ok(state.nextAttackAt > T0);
-  const first = R.processIncoming(state, state.nextAttackAt + 1, rand);
-  assert.equal(first.length, 1);
-  assert.equal(first[0].blocked, true);
-  assert.equal(state.shields, 0);
-  const second = R.processIncoming(state, state.nextAttackAt + 1, rand);
-  assert.equal(second[0].blocked, false);
-  const k = second[0].plot;
-  assert.equal(state.plots[k].splat, true);
-  assert.equal(R.upgradePlot(state, k), null, 'no upgrades until it is cleaned');
-  state.coins = 0;
-  assert.equal(R.repairPlot(state, k), null);
-  state.coins = E.repairCost(0, k, state.plots[k].stage);
-  assert.ok(R.repairPlot(state, k));
-  assert.equal(state.plots[k].splat, false);
-  assert.equal(state.coins, 0);
-  // a long absence is capped
-  const many = R.processIncoming(state, state.nextAttackAt + 100 * HOUR, rand, TUNING.incomingMaxAway);
-  assert.ok(many.length <= TUNING.incomingMaxAway);
-  assert.ok(state.nextAttackAt > T0 + 100 * HOUR);
-  // revenge is a free pie at the culprit
-  assert.equal(R.startRevenge(state, second[0], rand), true);
-  assert.equal(state.pending.rival.id, second[0].rival % RIVALS.length);
-  assert.equal(R.startRevenge(state, second[0], rand), false);
-});
-
-// ---- building ------------------------------------------------------------
-
-test('upgrades cost coins, pay their rewards, and a finished fair moves on', () => {
-  const { state } = fresh();
-  assert.equal(R.upgradePlot(state, 0), null);
-  state.coins = E.townCost(0);
-  const tokens = state.tokens;
-  for (const p of PLOTS) {
-    for (let s = 1; s <= STAGES; s++) {
-      assert.equal(R.travel(state), null);
-      const up = R.upgradePlot(state, p.index);
-      assert.equal(up.stage, s);
-    }
-    assert.equal(R.upgradePlot(state, p.index), null, 'five stars is the top');
-  }
-  assert.ok(Math.abs(state.coins) < 1e-6);
-  assert.equal(state.tokens, tokens + 3 * PLOTS.length);
-  assert.equal(state.cards.packs.bronze, PLOTS.length);
-  assert.equal(E.townComplete(state), true);
-  const moved = R.travel(state);
-  assert.equal(moved.town, 1);
-  assert.equal(state.cards.packs.gold, 1);
-  assert.ok(state.plots.every((p) => p.stage === 0 && !p.splat));
-  assert.ok(E.unit(1) > E.unit(0));
-});
-
-// ---- cards ---------------------------------------------------------------
 
 test('packs give cards from unlocked sets; spares become stars', () => {
   const { state, rand } = fresh(12);
@@ -459,59 +342,6 @@ test('missions pay out in order and never run out', () => {
 
 // ---- the living fair -----------------------------------------------------
 
-test('guests visit open attractions, pay into the till, and avoid closed ones', () => {
-  const { state } = fresh();
-  const world = S.createWorld(state, S.mulberry32(21));
-  for (let t = 0; t < 30; t += 0.1) S.step(world, 0.1);
-  assert.equal(world.guests.length, 0, 'an empty field draws nobody');
-  state.plots.forEach((p) => { p.stage = 3; });
-  let peak = 0;
-  for (let t = 0; t < 600; t += 0.1) {
-    S.step(world, 0.1);
-    peak = Math.max(peak, world.guests.length);
-    for (const p of PLOTS) {
-      const rt = world.rt[p.index];
-      assert.ok(rt.queue.length <= TUNING.queueLimit && rt.inbound >= 0);
-      assert.ok(rt.riders.length <= S.capacity(S.designAt(state, p.index), 3));
-    }
-    world.events.length = 0;
-  }
-  assert.ok(peak > 15 && peak <= TUNING.maxGuests, `peak ${peak}`);
-  assert.ok(state.coins > 0);
-  assert.ok(state.plots.every((p) => p.served > 0));
-  for (const g of world.guests) assert.ok(g.x > 40 && g.x < 1040 && Number.isFinite(g.y)); // inside the fence
-  assert.ok(E.idleRate(state) > 0);
-
-  state.plots[2].splat = true;
-  const served = state.plots[2].served;
-  for (let t = 0; t < 120; t += 0.1) S.step(world, 0.1);
-  assert.equal(world.rt[2].queue.length + world.rt[2].riders.length, 0);
-  assert.equal(state.plots[2].served, served);
-  assert.equal(E.plotRate(state, 2), 0);
-
-  const coins = state.coins;
-  const away = S.applyOffline(world, 100 * 3600);
-  assert.equal(away.capped, true);
-  assert.ok(Math.abs(state.coins - coins - E.idleRate(state) * TUNING.offlineCapHours * 3600) < 1e-6);
-});
-
-test('balloons drift past and pay a small prize once', () => {
-  const { state } = seasoned();
-  const world = S.createWorld(state, S.mulberry32(8));
-  let seen = null;
-  for (let t = 0; t < 200 && !seen; t += 0.1) {
-    S.step(world, 0.1);
-    seen = world.balloons[0] || null;
-  }
-  assert.ok(seen);
-  const before = JSON.stringify([state.coins, state.tokens, state.pet.treats]);
-  assert.ok(S.popBalloon(world, seen));
-  assert.notEqual(JSON.stringify([state.coins, state.tokens, state.pet.treats]), before);
-  assert.equal(S.popBalloon(world, seen), null);
-});
-
-// ---- saves ---------------------------------------------------------------
-
 test('hydrate survives junk and clamps bad values', () => {
   for (const junk of [null, 42, 'x', [], { plots: 'no' }, { coins: -5, tokens: NaN, shields: 99, bet: 7, town: -3 }]) {
     const s = hydrate(junk);
@@ -600,31 +430,125 @@ test('a completed purchase hands over its contents; one-time items only once', a
   assert.equal(R.adTokensLeft(state, noon + 24 * HOUR), ADS.perDay);
 });
 
-test('every kind of town has a map the guests can walk', () => {
-  const seen = new Set();
-  for (let town = 0; town < THEMES.length; town++) {
-    const L = layoutFor(town);
-    seen.add(L.key);
-    assert.equal(L.plots.length, PLOTS.length);
-    assert.equal(layoutFor(town + THEMES.length), L, 'towns of the same kind share a map');
-    // the walkways are one connected network
-    for (let k = 0; k < L.nodes.length; k++) assert.equal(nodeRoute(L, L.gateNode, k).at(-1), k, `${L.key}: node ${k} is cut off`);
-    const gate = L.nodes[L.gateNode];
-    assert.ok(Math.hypot(gate.x - L.gate.x, gate.y - L.gate.y) < 90);
-    for (const p of L.plots) {
-      assert.ok(p.x > 100 && p.x < WORLD.w - 100 && p.y > 300 && p.y < WORLD.gateY, `${L.key}: plot ${p.index} is off the map`);
-      // nobody queues in the water, and the queue is within reach of a path
-      for (let n = 0; n < TUNING.queueLimit; n++) {
-        const slot = S.queueSlot(L, p.index, n);
-        assert.ok(!L.wet(slot.x, slot.y), `${L.key}: plot ${p.index} queues in the water`);
-        const node = L.nodes[nearestNode(L, slot.x, slot.y)];
-        assert.ok(Math.hypot(node.x - slot.x, node.y - slot.y) < 70, `${L.key}: plot ${p.index} queue is off the paths`);
-      }
-      const out = S.exitPoint(L, p.index, 3);
-      assert.ok(!L.wet(out.x, out.y));
-    }
-    // plots do not sit on top of one another
-    for (const a of L.plots) for (const b of L.plots) if (a.index < b.index) assert.ok(Math.abs(a.x - b.x) > 250 || Math.abs(a.y - b.y) > 150, `${L.key}: plots ${a.index} and ${b.index} overlap`);
+
+test('every park has four rides and four facilities, named for its theme', () => {
+  assert.equal(PLOTS.length, 8);
+  for (let t = 0; t < 9; t++) {
+    const state = newState(0);
+    state.town = t;
+    const names = PLOTS.map((p) => S.designAt(state, p.index).name);
+    assert.equal(new Set(names).size, 8);
+    assert.deepEqual(PLOTS.map((p) => S.designAt(state, p.index).kind), ['ride', 'ride', 'ride', 'ride', 'facility', 'facility', 'facility', 'facility']);
+    assert.ok(townInfo(t).name.length > 3 && townInfo(t).number === t + 1);
   }
-  assert.ok(seen.size >= 5);
+  assert.notEqual(townInfo(0).theme.key, townInfo(1).theme.key);
 });
+
+test('a site climbs ten stars, then buys capacity; a finished park moves on', () => {
+  const { state } = fresh();
+  assert.equal(R.upgradePlot(state, 0), null, 'nothing is free');
+  state.coins = 1e12;
+  let last = 0;
+  for (let stage = 1; stage <= STAGES; stage++) {
+    const cost = E.stageCost(0, 0, stage);
+    assert.ok(cost > last, 'each star costs more than the one before');
+    last = cost;
+    const up = R.upgradePlot(state, 0);
+    assert.equal(up.stage, stage);
+    assert.equal(up.cap, false);
+  }
+  assert.equal(E.townComplete(state), false);
+  const cap = R.upgradePlot(state, 0);
+  assert.ok(cap.cap && cap.stage === STAGES);
+  assert.equal(R.upgradePlot(state, 0), null, 'nothing left to buy');
+  assert.equal(R.travel(state), null, 'the park is not finished');
+  for (const p of PLOTS.slice(1)) for (let n = 0; n <= STAGES; n++) assert.ok(R.upgradePlot(state, p.index));
+  assert.ok(E.townComplete(state));
+  assert.equal(E.stagesBuilt(state), E.PARK_STARS);
+  const tokens = state.tokens;
+  const moved = R.travel(state);
+  assert.equal(moved.town, 1);
+  assert.ok(state.tokens > tokens);
+  assert.ok(state.plots.every((p) => p.stage === 0 && !p.cap));
+});
+
+test('prices are capped: late parks cost what the one before did', () => {
+  assert.ok(E.townCost(3) > E.townCost(2));
+  assert.equal(E.unit(TUNING.unitCapPark + 20), E.unit(TUNING.unitCapPark));
+  assert.equal(E.townSpins(90), TUNING.spinsCap);
+  assert.equal(E.townCost(99), E.townCost(98));
+});
+
+test('three shells open a pearl dive: three goes at four shells', () => {
+  const { state, rand } = fresh();
+  state.stats.spins = 99;
+  state.tokens = 1e6;
+  let res;
+  do res = R.spin(state, rand, 0); while (res.kind !== 'raid');
+  assert.equal(state.pending.type, 'raid');
+  assert.equal(R.spin(state, rand, 0).ok, false, 'no spinning until the dive is done');
+  let won = 0;
+  for (const tub of [0, 1, 2]) won += R.raidPick(state, tub).amount;
+  assert.equal(state.pending, null);
+  assert.ok(won > 0);
+});
+
+test('three balls win a turn on the prize wheel, and the wheel always pays', () => {
+  const { state, rand } = fresh();
+  assert.equal(state.wheel.tickets, 1, 'one turn to start with');
+  state.stats.spins = 99;
+  state.tokens = 1e6;
+  let res;
+  do {
+    res = R.spin(state, rand, 0);
+    playOut(state, rand);
+  } while (res.kind !== 'wheel');
+  assert.equal(res.wheel, 1);
+  assert.equal(state.wheel.tickets, 2);
+  const seen = new Set();
+  state.wheel.tickets = 400;
+  for (let i = 0; i < 400; i++) {
+    const turn = R.wheelSpin(state, rand);
+    assert.ok(turn.index >= 0 && turn.index < WHEEL.length && turn.reward);
+    seen.add(turn.index);
+  }
+  assert.equal(seen.size, WHEEL.length, 'every wedge comes up');
+  assert.equal(R.wheelSpin(state, rand), null, 'no tickets, no turn');
+});
+
+test('nothing ever attacks the park: no shields, no closures, no incoming', () => {
+  const { state, rand } = fresh();
+  state.coins = 1e12;
+  for (const p of PLOTS) R.upgradePlot(state, p.index);
+  state.stats.spins = 99;
+  state.tokens = 5000;
+  const kinds = new Set();
+  for (let i = 0; i < 3000; i++) {
+    const res = R.spin(state, rand, i * 1000);
+    kinds.add(res.kind);
+    if (state.pending) for (const tub of [0, 1, 2]) R.raidPick(state, tub);
+    assert.deepEqual(R.tick(state, i * 3600e3, rand, 4).incidents, []);
+  }
+  assert.ok(!kinds.has('attack') && !kinds.has('shield'));
+  assert.ok(state.plots.every((p) => !p.splat));
+});
+
+test('the gate takes money in step with the stars, awake or away', () => {
+  const { state } = fresh();
+  const world = S.createWorld(state, S.mulberry32(3));
+  for (let t = 0; t < 60; t += 0.1) S.step(world, 0.1);
+  assert.equal(state.coins, 0, 'an empty park earns nothing');
+  state.coins = 1e12;
+  for (const p of PLOTS) for (let n = 0; n < 3; n++) R.upgradePlot(state, p.index);
+  const rate = E.idleRate(state);
+  assert.ok(rate > 0);
+  const before = state.coins;
+  for (let t = 0; t < 60; t += 0.1) S.step(world, 0.1);
+  assert.ok(Math.abs(state.coins - before - rate * 60) < rate, 'a minute of takings');
+  assert.ok(world.events.some((e) => e.type === 'pay'));
+  for (let n = 0; n < 8; n++) R.upgradePlot(state, 0);
+  assert.ok(E.idleRate(state) > rate, 'more stars and capacity take more');
+  const away = S.applyOffline(world, 10 * 3600);
+  assert.ok(away.capped && away.amount > 0);
+});
+

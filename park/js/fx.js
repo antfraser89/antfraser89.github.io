@@ -11,8 +11,8 @@ export function createFx(canvas) {
 
   function resize() {
     dpr = Math.min(window.devicePixelRatio || 1, 2);
-    w = window.innerWidth;
-    h = window.innerHeight;
+    w = canvas.clientWidth || 390;
+    h = canvas.clientHeight || 847;
     canvas.width = Math.round(w * dpr);
     canvas.height = Math.round(h * dpr);
   }

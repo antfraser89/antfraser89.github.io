@@ -2,11 +2,9 @@
 import { setDisplayFont } from './art.js';
 import { createAudio } from './audio.js';
 import { GAME_TITLE, LEGACY_SAVE_KEYS, OPENING_SPINS, PLOTS, SAVE_KEY, TUNING } from './config.js';
-import { plotAt } from './layout.js';
 import * as E from './economy.js';
 import { money } from './format.js';
-import { createRenderer } from './render.js';
-import { createRenderer3D } from './world3d.js';
+import { createParkView } from './parkview.js';
 import * as R from './rules.js';
 import * as S from './sim.js';
 import { newState, parseSave, serialize } from './state.js';
@@ -72,17 +70,15 @@ function replaceSave(next) {
 }
 
 const audio = createAudio(() => world.state.settings);
-const canvas = document.getElementById('game');
-// The park is drawn in 3D where the device can manage it, and flat where it cannot.
-const hooks = { onTap, onBang: () => audio.play('bang') };
-let renderer;
-try {
-  if (new URLSearchParams(location.search).has('flat')) throw new Error('flat renderer asked for');
-  renderer = createRenderer3D(canvas, world, hooks);
-} catch (err) {
-  console.info('Park!: using the flat renderer.', err && err.message);
-  renderer = createRenderer(canvas, world, hooks);
-}
+// The park page: the painted park, with a tap area on each of its eight sites.
+const renderer = createParkView(world, {
+  onSite: (k) => {
+    audio.unlock();
+    audio.play('click');
+    ui.openBuild(k);
+  },
+  onBang: () => audio.play('bang'),
+});
 const ui = createUI({
   world,
   renderer,
@@ -93,33 +89,10 @@ const ui = createUI({
   onReset: () => replaceSave(null),
 });
 
-function onTap(sx, sy) {
-  audio.unlock();
-  const hit = renderer.pick(sx, sy);
-  if (!hit) {
-    ui.closeSheet();
-    return;
-  }
-  if (hit.balloon) {
-    S.popBalloon(world, hit.balloon);
-    return;
-  }
-  audio.play('click');
-  ui.openBuild(hit.plot);
-}
-
 function handleEvents() {
   for (const ev of world.events) {
     if (ev.type === 'pay') {
-      if (!ui.parkVisible) continue; // nobody is looking at the park
-      const p = plotAt(world.state.town, ev.k);
-      const d = S.designAt(world.state, ev.k);
-      renderer.popText(p.x, p.y - d.h * 0.62, '+' + money(ev.amount));
-      renderer.coins(p.x, p.y - d.h * 0.5, Math.min(5, 1 + ev.n));
-    } else if (ev.type === 'balloon') {
-      audio.play('pop');
-      renderer.burst(ev.x, ev.y, 16, [ev.color, '#fff6e0'], { speed: 220, life: 0.6, size: 6 });
-      ui.toast(`Prize balloon: ${ui.describe(ev.reward)}`, 'gold');
+      if (ui.parkVisible) renderer.pay(ev.k, '+' + money(ev.amount));
     } else if (ev.type === 'mission') {
       audio.play('claim');
       ui.toast(`Mission complete: ${ui.describe(ev.reward)}`, 'gold');
@@ -129,28 +102,12 @@ function handleEvents() {
   world.events.length = 0;
 }
 
-// A rival's pie arriving while you are playing.
-function announce(item) {
-  const who = R.rivalName(item.rival);
-  if (item.blocked) {
-    audio.play('lock');
-    ui.toast(`${who} threw a pie. Your padlock stopped it!`);
-    return;
-  }
-  const p = plotAt(world.state.town, item.plot);
-  const d = S.designAt(world.state, item.plot);
-  audio.play('splat');
-  if (ui.parkVisible) renderer.custard(p.x, p.y - d.h * 0.5);
-  ui.toast(`<b>${who} pied your ${d.name}!</b> Clean it up to reopen.`);
-}
-
 // Catch up after time away: the gate's takings, the token meter, the rivals.
 function comeBack(seconds, announceIt) {
   if (!(seconds > 5)) return;
   const till = S.applyOffline(world, seconds);
   const res = R.tick(world.state, clock(), Math.random, TUNING.incomingMaxAway);
   if (announceIt && seconds >= TUNING.offlineMinSeconds) ui.showAway(seconds, till, res.tokens, res.incidents);
-  else res.incidents.forEach(announce);
   ui.showLeague(res.league);
 }
 
@@ -187,7 +144,6 @@ function frame(now) {
   if (tickClock >= 1) {
     tickClock = 0;
     const res = R.tick(world.state, clock(), Math.random, 1);
-    res.incidents.forEach(announce);
     ui.showLeague(res.league);
     if (!ui.busy && world.state.stats.spins >= OPENING_SPINS.length) ui.showDaily();
   }
@@ -219,7 +175,6 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('pagehide', save);
 window.addEventListener('resize', () => {
   ui.measure();
-  renderer.resize();
 });
 window.addEventListener('pointerdown', () => audio.unlock(), { passive: true });
 window.addEventListener('keydown', (e) => {
@@ -235,7 +190,6 @@ window.addEventListener('keydown', (e) => {
 document.title = GAME_TITLE;
 ui.refresh();
 ui.measure();
-renderer.resetView();
 
 // The splash doubles as the first tap, which browsers need before sound can play.
 ui.showSplash(() => {
