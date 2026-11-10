@@ -36,7 +36,7 @@ function readSave() {
 // with it; if it does not come, carry on with the system font.
 const fontReady = await Promise.race([
   document.fonts && document.fonts.load
-    ? Promise.all([document.fonts.load('800 20px "Playfair Display"'), document.fonts.load('italic 900 20px "Playfair Display"'), document.fonts.load('700 14px "Jost"')])
+    ? Promise.all([document.fonts.load('400 20px "Lilita One"'), document.fonts.load('700 14px "Baloo 2"'), document.fonts.load('800 14px "Baloo 2"')])
       .then((sets) => sets[0].length > 0, () => false)
     : false,
   new Promise((resolve) => setTimeout(() => resolve(false), 1800)),

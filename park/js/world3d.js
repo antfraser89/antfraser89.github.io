@@ -106,10 +106,41 @@ class Halos {
   }
 }
 
+function bushSpots(L, items, seed) {
+  const r = mulberry32(seed);
+  const spots = [];
+  const taken = (x, y) => items.some((it) => it.kind !== 'tree' && it.kind !== 'fence' && Math.hypot(it.x - x, it.y - y) < 22)
+    || spots.some((sp) => Math.hypot(sp.x - x, sp.y - y) < 21)
+    || L.plots.some((p) => Math.abs(x - p.x) < 158 && y > p.y - 222 && y < p.y + 46)
+    || L.decks.some((d) => x > d.x - 6 && x < d.x + d.w + 6 && y > d.y - 6 && y < d.y + d.h + 6);
+  for (const path of L.paths) {
+    if (path.kind === 'board' || path.kind === 'spur') continue;
+    let run = 0;
+    for (let i = 1; i < path.pts.length; i++) {
+      const [ax, ay] = path.pts[i - 1];
+      const [bx, by] = path.pts[i];
+      const len = Math.hypot(bx - ax, by - ay) || 1;
+      run += len;
+      if (run < 30) continue;
+      run = 0;
+      for (const side of [-1, 1]) {
+        if (L.paved && r() < 0.55) continue;
+        const off = path.w / 2 + 12 + r() * 5;
+        const x = bx - ((by - ay) / len) * off * side;
+        const y = by + ((bx - ax) / len) * off * side;
+        if (y > W.gateY - 30 || y < 60 || x < 40 || x > W.w - 40) continue;
+        if (L.onPath(x, y, 5) || L.wet(x, y) || L.wet(x, y - 14) || L.wet(x, y + 14) || taken(x, y)) continue;
+        spots.push({ x, y });
+      }
+    }
+  }
+  return spots;
+}
+
 export function createRenderer3D(canvas, world, hooks = {}) {
   const gl = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
   gl.outputColorSpace = THREE.SRGBColorSpace;
-  gl.toneMapping = THREE.ACESFilmicToneMapping;
+  gl.toneMapping = THREE.NoToneMapping; // colours as painted: bright and saturated
   gl.shadowMap.enabled = true;
   gl.shadowMap.type = THREE.PCFSoftShadowMap;
   const scene = new THREE.Scene();
@@ -169,6 +200,9 @@ export function createRenderer3D(canvas, world, hooks = {}) {
   const halos = new Halos(220, glowTex, false);
   const pools = new Halos(120, glowTex, true);
   scene.add(halos.mesh, pools.mesh);
+  const clouds = PR.buildClouds();
+  const airBalloons = PR.buildAirBalloons();
+  scene.add(clouds.group, airBalloons.group);
   const ripples = rippleTexture();
 
   // ---- the town ---------------------------------------------------------------
@@ -234,7 +268,7 @@ export function createRenderer3D(canvas, world, hooks = {}) {
     const tex = new THREE.CanvasTexture(buildGround(L, theme, seed, buildTile(theme, seed + 3, L.paved), true));
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = Math.min(8, gl.capabilities.getMaxAnisotropy());
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(W.w + 2 * M, W.h + 2 * M).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: tex, color: '#dcdcdc', roughness: 1, alphaTest: 0.5 }));
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(W.w + 2 * M, W.h + 2 * M).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ map: tex, color: '#eeeeee', roughness: 1, alphaTest: 0.5 }));
     ground.position.set(W.w / 2, 0, W.h / 2);
     ground.receiveShadow = true;
     ground.userData.ownMap = true;
@@ -295,6 +329,10 @@ export function createRenderer3D(canvas, world, hooks = {}) {
     land.add(PR.buildTrees(of('tree'), theme));
     const lamps = of('lamp');
     land.add(PR.buildLamps(lamps));
+    land.add(PR.buildBanners(lamps));
+    const hedges = bushSpots(L, items, seed + 21);
+    if (hedges.length) land.add(PR.buildBushes(hedges, theme));
+    land.add(PR.buildHills(theme));
     for (const it of lamps) {
       halos.add(it.x, 67, it.y, 120, '#ffd88a');
       pools.add(it.x, 0.8, it.y, 250, '#ffcf80');
@@ -318,6 +356,14 @@ export function createRenderer3D(canvas, world, hooks = {}) {
       switch (it.kind) {
         case 'gate':
           at(PR.buildGate(GAME_TITLE), it);
+          {
+            // the host stands just inside, waving people in
+            const panda = PR.buildPanda();
+            panda.group.position.set(it.x + 64, 0, it.y - 62);
+            panda.group.rotation.y = -0.3;
+            land.add(panda.group);
+            ticks.push(panda.tick);
+          }
           halos.add(it.x, 150, it.y, 420, '#ffd88a');
           pools.add(it.x, 0.8, it.y + 40, 420, '#ffcf80');
           break;
@@ -459,6 +505,12 @@ export function createRenderer3D(canvas, world, hooks = {}) {
       node.group.add(node.model.group);
       const kit = buildStageKit(plot.stage, p.side);
       if (kit) node.group.add(kit);
+      // its name on a board, and a roped-off queue
+      const sign = PR.buildNameSign(d.name);
+      sign.position.set(p.side * 100, 0, 106);
+      const rail = PR.buildQueueRail(p.q);
+      rail.position.set(-p.x, 0, -(p.y - 96));
+      node.group.add(sign, rail);
       if (plot.splat) node.group.add(buildSplat(d.w, d.h));
     });
   }
@@ -1079,7 +1131,7 @@ export function createRenderer3D(canvas, world, hooks = {}) {
     low: [C('#d6e8ee'), C('#ffcf9a'), C('#1c2748')],
     sun: [C('#fff4dc'), C('#ffc078'), C('#8fa6e8')],
     hemiSky: [C('#dce9ff'), C('#ffd9b4'), C('#4a5c94')],
-    hemiGround: [C('#a9a688'), C('#a08666'), C('#2a3350')],
+    hemiGround: [C('#c9c2a0'), C('#b0926c'), C('#2a3350')],
   };
   const tone = new THREE.Color();
   const blend = (set, gold, night) => tone.copy(set[0]).lerp(set[1], gold).lerp(set[2], night);
@@ -1096,10 +1148,10 @@ export function createRenderer3D(canvas, world, hooks = {}) {
     sunDir.set(Math.sin(azim) * Math.cos(elev), Math.sin(elev), Math.cos(azim) * Math.cos(elev));
     sun.position.copy(sun.target.position).addScaledVector(sunDir, 3200);
     sun.color.copy(blend(SKY.sun, gold, night));
-    sun.intensity = lerp(lerp(2.5, 2.3, gold), 0.8, night);
+    sun.intensity = lerp(lerp(1.75, 1.7, gold), 0.5, night);
     hemi.color.copy(blend(SKY.hemiSky, gold, night));
     hemi.groundColor.copy(blend(SKY.hemiGround, gold, night));
-    hemi.intensity = lerp(lerp(2.3, 1.9, gold), 1.5, night);
+    hemi.intensity = lerp(lerp(1.95, 1.6, gold), 1.0, night);
     sky.material.uniforms.top.value.copy(blend(SKY.top, gold, night));
     sky.material.uniforms.low.value.copy(blend(SKY.low, gold, night));
     scene.fog.color.copy(sky.material.uniforms.low.value);
@@ -1133,24 +1185,23 @@ export function createRenderer3D(canvas, world, hooks = {}) {
   // ---- thumbnails -----------------------------------------------------------------
 
   const thumbs = new Map();
-  // A little portrait of an attraction, rendered from its model.
-  function thumbnail(design, w = 88, h = 74) {
-    const key = `${design.id}|${w}|${h}`;
-    if (thumbs.has(key)) return thumbs.get(key);
+  // Render a model on its own, against nothing, to a canvas: for menus and the mascot.
+  function snapshot(group, w, h, v = {}) {
     const k = 3;
     const target = new THREE.WebGLRenderTarget(w * k, h * k);
-    const model = buildAttraction(design);
-    const box = new THREE.Box3().setFromObject(model.group);
+    const box = new THREE.Box3().setFromObject(group);
     const size = box.getSize(new THREE.Vector3());
     const mid = box.getCenter(new THREE.Vector3());
+    if (v.focus) mid.y = box.min.y + size.y * v.focus;
     const stage = new THREE.Scene();
-    const key1 = new THREE.DirectionalLight('#fff4dc', 3.2);
+    const key1 = new THREE.DirectionalLight('#fff4dc', 1.8);
     key1.position.set(-1.2, 2, 1.6);
-    stage.add(model.group, new THREE.HemisphereLight('#e8f0ff', '#807868', 1.5), key1);
+    stage.add(group, new THREE.HemisphereLight('#ffffff', '#c9c2a0', 1.9), key1);
     const cam = new THREE.PerspectiveCamera(24, w / h, 10, 6000);
-    const reach = Math.max(size.y, size.x / (w / h), size.z * 0.6) * 0.5;
-    const dist = (reach / Math.tan((12 * RAD))) * 1.12;
-    cam.position.set(mid.x + dist * 0.42, mid.y + dist * 0.4, mid.z + dist * 0.82);
+    const reach = Math.max(size.y, size.x / (w / h), size.z * 0.6) * 0.5 * (v.fill || 1);
+    const dist = (reach / Math.tan(12 * RAD)) * 1.12;
+    const [yaw, pitch] = [v.yaw ?? 0.42, v.pitch ?? 0.4];
+    cam.position.set(mid.x + dist * yaw, mid.y + dist * pitch, mid.z + dist * Math.sqrt(Math.max(0.1, 1 - yaw * yaw - pitch * pitch)));
     cam.lookAt(mid);
     const keepGlow = GLOW.color.getHex();
     GLOW.color.setScalar(1);
@@ -1164,7 +1215,6 @@ export function createRenderer3D(canvas, world, hooks = {}) {
     gl.setClearColor(0x000000, 1);
     GLOW.color.setHex(keepGlow);
     target.dispose();
-    dispose(model.group);
     // the pixels come back upside down and in linear light: flip and gamma-correct them
     const cv = document.createElement('canvas');
     cv.width = w * k;
@@ -1181,8 +1231,27 @@ export function createRenderer3D(canvas, world, hooks = {}) {
       }
     }
     c.putImageData(img, 0, 0);
-    thumbs.set(key, cv);
     return cv;
+  }
+  // A little portrait of an attraction, rendered from its model.
+  function thumbnail(design, w = 88, h = 74) {
+    const key = `${design.id}|${w}|${h}`;
+    if (!thumbs.has(key)) {
+      const model = buildAttraction(design);
+      thumbs.set(key, snapshot(model.group, w, h));
+      dispose(model.group);
+    }
+    return thumbs.get(key);
+  }
+  // The panda, for the menus: whole (the default) or head and shoulders.
+  function mascot(w = 150, h = 170, v = {}) {
+    const key = `panda|${w}|${h}|${v.focus || 0}`;
+    if (!thumbs.has(key)) {
+      const panda = PR.buildPanda();
+      thumbs.set(key, snapshot(panda.group, w, h, { yaw: 0.24, pitch: 0.08, ...v }));
+      dispose(panda.group);
+    }
+    return thumbs.get(key);
   }
 
   // ---- the frame --------------------------------------------------------------------
@@ -1217,6 +1286,8 @@ export function createRenderer3D(canvas, world, hooks = {}) {
       }
     });
     for (const tick of ticks) tick(time);
+    clouds.tick(time);
+    airBalloons.tick(time);
     crowd.update(world.guests, time, W.spawnY + 40);
     ripples.offset.set(time * 0.012, time * 0.008);
     if (surf) {
@@ -1278,6 +1349,7 @@ export function createRenderer3D(canvas, world, hooks = {}) {
     intro,
     rotate,
     thumbnail,
+    mascot,
     pop: (k) => { pops[k] = 1; },
     burst,
     cam: rig,

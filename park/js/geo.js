@@ -7,7 +7,7 @@ import * as THREE from './vendor/three.module.min.js';
 export { THREE };
 
 // Shared by every painted surface in the park.
-export const PAINT = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, metalness: 0.02 });
+export const PAINT = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.02 });
 // Lit bulbs, lanterns and windows: unaffected by the scene's lights. The
 // renderer turns its colour up at night and down by day.
 export const GLOW = new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false });
@@ -163,5 +163,9 @@ export class Kit {
 export function dispose(object) {
   object.traverse((o) => {
     if (o.geometry) o.geometry.dispose();
+    if (o.userData.ownMap && o.material) {
+      if (o.material.map) o.material.map.dispose();
+      o.material.dispose();
+    }
   });
 }

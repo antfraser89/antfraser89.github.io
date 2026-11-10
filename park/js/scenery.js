@@ -13,6 +13,36 @@ const trace = (c, pts, close = true) => {
 
 // ---- ground layers (painted once into the cached ground) -----------------------
 
+// Square pavers in two tones with a fine joint between them, as a fill pattern.
+const pavers = new Map();
+export function paverPattern(c, theme, stone) {
+  const key = theme.key + (stone ? 's' : 'p');
+  if (!pavers.has(key)) {
+    const n = 26;
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = n * 2;
+    const t = cv.getContext('2d');
+    t.fillStyle = stone ? theme.stone : theme.path;
+    t.fillRect(0, 0, n * 2, n * 2);
+    for (let i = 0; i < 4; i++) {
+      t.fillStyle = (i === 0 || i === 3) ? 'rgba(255,255,255,0.16)' : 'rgba(190,110,80,0.13)';
+      t.fillRect((i % 2) * n + 1, (i >> 1) * n + 1, n - 2, n - 2);
+    }
+    t.strokeStyle = 'rgba(120,80,60,0.22)';
+    t.lineWidth = 1.4;
+    for (const v of [0, n]) {
+      t.beginPath();
+      t.moveTo(v, 0);
+      t.lineTo(v, n * 2);
+      t.moveTo(0, v);
+      t.lineTo(n * 2, v);
+      t.stroke();
+    }
+    pavers.set(key, cv);
+  }
+  return c.createPattern(pavers.get(key), 'repeat');
+}
+
 // A paved or planked walkway along a polyline.
 export function paintPath(c, path, theme, rand) {
   const { pts, w, kind } = path;
@@ -32,6 +62,10 @@ export function paintPath(c, path, theme, rand) {
   c.strokeStyle = base;
   c.lineWidth = w;
   c.stroke();
+  if (!board) {
+    c.strokeStyle = paverPattern(c, theme, stone);
+    c.stroke();
+  }
   // a paler crown down the middle, as if worn by feet
   c.strokeStyle = 'rgba(255,255,255,0.13)';
   c.lineWidth = w * 0.5;
@@ -63,7 +97,7 @@ export function paintPath(c, path, theme, rand) {
         c.roundRect(ax + (bx - ax) * t + nx * o - 4, ay + (by - ay) * t + ny * o - 3, 8, 6, 2);
         c.fill();
       }
-    } else if (rand() < 0.8) {
+    } else if (rand() < 0.15) {
       const o = (rand() - 0.5) * (w - 12);
       c.fillStyle = 'rgba(70,50,20,0.10)';
       c.fillRect(ax + nx * o, ay + ny * o, 5 + rand() * 7, 2.2);

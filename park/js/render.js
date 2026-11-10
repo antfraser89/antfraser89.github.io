@@ -234,6 +234,8 @@ export function buildGround(L, theme, seed, tileCv, hollow = false) {
     c.ellipse(e.x, e.y, e.rx, e.ry, 0, 0, TAU);
     c.fillStyle = stone ? theme.stone : theme.path;
     c.fill();
+    c.fillStyle = SC.paverPattern(c, theme, stone);
+    c.fill();
     c.beginPath();
     c.ellipse(e.x, e.y, e.rx * 0.62, e.ry * 0.62, 0, 0, TAU);
     c.strokeStyle = 'rgba(255,255,255,0.16)';

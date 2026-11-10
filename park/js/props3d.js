@@ -3,6 +3,7 @@
 import { P } from './art.js';
 import { GUEST_LOOKS } from './config.js';
 import { GLOW, Kit, PAINT, THREE } from './geo.js';
+import { along } from './layout.js';
 
 const TAU = Math.PI * 2;
 const GOLD = '#e3c583';
@@ -23,6 +24,7 @@ const geometryOf = (kit, lit = false) => {
 export function treeKind(theme, v) {
   if (theme.weather === 'snow') return 'fir';
   if (theme.key === 'sand') return v % 2 ? 'palm' : 'round';
+  if (theme.key === 'green' && v % 5 === 1) return 'palm';
   return v % 5 === 3 ? 'poplar' : 'round';
 }
 
@@ -53,6 +55,8 @@ function treeGeometry(theme, kind) {
     k.blob(13, 42, -6, 17, dark);
     k.blob(-5, 63, -3, 14, light);
     k.blob(9, 56, 8, 12, light);
+    k.blob(-16, 54, -8, 12, mid);
+    k.blob(4, 70, 2, 10, light);
     if (theme.fruit) for (const [x, y, z] of [[-14, 46, 14], [10, 58, 15], [18, 44, 6], [-4, 38, 18]]) k.ball(x, y, z, 2.6, theme.fruit, { seg: 6 });
   }
   return geometryOf(k);
@@ -103,7 +107,7 @@ export function buildLamps(items) {
   const m = new THREE.Matrix4();
   for (const [geo, material, shadow] of [[geometryOf(post), PAINT, true], [geometryOf(globe, true), GLOW, false]]) {
     const mesh = new THREE.InstancedMesh(geo, material, items.length);
-    items.forEach((it, i) => mesh.setMatrixAt(i, m.makeRotationY((it.x + it.y) % 3).setPosition(it.x, 0, it.y)));
+    items.forEach((it, i) => mesh.setMatrixAt(i, m.makeTranslation(it.x, 0, it.y)));
     mesh.castShadow = shadow;
     group.add(mesh);
   }
@@ -140,72 +144,84 @@ export function buildFence(items, color) {
 }
 
 // A flat sign with lettering on it, readable from both sides.
-function lettering(text, w, h, bg, fg) {
+function lettering(text, w, h, o = {}) {
   const cv = document.createElement('canvas');
   cv.width = 512;
   cv.height = Math.round((512 * h) / w);
   const c = cv.getContext('2d');
-  c.fillStyle = bg;
+  c.fillStyle = o.bg || '#2a6fe0';
   c.fillRect(0, 0, cv.width, cv.height);
-  c.strokeStyle = fg;
-  c.lineWidth = 6;
-  c.strokeRect(9, 9, cv.width - 18, cv.height - 18);
-  c.fillStyle = fg;
+  const font = (px) => `400 ${px}px "Lilita One", "Baloo 2", system-ui, sans-serif`;
+  let size = cv.height * 0.74;
+  c.font = font(size);
+  const wide = c.measureText(text).width;
+  if (wide > cv.width - 56) size *= (cv.width - 56) / wide;
+  c.font = font(size);
   c.textAlign = 'center';
   c.textBaseline = 'middle';
-  let size = cv.height * 0.62;
-  c.font = `italic 900 ${size}px "Playfair Display", Georgia, serif`;
-  const wide = c.measureText(text).width;
-  if (wide > cv.width - 50) {
-    size *= (cv.width - 50) / wide;
-    c.font = `italic 900 ${size}px "Playfair Display", Georgia, serif`;
+  c.lineJoin = 'round';
+  if (o.outline) {
+    c.strokeStyle = o.outline;
+    c.lineWidth = size * 0.18;
+    c.strokeText(text, cv.width / 2, cv.height / 2 + size * 0.05);
   }
-  c.fillText(text, cv.width / 2, cv.height / 2 + size * 0.04);
+  c.fillStyle = o.fg || '#ffd83d';
+  c.fillText(text, cv.width / 2, cv.height / 2 + size * 0.05);
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
+  const mat = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6 });
   const group = new THREE.Group();
   for (const flip of [0, Math.PI]) {
-    const plane = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.7 }));
+    const plane = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
     plane.rotation.y = flip;
-    plane.position.z = flip ? -0.2 : 0.2;
+    plane.userData.ownMap = true;
     group.add(plane);
   }
   return group;
 }
 
+// The way in: cream stone towers with teal domes, an arch between them and
+// the park's name over the top.
 export function buildGate(title) {
+  const [CREAM, TRIM, TEAL] = ['#f7e9c6', '#e6d0a0', '#1fb3ad'];
   const k = new Kit();
+  const dome = (x, y, r) => {
+    k.cyl(x, y, 0, r, r + 2, 10, TRIM, { seg: 18 });
+    k.ball(x, y + 10, 0, r, TEAL, { seg: 18, rings: 12, sy: 0.9 });
+    k.cyl(x, y + 8 + r * 0.9, 0, 1.6, 3, 12, GOLD, { seg: 6 });
+    k.ball(x, y + 22 + r * 0.9, 0, 3.6, GOLD, { seg: 8, rings: 6 });
+    k.cyl(x, y + 24 + r * 0.9, 0, 0.8, 0.8, 24, GOLD, { seg: 5 });
+    k.put(new THREE.ConeGeometry(5, 15, 3), '#ffcf2e', x + 8, y + 42 + r * 0.9, 0, { rz: -Math.PI / 2, sz: 0.2 });
+  };
   for (const s of [-1, 1]) {
-    const x = s * 96;
-    k.box(x, 0, 0, 36, 10, 36, '#b9ad95');
-    k.box(x, 10, 0, 28, 108, 28, STONE);
-    for (let i = 1; i < 5; i++) k.box(x, 10 + i * 22, 0, 29, 1.4, 29, '#c9bfa8');
-    k.box(x, 118, 0, 36, 9, 36, GOLD);
-    k.box(x, 127, 0, 8, 16, 8, IRON);
-    k.ball(x, 138, 0, 7, BULB, { glow: true });
-    k.cone(x, 143, 0, 9, 9, IRON, { seg: 4, ry: Math.PI / 4 });
+    const x = s * 120;
+    k.box(x, 0, 0, 60, 12, 60, TRIM);
+    k.box(x, 12, 0, 50, 130, 50, CREAM);
+    k.box(x, 62, 0, 53, 7, 53, TRIM);
+    k.box(x, 142, 0, 60, 10, 60, TRIM);
+    k.box(x, 88, 25.6, 24, 40, 1.5, TEAL);
+    k.box(x, 22, 25.6, 20, 30, 1.5, '#c9b386');
+    k.cyl(x, 52, 25.6, 10, 10, 1.5, '#c9b386', { rx: Math.PI / 2, seg: 14 });
+    dome(x, 152, 24);
+    k.box(x - s * 30, 74, 27, 3, 3, 8, IRON);
+    k.ball(x - s * 30, 72, 32, 5, BULB, { glow: true, seg: 8, rings: 6 });
   }
-  // the arch: green lacquer edged in brass, like the machine
-  const n = 18;
-  for (let i = 0; i < n; i++) {
-    const u0 = i / n;
-    const u1 = (i + 1) / n;
-    const at = (u) => [-108 + 216 * u, 124 + Math.sin(u * Math.PI) * 44];
-    const [x0, y0] = at(u0);
-    const [x1, y1] = at(u1);
-    const len = Math.hypot(x1 - x0, y1 - y0);
-    const tilt = Math.atan2(y1 - y0, x1 - x0);
-    k.put(new THREE.BoxGeometry(len + 0.6, 34, 10), '#0e3d33', (x0 + x1) / 2, (y0 + y1) / 2, 0, { rz: tilt });
-    k.put(new THREE.BoxGeometry(len + 0.6, 3, 12), GOLD, (x0 + x1) / 2 - Math.sin(tilt) * 17, (y0 + y1) / 2 + Math.cos(tilt) * 17, 0, { rz: tilt });
-    k.put(new THREE.BoxGeometry(len + 0.6, 3, 12), GOLD, (x0 + x1) / 2 + Math.sin(tilt) * 17, (y0 + y1) / 2 - Math.cos(tilt) * 17, 0, { rz: tilt });
-    if (i % 2 === 0) k.ball((x0 + x1) / 2 - Math.sin(tilt) * 21, (y0 + y1) / 2 + Math.cos(tilt) * 21, 0, 2.8, BULB, { glow: true, seg: 6, rings: 4 });
-  }
+  // the beam across, the arch under it and the big dome on top
+  k.box(0, 128, 0, 192, 52, 36, CREAM);
+  k.box(0, 122, 0, 196, 8, 40, TRIM);
+  k.box(0, 178, 0, 200, 8, 42, TRIM);
+  k.ring(0, 36, 0, 90, 9, TRIM, { rx: 0, arc: Math.PI, seg: 28 });
+  dome(0, 186, 34);
+  for (let i = 0; i < 11; i++) k.ball(-90 + i * 18, 184, 22, 2.8, BULB, { glow: true, seg: 6, rings: 4 });
+  // a crown over the name
+  k.box(0, 172, 19.4, 26, 3.4, 1.5, GOLD);
+  for (const dx of [-10, 0, 10]) k.cone(dx, 175, 19.4, 4.2, 9, GOLD, { seg: 4 });
   const group = k.build();
-  const sign = lettering(title, 150, 30, '#0e3d33', '#f5e6bd');
-  sign.position.set(0, 160, 0);
-  sign.children[0].position.z = 5.6;
-  sign.children[1].position.z = -5.6;
+  const sign = lettering(title.toUpperCase(), 150, 36, { bg: '#2a6fe0', fg: '#ffd83d', outline: '#123a9c' });
+  sign.position.set(0, 150, 0);
+  sign.children[0].position.z = 18.4;
+  sign.children[1].position.z = -18.4;
   group.add(sign);
   return group;
 }
@@ -529,7 +545,10 @@ export class Crowd {
     this.head = make(new THREE.SphereGeometry(4.3, 10, 8).translate(0, 24.4, 0));
     this.hair = make(new THREE.SphereGeometry(4.7, 10, 6, 0, TAU, 0, Math.PI * 0.52).translate(0, 24.8, -0.5));
     this.group = new THREE.Group();
-    this.group.add(this.legs, this.body, this.head, this.hair);
+    const arms = new Kit();
+    for (const sx of [-1, 1]) arms.ball(sx * 5.8, 14.5, 0, 2.2, '#ffffff', { sy: 2.3, seg: 6, rings: 5, plain: true });
+    this.arms = make(geometryOf(arms));
+    this.group.add(this.legs, this.body, this.head, this.hair, this.arms);
     this.m = new THREE.Matrix4();
     this.q = new THREE.Quaternion();
     this.e = new THREE.Euler();
@@ -573,16 +592,229 @@ export class Crowd {
       this.body.setMatrixAt(n, this.m);
       this.head.setMatrixAt(n, this.m);
       this.hair.setMatrixAt(n, this.m);
+      this.arms.setMatrixAt(n, this.m);
+      this.arms.setColorAt(n, this.colors.shirts[g.shirt % this.colors.shirts.length]);
       this.legs.setColorAt(n, this.colors.trousers[g.legs % this.colors.trousers.length]);
       this.body.setColorAt(n, this.colors.shirts[g.shirt % this.colors.shirts.length]);
       this.head.setColorAt(n, this.colors.skins[g.skin % this.colors.skins.length]);
       this.hair.setColorAt(n, g.hat ? this.colors.shirts[(g.shirt + 3) % this.colors.shirts.length] : this.colors.hairs[g.hair % this.colors.hairs.length]);
       n++;
     }
-    for (const mesh of [this.legs, this.body, this.head, this.hair]) {
+    for (const mesh of [this.legs, this.body, this.head, this.hair, this.arms]) {
       mesh.count = n;
       mesh.instanceMatrix.needsUpdate = true;
       if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     }
   }
+}
+
+// ---- more detail: banners, hedges, signs, queue rails, sky furniture, the mascot ----
+
+// A crowned banner hanging from every lamp post, blue and red by turns.
+export function buildBanners(items) {
+  const k = new Kit();
+  items.forEach((it, i) => {
+    const c = i % 2 ? '#e8474f' : '#2f7fe6';
+    k.bar([it.x, 54, it.y], [it.x + 17, 54, it.y], 0.8, IRON, { seg: 4 });
+    k.box(it.x + 10, 29, it.y, 12, 24, 0.9, c);
+    k.box(it.x + 10, 27, it.y, 13.4, 2, 1.1, GOLD);
+    for (const f of [-0.75, 0.75]) {
+      k.box(it.x + 10, 40, it.y + f, 7, 2, 0.5, GOLD);
+      for (const dx of [-2.6, 0, 2.6]) k.cone(it.x + 10 + dx, 42, it.y + f, 1.3, 3.2, GOLD, { seg: 4 });
+    }
+  });
+  return k.build();
+}
+
+// Low flowering hedges, as instanced clumps.
+export function buildBushes(spots, theme) {
+  const [mid, light, dark] = theme.tree;
+  const group = new THREE.Group();
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const up = new THREE.Vector3(0, 1, 0);
+  [theme.blooms.slice(0, 2), theme.blooms.slice(2, 4), []].forEach((flowers, v) => {
+    const list = spots.filter((_, i) => i % 3 === v);
+    if (!list.length) return;
+    const k = new Kit();
+    k.blob(0, 6, 0, 9, mid, { sy: 0.8 });
+    k.blob(-7, 5, 2, 6.5, dark, { sy: 0.8 });
+    k.blob(7, 5, -1, 7, dark, { sy: 0.8 });
+    k.blob(1, 10, 1, 5.5, light);
+    flowers.forEach((c, j) => {
+      for (let i = 0; i < 6; i++) {
+        const a = i * 1.05 + j * 0.5;
+        k.ball(Math.cos(a) * 8, 7 + (i % 3) * 2.2, Math.sin(a) * 6 + 1, 1.9, c, { seg: 5, rings: 4 });
+      }
+    });
+    const mesh = new THREE.InstancedMesh(geometryOf(k), PAINT, list.length);
+    list.forEach((s, i) => {
+      const sc = 0.85 + ((s.x * 7 + s.y * 3) % 10) / 22;
+      m.compose(new THREE.Vector3(s.x, 0, s.y), q.setFromAxisAngle(up, (s.x + s.y) % TAU), new THREE.Vector3(sc, sc, sc));
+      mesh.setMatrixAt(i, m);
+    });
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    group.add(mesh);
+  });
+  return group;
+}
+
+// The name of a ride on a board by its entrance.
+export function buildNameSign(name) {
+  const k = new Kit();
+  for (const sx of [-1, 1]) {
+    k.cyl(sx * 33, 0, 0, 1.8, 2.3, 42, '#2459c0', { seg: 6 });
+    k.ball(sx * 33, 44, 0, 3, GOLD, { seg: 6, rings: 4 });
+  }
+  k.box(0, 20, 0, 72, 22, 3, '#2459c0');
+  k.box(0, 42, 0, 60, 2.4, 3.6, GOLD);
+  const group = k.build();
+  const sign = lettering(name.toUpperCase(), 66, 16, { bg: '#fff6dc', fg: '#5b3312' });
+  sign.position.set(0, 31, 0);
+  sign.children[0].position.z = 1.7;
+  sign.children[1].position.z = -1.7;
+  group.add(sign);
+  return group;
+}
+
+// Posts and red rope either side of where the queue stands.
+export function buildQueueRail(q, len = 116) {
+  const k = new Kit();
+  let prev = null;
+  for (let d = 0; d <= len; d += 29) {
+    const a = along(q, d);
+    const b = along(q, d + 4);
+    const n = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    const [px, pz] = [(-(b.y - a.y) / n) * 11, ((b.x - a.x) / n) * 11];
+    const posts = [[a.x + px, a.y + pz], [a.x - px, a.y - pz]];
+    posts.forEach(([x, z], i) => {
+      k.cyl(x, 0, z, 1.3, 1.7, 13, '#2459c0', { seg: 6 });
+      k.ball(x, 14.4, z, 2, GOLD, { seg: 6, rings: 4 });
+      if (prev) k.bar([prev[i][0], 11, prev[i][1]], [x, 11, z], 0.7, '#e8474f', { seg: 4 });
+    });
+    prev = posts;
+  }
+  return k.build();
+}
+
+// Fair-weather clouds, circling a long way off.
+export function buildClouds() {
+  const mat = new THREE.MeshLambertMaterial({ color: '#ffffff', fog: false });
+  const group = new THREE.Group();
+  const puffs = [];
+  for (let i = 0; i < 11; i++) {
+    const k = new Kit();
+    const n = 4 + (i % 3);
+    for (let j = 0; j < n; j++) k.blob((j - n / 2) * 150 + 60, (j % 2) * 50, ((j * 37) % 80) - 40, 150 + ((i * 53 + j * 31) % 90), '#ffffff', { sy: 0.55, plain: true });
+    const cloud = k.build({ material: mat, shadow: false, receive: false });
+    cloud.userData = { a: (i / 11) * TAU, r: 5200 + (i % 4) * 800, y: 1000 + (i % 5) * 190 };
+    group.add(cloud);
+    puffs.push(cloud);
+  }
+  return {
+    group,
+    tick: (t) => {
+      for (const c of puffs) {
+        const a = c.userData.a + t * 0.004;
+        c.position.set(540 + Math.cos(a) * c.userData.r, c.userData.y, 740 + Math.sin(a) * c.userData.r);
+        c.rotation.y = -a;
+      }
+    },
+  };
+}
+
+// A ring of hills on the horizon, the tallest with snow on top.
+export function buildHills(theme) {
+  const k = new Kit();
+  const base = new THREE.Color(theme.tree[2]).lerp(new THREE.Color(theme.ground), 0.5);
+  for (let i = 0; i < 26; i++) {
+    const a = (i / 26) * TAU + 0.1;
+    const r = 4300 + ((i * 617) % 1900);
+    const h = 380 + ((i * 331) % 520);
+    const w = 900 + ((i * 173) % 700);
+    const [x, z] = [540 + Math.cos(a) * r, 740 + Math.sin(a) * r];
+    k.cone(x, -40, z, w, h, '#' + base.clone().offsetHSL(0, 0, ((i % 3) - 1) * 0.04).getHexString(), { seg: 7, plain: true });
+    if (h > 700) k.cone(x, -40 + h * 0.7, z, w * 0.3, h * 0.3, '#f4f8fc', { seg: 7, plain: true });
+  }
+  return k.build({ shadow: false, receive: false });
+}
+
+// Hot-air balloons drifting beyond the park.
+export function buildAirBalloons() {
+  const group = new THREE.Group();
+  const list = [['#ee3a3a', '#ffd83d'], ['#2f7fe6', '#ffffff'], ['#8b66ff', '#ffd83d']].map(([a, b], i) => {
+    const k = new Kit();
+    for (let s = 0; s < 8; s++) k.put(new THREE.SphereGeometry(60, 4, 10, (s / 8) * TAU, TAU / 8), s % 2 ? a : b, 0, 0, 0, { sy: 1.15 });
+    k.cyl(0, -84, 0, 22, 12, 22, a, { seg: 8 });
+    k.box(0, -122, 0, 22, 18, 22, '#8a5a2e');
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) k.bar([sx * 10, -104, sz * 10], [sx * 13, -80, sz * 13], 0.8, '#5b3312', { seg: 4 });
+    const balloon = k.build({ shadow: false });
+    group.add(balloon);
+    return balloon;
+  });
+  return {
+    group,
+    tick: (t) => list.forEach((b, i) => {
+      b.position.set(540 + Math.sin(t * 0.02 + i * 2.1) * 1500, 640 + i * 150 + Math.sin(t * 0.3 + i) * 20, -700 - i * 600);
+      b.rotation.y = t * 0.05 + i;
+    }),
+  };
+}
+
+// The park's host: a panda in a blue cap and waistcoat with a yellow bow tie.
+export function buildPanda() {
+  const [FUR, DARK, BLUE, DEEP, YELLOW] = ['#fbf7ef', '#3a2418', '#2f6fe0', '#2459c0', '#ffcf2e'];
+  const smooth = { seg: 20, rings: 14 };
+  const k = new Kit();
+  // feet and legs
+  for (const sx of [-1, 1]) k.ball(sx * 9.5, 7, 3, 8.6, DARK, { ...smooth, sy: 0.85, sz: 1.15 });
+  // body, with a waistcoat open at the front
+  k.ball(0, 26, 0, 19, FUR, { ...smooth, sy: 1.05 });
+  k.put(new THREE.SphereGeometry(20.3, 22, 14, Math.PI / 2 + 0.52, TAU - 1.04, 0.5, 1.8), BLUE, 0, 26, 0, { sy: 1.05 });
+  for (const y of [31, 23]) k.ball(8.6, y, 17.2, 1.7, YELLOW, { seg: 8, rings: 6 });
+  // sleeves, and the arm that hangs down
+  for (const sx of [-1, 1]) k.ball(sx * 19, 37, 1, 8, '#f4e6c8', smooth);
+  k.bar([-20, 35, 2], [-26, 19, 6], 6, DARK, { seg: 12 });
+  k.ball(-26.5, 17, 6.5, 6.6, DARK, smooth);
+  // bow tie
+  for (const sx of [-1, 1]) k.cone(sx * 6.5, 43.5, 17.6, 5, 9, YELLOW, { rz: sx * Math.PI / 2, seg: 10 });
+  k.ball(0, 43.5, 18.4, 3, YELLOW, { seg: 10, rings: 8 });
+  // head
+  k.ball(0, 63, 0, 21, FUR, { ...smooth, sx: 1.12, sy: 0.98 });
+  for (const sx of [-1, 1]) {
+    k.ball(sx * 18, 81, -2, 8.6, DARK, smooth);
+    k.ball(sx * 9.4, 64.5, 17.4, 7.6, DARK, { ...smooth, sx: 0.85, sy: 1.18, sz: 0.5, rz: sx * 0.36 });
+    k.ball(sx * 8.8, 65.5, 19.6, 4.6, '#ffffff', { ...smooth, sz: 0.62 });
+    k.ball(sx * 8.5, 65.5, 21.4, 3.2, '#6a3b1a', { seg: 14, rings: 10, sz: 0.5 });
+    k.ball(sx * 8.4, 65.5, 22.5, 1.9, '#140c08', { seg: 12, rings: 8, sz: 0.5 });
+    k.ball(sx * 8.4 - 1.1, 67, 23.2, 0.95, '#ffffff', { seg: 8, rings: 6, glow: true });
+  }
+  k.ball(0, 56.5, 17, 8, '#ffffff', { ...smooth, sx: 1.2, sz: 0.8 });
+  k.ball(0, 59.8, 23.4, 3, DARK, { seg: 14, rings: 10, sx: 1.3, sy: 0.8 });
+  k.ball(0, 53.6, 21.8, 4, '#a3242c', { seg: 14, rings: 10, sy: 0.8, sz: 0.6 });
+  k.ball(0, 52.2, 22.8, 2.4, '#ff8f9c', { seg: 10, rings: 8, sz: 0.7 });
+  // cap
+  k.cyl(0, 78, -1, 15, 17.5, 9, BLUE, { seg: 20, rx: -0.12 });
+  k.ball(0, 87, -2, 15.6, BLUE, { ...smooth, sy: 0.5 });
+  k.cyl(0, 77.4, -1, 17.8, 17.8, 2.4, YELLOW, { seg: 20, rx: -0.12 });
+  k.cyl(0, 78, 15, 11, 11, 1.8, DEEP, { seg: 16, sz: 0.85 });
+  k.ball(0, 84.5, 14, 4.6, YELLOW, { seg: 14, rings: 10, sz: 0.4 });
+  const body = k.build();
+  // the other arm waves
+  const ak = new Kit();
+  ak.bar([0, 0, 0], [8, 19, 2], 6, DARK, { seg: 12 });
+  ak.ball(9, 21.5, 2.4, 6.8, DARK, smooth);
+  const arm = ak.build();
+  arm.position.set(19, 37, 2);
+  body.add(arm);
+  const group = new THREE.Group();
+  group.add(body);
+  const tick = (t) => {
+    arm.rotation.z = -0.15 + Math.sin(t * 5) * 0.32;
+    body.position.y = Math.abs(Math.sin(t * 2.4)) * 1.6;
+    body.rotation.z = Math.sin(t * 2.4) * 0.03;
+  };
+  tick(0.25);
+  return { group, tick };
 }

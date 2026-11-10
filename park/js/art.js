@@ -74,10 +74,10 @@ export function setDisplayFont(ready) {
   displayReady = ready;
 }
 export const displayFont = (size) => (displayReady
-  ? `800 ${size}px "Playfair Display", Georgia, "Times New Roman", serif`
+  ? `400 ${size}px "Lilita One", "Baloo 2", ui-rounded, system-ui, sans-serif`
   : `800 ${size}px Georgia, "Times New Roman", serif`);
 // Small labels and numbers: a geometric sans that stays legible at map sizes.
-export const uiFont = (size, weight = 700) => `${weight} ${size}px "Jost", "Trebuchet MS", system-ui, sans-serif`;
+export const uiFont = (size, weight = 700) => `${Math.min(800, weight)} ${size}px "Baloo 2", "Trebuchet MS", system-ui, sans-serif`;
 
 function label(c, text, x, y, size, col) {
   c.font = displayFont(size);

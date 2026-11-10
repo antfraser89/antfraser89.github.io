@@ -2,7 +2,7 @@
 // game, the tests and the balance tool all read the same numbers.
 
 export const GAME_TITLE = 'Park!';
-export const VERSION = '5.0.0';
+export const VERSION = '6.0.0';
 export const SAVE_KEY = 'park.save.v1';
 // saves written under an earlier name are picked up once and carried over
 export const LEGACY_SAVE_KEYS = ['starlight-funfair.save.v2'];
@@ -125,19 +125,19 @@ const LINEUPS = [
 
 // Each kind of town: its palette, its weather, and (in layout.js) its map.
 const BASE = {
-  board: '#b88d60', boardEdge: '#7f5c3a', stone: '#c9c0ae', stoneEdge: '#8e8676', soil: '#5e4a36',
-  blooms: ['#e8607a', '#f2c14e', '#f7f3e8', '#b98ad6', '#ef8a4a'], foam: '#d8f1ee', weather: null,
+  board: '#c99a66', boardEdge: '#8a6238', stone: '#c9c0ae', stoneEdge: '#8e8676', soil: '#6a4a30',
+  blooms: ['#ff5b8f', '#ffcf2e', '#ffffff', '#8b66ff', '#ff7a3b'], foam: '#e3f7f6', weather: null,
 };
 export const THEMES = [
   {
-    ...BASE, key: 'green', ground: '#6c9c58', ground2: '#618f4e', tuft: '#527c41', path: '#e7d9b6', pathEdge: '#bfae87',
-    plot: '#83b267', tree: ['#3f7d47', '#5d9c56', '#2a5c3a'], trunk: '#5c4630', fence: '#efe6cf', bank: '#9aa66a',
-    water: ['#2b7186', '#4fa3ad'], fruit: '#f2c14e',
+    ...BASE, key: 'green', ground: '#6fc455', ground2: '#63b84b', tuft: '#52a23f', path: '#f1d6c2', pathEdge: '#c9a58c',
+    plot: '#8fdc6c', tree: ['#3fa648', '#7ed957', '#2b8a3c'], trunk: '#6a4a2c', fence: '#ffffff', bank: '#a9c56a',
+    water: ['#1f8fd6', '#45c8ea'], fruit: '#ffcf2e',
   },
   {
-    ...BASE, key: 'sand', ground: '#e8d6a8', ground2: '#decb96', tuft: '#cbb37b', path: '#dccbaa', pathEdge: '#b7a37c',
-    plot: '#f0e2bb', tree: ['#3a8a6a', '#58a983', '#27694f'], trunk: '#7a5a38', fence: '#f7f1e1', bank: '#d3bd88',
-    water: ['#1f6d93', '#49b3bf'], stone: '#e3d8c0', stoneEdge: '#b3a481',
+    ...BASE, key: 'sand', ground: '#f3dfab', ground2: '#ead29a', tuft: '#d6ba7c', path: '#f1d6c2', pathEdge: '#c9a58c',
+    plot: '#f8e9c0', tree: ['#35a86e', '#62cf8f', '#23804f'], trunk: '#7a5a38', fence: '#ffffff', bank: '#e0c890',
+    water: ['#1795d8', '#4fd3e6'], stone: '#f1d6c2', stoneEdge: '#c9a58c',
   },
   {
     ...BASE, key: 'autumn', ground: '#a39652', ground2: '#958847', tuft: '#82763a', path: '#decca5', pathEdge: '#b6a279',

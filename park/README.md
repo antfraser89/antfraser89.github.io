@@ -6,7 +6,7 @@ It follows the "spin and build" formula of mobile games such as Carnival Tycoon,
 
 Play it at `https://antfraser89.github.io/park/` once this folder is on the default branch.
 
-No build step. The park is rendered in real-time 3D with [three.js](https://threejs.org) (MIT licence), which is vendored in `js/vendor/` so nothing has to be installed; every model is built in code from simple solids, the audio is synthesised with Web Audio, and the only thing fetched from elsewhere is the type (Playfair Display and Jost, from Google Fonts). The folder is self-contained, so it can be moved to its own repository as-is.
+No build step. The park is rendered in real-time 3D with [three.js](https://threejs.org) (MIT licence), which is vendored in `js/vendor/` so nothing has to be installed; every model is built in code from simple solids, the audio is synthesised with Web Audio, and the only thing fetched from elsewhere is the type (Lilita One and Baloo 2, from Google Fonts). The folder is self-contained, so it can be moved to its own repository as-is.
 
 ## Run it locally
 
@@ -44,7 +44,7 @@ Each kind of town has its own map, and guests really walk it: they follow the pa
 | Winter | A frozen lake with skaters, and a lit fir where the fountain would be. |
 | Canal town | Cobbled quays either side of a canal, two bridges, strings of paper lanterns and barges working up and down. |
 
-The park is a real 3D scene. Every attraction is a model with moving parts: the big wheel turns with its cars hanging level, the carousel's horses rise and fall, the coaster train runs its loop, dodgems wander their floor. Guests are little figures walking the paths; trees, lamps, fences, the gate and the pier's legs are all solid. One sun lights it and everything casts a shadow. Water sits below the level of the ground and catches the light.
+The park is a real 3D scene. Every attraction is a model with moving parts: the big wheel turns with its cars hanging level, the carousel's horses rise and fall, the coaster train runs its loop, dodgems wander their floor. Guests are little figures walking the paths; trees, lamps, fences, the domed gate and the pier's legs are all solid. Crown banners hang from the lamp posts, flowering hedges line the paved promenades, every ride has its name on a board and a roped-off queue, and beyond the fence there are hills, clouds and hot-air balloons. One sun lights it and everything casts a shadow. Water sits below the level of the ground and catches the light.
 
 Drag to pan, pinch or scroll to zoom, twist with two fingers (or shift-scroll, or drag with the right button) to turn the view; there are two buttons on the park page that turn it an eighth of a circle. Pulled back, the camera looks down on the whole park; close in, it drops low enough to look across it to the horizon.
 
@@ -54,7 +54,11 @@ The day runs from soft daylight through a long golden hour to a lamp-lit night. 
 
 ## The look
 
-Ink, brass and ivory: dark glass panels with fine brass edges, a serif display face, small-capital labels and one red button. The slot machine is a green lacquer cabinet with a brass inlay and real depth: it leans toward the pointer (or sways gently on a phone) so the sign, bulbs and glass part from the reels, and each reel is a drum whose symbols foreshorten as they turn away. The eight reel symbols share one style (lit from the upper left, fine dark outline). The colours, type and radii all come from the variables at the top of `css/style.css`.
+The style follows the Park! style guide: sky blue and sunshine yellow, cream counters with brown lettering, chunky rounded type (Lilita One and Baloo 2), and glossy buttons with a solid edge underneath. The logo is the yellow wordmark on a blue badge with a golden ticket. Panels are royal blue with cream tiles; pop-ups are cream cards in a blue frame. The slot machine is a red cabinet with a big red SPIN button on a grey stand. The tab bar is a cream tray with the current tab raised in orange.
+
+The park's host is a panda in a blue cap and waistcoat with a yellow bow tie. He is a 3D model: he waves people in at the gate, and his portrait on the splash screen, the welcome card and the slots page is rendered from the same model.
+
+All of this is the last section of `css/style.css` (everything above it is layout), so the palette and type can be changed in one place.
 
 ## How the game works
 

@@ -1,6 +1,6 @@
 {
   "name": "park",
-  "version": "5.0.0",
+  "version": "6.0.0",
   "private": true,
   "type": "module",
   "description": "Park! - a spin-and-build theme park game for the browser",
