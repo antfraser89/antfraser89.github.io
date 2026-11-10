@@ -56,7 +56,9 @@ The day runs from soft daylight through a long golden hour to a lamp-lit night. 
 
 The style follows the Park! style guide: sky blue and sunshine yellow, cream counters with brown lettering, chunky rounded type (Lilita One and Baloo 2), and glossy buttons with a solid edge underneath. The logo is the yellow wordmark on a blue badge with a golden ticket. Panels are royal blue with cream tiles; pop-ups are cream cards in a blue frame. The slot machine is a red cabinet with a big red SPIN button on a grey stand. The tab bar is a cream tray with the current tab raised in orange.
 
-The park's host is a panda in a blue cap and waistcoat with a yellow bow tie. He is a 3D model: he waves people in at the gate, and his portrait on the splash screen, the welcome card and the slots page is rendered from the same model.
+The painted artwork comes straight from the style-guide mockups and lives in `img/`: the loading screen (also used, out of focus, behind the slot machine), the logo, the panda host in four poses, three of the tab icons and the six album set covers. They were cut out of the mockup images, so they are mockup resolution; drop in higher-resolution exports under the same names to sharpen them.
+
+The park's host is a panda in a blue cap and waistcoat with a yellow bow tie. In the menus he is the painted character; in the 3D park a modelled version of him waves people in at the gate.
 
 All of this is the last section of `css/style.css` (everything above it is layout), so the palette and type can be changed in one place.
 
@@ -116,6 +118,7 @@ js/geo.js             a kit for building models from simple solids, baked to one
 js/models.js          the twelve attractions as 3D models, with their moving parts
 js/props3d.js         3D scenery: trees, lamps, gate, bandstand, boats, pier legs, the crowd
 js/vendor/            three.js (MIT)
+img/                  artwork cut from the style-guide mockups
 js/goals.js           missions
 js/state.js           save state, validation, export codes
 js/format.js          number and time formatting

@@ -148,19 +148,19 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
   });
 
   // "Park!" with its exclamation mark set apart, so it can bounce
-  // The logo: chunky yellow letters on a blue badge, with a golden ticket tucked under it.
-  const LOGO = `<svg viewBox="0 0 420 256" role="img" aria-label="${GAME_TITLE}"><defs><linearGradient id="pk-b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4fb0ff"/><stop offset="1" stop-color="#1b56d6"/></linearGradient><linearGradient id="pk-y" x1="0" y1="0" x2="0" y2="1"><stop offset=".14" stop-color="#fffbe0"/><stop offset=".45" stop-color="#ffd83d"/><stop offset=".92" stop-color="#ff9a1f"/></linearGradient></defs><path d="M70 100C70 44 126 22 210 22s140 22 140 78" fill="none" stroke="#1b56d6" stroke-width="13" stroke-linecap="round"/><path d="M118 96V52M164 92V38M210 90V30M256 92V38M302 96V52" stroke="#1b56d6" stroke-width="9"/><rect x="18" y="62" width="384" height="150" rx="66" fill="url(#pk-b)" stroke="#123a9c" stroke-width="9"/><rect x="34" y="74" width="352" height="54" rx="34" fill="#fff" opacity=".17"/><g font-family="'Lilita One','Baloo 2',system-ui,sans-serif" font-size="140" text-anchor="middle" transform="rotate(-5 210 140)" stroke-linejoin="round"><text x="210" y="190" fill="none" stroke="#123a9c" stroke-width="30">${GAME_TITLE}</text><text x="210" y="184" fill="none" stroke="#e2541b" stroke-width="15">${GAME_TITLE}</text><text x="210" y="184" fill="url(#pk-y)">${GAME_TITLE}</text></g><g transform="translate(210 226) rotate(-4)"><rect x="-46" y="-21" width="92" height="42" rx="9" fill="#ffc83d" stroke="#c9761a" stroke-width="5"/><path d="M0-13 3.800-4 13.700-3.300 6.100 3.100 8.500 12.800 0 7.500-8.500 12.800-6.100 3.100-13.700-3.300-3.800-4Z" fill="#e2541b"/></g></svg>`;
-  const wordmark = () => h('div', { class: 'wordmark', html: LOGO });
-  // The host: a portrait rendered from the 3D model, where there is one.
-  const hostURL = renderer.mascot ? memo('host', () => renderer.mascot(150, 176).toDataURL()) : null;
-  const host = (cls) => (hostURL ? h('img', { class: cls, src: hostURL, alt: '' }) : null);
-  // Chunky two-tone icons for the tab bar.
+  // Artwork cut from the style-guide mockups lives in img/. A single-file build
+  // can hand the same pictures over as data URIs in window.PARK_ART.
+  const ART = (name) => (window.PARK_ART && window.PARK_ART[name]) || `img/${name}.webp`;
+  const wordmark = () => h('div', { class: 'wordmark' }, h('img', { src: ART('logo'), alt: GAME_TITLE }));
+  // The host, in one of his poses: welcome, thumbs, party or sad.
+  const host = (cls, pose = 'thumbs') => h('img', { class: cls, src: ART('panda-' + pose), alt: '' });
+  // The tab bar's icons.
   const TABICON = {
-    shop: '<svg viewBox="0 0 32 32"><path d="M5 13h22v13a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2z" fill="#fff3d6" stroke="#b5651d" stroke-width="1.6"/><path d="M4 5h24l2 7a3.700 3.700 0 0 1-7 0 3.700 3.700 0 0 1-7 0 3.700 3.700 0 0 1-7 0 3.700 3.700 0 0 1-7 0z" fill="#ee3a3a" stroke="#a51c26" stroke-width="1.2"/><path d="M10.500 5h5.500v7a3.700 3.700 0 0 1-7 0zM21.500 5H28l2 7a3.700 3.700 0 0 1-7 0z" fill="#fff"/><rect x="12.500" y="18" width="7" height="10" rx="1.200" fill="#58b6ff" stroke="#1b56c4" stroke-width="1.200"/></svg>',
-    park: '<svg viewBox="0 0 32 32"><path d="M4 28V15h8v13zM20 28V15h8v13z" fill="#fff3d6" stroke="#b5651d" stroke-width="1.600"/><path d="M3 15l5-7 5 7zM19 15l5-7 5 7z" fill="#2f7fe6" stroke="#1b56c4" stroke-width="1.200"/><rect x="11" y="18" width="10" height="10" fill="#ffe1a8" stroke="#b5651d" stroke-width="1.600"/><path d="M13.500 28v-4.500a2.500 2.500 0 0 1 5 0V28z" fill="#2f7fe6"/><path d="M16 18V8l5.500 2.200L16 12.500" fill="#ee3a3a" stroke="#a51c26" stroke-width="1"/></svg>',
-    machine: '<svg viewBox="0 0 32 32"><rect x="2" y="9" width="28" height="17" rx="8.500" fill="#ffb21f" stroke="#b5651d" stroke-width="1.600"/><rect x="5" y="11" width="22" height="5" rx="2.500" fill="#fff" opacity=".35"/><path d="M8 17.500h6M11 14.500v6" stroke="#fff" stroke-width="2.800" stroke-linecap="round"/><circle cx="20.500" cy="15.500" r="2.100" fill="#fff"/><circle cx="24.500" cy="19.500" r="2.100" fill="#fff"/></svg>',
-    album: '<svg viewBox="0 0 32 32"><rect x="4" y="6" width="15" height="21" rx="3" fill="#58b6ff" stroke="#1b56c4" stroke-width="1.600" transform="rotate(-10 12 16)"/><g transform="rotate(8 20 16)"><rect x="12" y="5.500" width="15" height="21" rx="3" fill="#ffc83d" stroke="#c9761a" stroke-width="1.600"/><path d="M19.500 10.500l1.700 3.500 3.800.5-2.800 2.700.7 3.800-3.400-1.800-3.400 1.800.7-3.800-2.800-2.700 3.800-.5z" fill="#e2541b"/></g></svg>',
-    events: '<svg viewBox="0 0 32 32"><path d="M10 7H4.500v2.500A5.500 5.500 0 0 0 10 15M22 7h5.500v2.500A5.500 5.500 0 0 1 22 15" fill="none" stroke="#c9761a" stroke-width="2.200"/><path d="M9.500 4.500h13V14a6.500 6.500 0 0 1-13 0z" fill="#ffc83d" stroke="#c9761a" stroke-width="1.600"/><path d="M12 6.500h3v8.500a3 3 0 0 1-3-3z" fill="#fff" opacity=".5"/><rect x="14" y="20" width="4" height="4.500" fill="#c9761a"/><rect x="9" y="24" width="14" height="4.500" rx="1.600" fill="#b5651d"/></svg>',
+    shop: `<img src="${ART('tab-shop')}" alt="">`,
+    park: `<img src="${ART('tab-park')}" alt="">`,
+    machine: `<img src="${ART('ico-ticket')}" alt="">`,
+    album: `<img src="${ART('tab-album')}" alt="">`,
+    events: `<img src="${ART('ico-crown')}" alt="">`,
   };
 
   const click = () => audio.play('click');
@@ -322,7 +322,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
   perch.badge = h('i', { class: 'badge' });
   perch.append(perch.badge);
   const payBtn = h('button', { class: 'pay-btn', 'aria-label': 'What the symbols pay', onclick: () => { click(); paytable(); } }, h('span', { html: ICON.info }), 'Pays');
-  const mCab = h('div', { class: 'm-cab' }, cabinet, lever, perch, payBtn, host('host'));
+  const mCab = h('div', { class: 'm-cab' }, cabinet, lever, perch, payBtn, host('host', 'thumbs'));
   const jackpotEl = h('b');
   // the sign on top of the machine; wins light up across it
   const topper = h('div', { class: 'topper', onclick: () => { click(); paytable(); } },
@@ -906,6 +906,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
         refresh();
       } }, 'Claim');
       const el = h('button', { class: 'set-tile', style: `--set:${set.color}`, onclick: () => { click(); openSet(s); } },
+        h('img', { class: 'set-art', src: ART('cover-' + (['sweets', 'games', 'show', 'lights', 'seaside', 'rides'][set.index] || 'rides')), alt: '' }),
         h('div', { class: 'set-name' }, set.name), h('div', { class: 'dots' }, dots), state, claim);
       return { s, set, dots, state, claim, el };
     });
@@ -1192,6 +1193,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     buzz([20, 30, 40]);
     const buttons = actions || [['Collect', null, 'btn big wide']];
     overlay('celebrate', [
+      host('ov-host', 'party'),
       h('div', { class: 'kicker' }, kicker),
       h('h2', null, title),
       sub ? h('p', { html: sub }) : null,
@@ -1418,7 +1420,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
 
   function showWelcome() {
     popup(() => modal([
-      host('modal-host'),
+      host('modal-host', 'welcome'),
       wordmark(),
       h('p', null, 'An empty field, a pocketful of tokens and a lucky machine.'),
       h('ul', null,
@@ -1729,6 +1731,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     const left = R.adTokensLeft(s, clock());
     const secs = R.nextTokenIn(s, clock());
     modal([
+      host('modal-host', 'sad'),
       h('div', { class: 'kicker' }, 'Out of tokens'),
       h('h2', null, 'The machine needs feeding'),
       h('p', { html: `A token comes back every ${TUNING.tokenEvery / 60} minutes${secs > 0 ? `; the next is <b>${fmtClock(secs)}</b> away` : ''}.` }),
@@ -1746,11 +1749,12 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
   // ---- splash -----------------------------------------------------------------
 
   function showSplash(done) {
-    const el = h('div', { class: 'splash', role: 'button', tabindex: '0', 'aria-label': 'Tap to play' },
-      h('div', { class: 'rays' }), h('i'), h('i'),
-      h('div', { class: 'splash-inner' }, wordmark(), host('splash-host'),
-        h('div', { class: 'splash-reel' }, ['pie', 'coin', 'star', 'sack', 'barrel'].map((sym, i) => h('img', { src: symbolImage(sym, 72), alt: '', style: `animation-delay:${0.45 + i * 0.09}s` }))),
-        h('p', null, 'Spin. Build. Pie your rivals.'), h('div', { class: 'tap' }, 'Tap to play'), h('small', null, 'Fraser Studios')));
+    // the painted loading screen, with a real bar and button laid over its own
+    const fill = h('i');
+    const el = h('div', { class: 'splash loading', role: 'button', tabindex: '0', 'aria-label': 'Tap to play' },
+      h('div', { class: 'splash-art' }, h('div', { class: 'load-bar' }, fill), h('div', { class: 'tap' }, 'Tap to play')));
+    requestAnimationFrame(() => requestAnimationFrame(() => { fill.style.width = '100%'; }));
+    setTimeout(() => el.classList.remove('loading'), 1250);
     const go = () => {
       if (el.classList.contains('gone')) return;
       audio.unlock();
