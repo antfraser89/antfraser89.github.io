@@ -609,29 +609,6 @@ export function drawBales(c, x, y) {
   }
 }
 
-// Paper lanterns strung across the canal.
-export function drawLanterns(c, x, y, half, t, lit) {
-  const y0 = y - half - 26;
-  const y1 = y + half - 6;
-  line(c, x - 14, y0 + 30, x - 14, y0, '#27343f', 2.4);
-  line(c, x + 14, y1 + 26, x + 14, y1 - 6, '#27343f', 2.4);
-  c.beginPath();
-  c.moveTo(x - 14, y0);
-  c.quadraticCurveTo(x + 4, (y0 + y1) / 2 + 16, x + 14, y1 - 6);
-  c.strokeStyle = 'rgba(30,40,50,0.7)';
-  c.lineWidth = 1;
-  c.stroke();
-  const cols = ['#e2572b', '#f7b733', '#e06a8a', '#f08a2c'];
-  for (let k = 1; k <= 4; k++) {
-    const u = k / 5;
-    const lx = x - 14 + 28 * u + Math.sin(t * 1.2 + k) * 1.2;
-    const ly = (1 - u) * (1 - u) * y0 + 2 * (1 - u) * u * ((y0 + y1) / 2 + 16) + u * u * (y1 - 6) + 5;
-    if (lit) circ(c, lx, ly, 9, 'rgba(255,190,110,0.28)');
-    ell(c, lx, ly, 4.6, 6, cols[k % 4]);
-    rr(c, lx - 2.4, ly - 7, 4.8, 2, 1, '#27343f');
-  }
-}
-
 // Low posts and rope round the edge of the boards.
 export function drawRail(c, x1, y1, x2, y2) {
   const n = Math.max(1, Math.round(Math.hypot(x2 - x1, y2 - y1) / 34));

@@ -1,5 +1,6 @@
-// Canvas renderer for the park: camera, cached ground, depth-sorted sprites,
-// water, the evening light, particles and the on-map labels.
+// Canvas renderer for the park. The ground is painted once, flat, and drawn
+// receding in perspective; everything that stands up (attractions, trees,
+// lamps, guests) is planted on it and scaled by its distance from the camera.
 import { GAME_TITLE, PLOTS, STAGES, WORLD as W, townInfo } from './config.js';
 import * as A from './art.js';
 import * as SC from './scenery.js';
@@ -9,10 +10,16 @@ import { layoutFor } from './layout.js';
 import { designAt, isOpen, mulberry32 } from './sim.js';
 
 const TAU = Math.PI * 2;
+const RAD = Math.PI / 180;
 const M = 240; // ground detail is painted this far beyond the world edge
 const GROUND_SCALE = 1.25;
+const FOCAL = 760; // the lens: a smaller number is a wider angle and a steeper perspective
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const lerp = (a, b, t) => a + (b - a) * t;
+const ease = (u) => {
+  const v = clamp(u, 0, 1);
+  return v * v * (3 - 2 * v);
+};
 const inEllipse = (e, x, y, pad = 0) => ((x - e.x) / (e.rx + pad)) ** 2 + ((y - e.y) / (e.ry + pad)) ** 2 < 1;
 
 // How far the day has gone, 0 (broad day) to 1 (night), from the state clock.
@@ -38,7 +45,14 @@ function makeGlow(r, g, b) {
   return cv;
 }
 
-// Scenery that has to be depth-sorted against guests and attractions.
+// Trees beyond the fence are placed by a hash of their grid cell.
+const FAR_CELL = 124;
+const cellHash = (gx, gy) => {
+  const v = Math.sin(gx * 127.1 + gy * 311.7) * 43758.5453;
+  return v - Math.floor(v);
+};
+
+// Everything that stands up and never moves, to be depth-sorted with the guests.
 function buildScenery(L, theme, seed) {
   const r = mulberry32(seed);
   const items = [];
@@ -93,6 +107,34 @@ function buildScenery(L, theme, seed) {
     if (crowded(x, y, 50)) continue;
     items.push({ kind: 'tree', x, y, v: Math.floor(r() * 8), s: 0.85 + r() * 0.4 });
     placed++;
+  }
+
+  // the fence, in short lengths so that each sorts properly against its neighbours
+  for (const run of L.fence) {
+    for (let i = 0; i < run.length - 1; i++) {
+      const [xa, ya] = run[i];
+      const [xb, yb] = run[i + 1];
+      const n = Math.max(1, Math.ceil(Math.hypot(xb - xa, yb - ya) / 150));
+      for (let k = 0; k < n; k++) {
+        const [x1, y1] = [xa + ((xb - xa) * k) / n, ya + ((yb - ya) * k) / n];
+        const [x2, y2] = [xa + ((xb - xa) * (k + 1)) / n, ya + ((yb - ya) * (k + 1)) / n];
+        items.push({ kind: 'fence', x1, y1, x2, y2, x: (x1 + x2) / 2, y: Math.max(y1, y2) });
+      }
+    }
+  }
+
+  // woodland beyond the fence, running off into the distance
+  for (let cy = Math.floor(-1000 / FAR_CELL); cy * FAR_CELL < W.h + 520; cy++) {
+    for (let cx = Math.floor(-1200 / FAR_CELL); cx * FAR_CELL < W.w + 1200; cx++) {
+      const hsh = cellHash(cx, cy);
+      if (hsh > 0.42) continue;
+      const x = (cx + ((hsh * 13.7) % 1)) * FAR_CELL;
+      const y = (cy + ((hsh * 7.3) % 1)) * FAR_CELL;
+      const inside = x > -24 && x < W.w + 24 && y > 30 && y < W.gateY + 58;
+      const road = Math.abs(x - gx) < 96 && y > W.gateY;
+      if (inside || road || L.wet(x, y) || L.wet(x, y - 30)) continue;
+      items.push({ kind: 'tree', x, y, v: Math.floor(hsh * 97) % 8, s: 0.95 + ((hsh * 31) % 1) * 0.5 });
+    }
   }
   return items;
 }
@@ -152,21 +194,14 @@ function buildTile(theme, seed, paved) {
   return cv;
 }
 
-// Trees beyond the cached area are placed by a hash of their grid cell, so
-// the countryside goes on for ever without storing anything.
-const FAR_CELL = 124;
-const cellHash = (gx, gy) => {
-  const v = Math.sin(gx * 127.1 + gy * 311.7) * 43758.5453;
-  return v - Math.floor(v);
-};
-const inTreeBand = (x, y) => x > -M + 50 && x < W.w + M - 50 && y > -M + 110 && y < W.h + M - 30;
-
-// Everything static inside and just around the fence, on a transparent layer.
-function buildGround(L, theme, seed) {
+// Everything flat: grass, water, paths, boards, gardens. Painted once per town.
+function buildGround(L, theme, seed, tileCv) {
   const cv = document.createElement('canvas');
   cv.width = Math.round((W.w + 2 * M) * GROUND_SCALE);
   cv.height = Math.round((W.h + 2 * M) * GROUND_SCALE);
   const c = cv.getContext('2d');
+  c.fillStyle = c.createPattern(tileCv, 'repeat');
+  c.fillRect(0, 0, cv.width, cv.height);
   c.scale(GROUND_SCALE, GROUND_SCALE);
   c.translate(M, M);
   const r = mulberry32(seed);
@@ -232,42 +267,36 @@ function buildGround(L, theme, seed) {
     }
   }
 
-  // the fence, with a gap at the gate
-  for (const run of L.fence) {
-    for (let i = 0; i < run.length - 1; i++) {
-      const [xa, ya] = run[i];
-      const [xb, yb] = run[i + 1];
-      c.strokeStyle = theme.fence;
-      c.lineWidth = 2.6;
-      c.beginPath();
-      c.moveTo(xa, ya - 12);
-      c.lineTo(xb, yb - 12);
-      c.moveTo(xa, ya - 6);
-      c.lineTo(xb, yb - 6);
-      c.stroke();
-      const n = Math.max(1, Math.round(Math.hypot(xb - xa, yb - ya) / 30));
-      for (let k = 0; k <= n; k++) {
-        const x = xa + ((xb - xa) * k) / n;
-        const y = ya + ((yb - ya) * k) / n;
-        c.fillStyle = 'rgba(15,30,30,0.14)';
-        c.fillRect(x - 1, y - 1, 9, 3.5);
-        c.fillStyle = theme.fence;
-        c.fillRect(x - 2.5, y - 16, 5, 17);
-      }
+  // fade the edges of the painted ground into the plain colour beyond it
+  const clear = `rgba(${parseInt(theme.ground.slice(1, 3), 16)},${parseInt(theme.ground.slice(3, 5), 16)},${parseInt(theme.ground.slice(5, 7), 16)},0)`;
+  c.save();
+  for (let y = -M; y < W.h + M; y += 24) {
+    if (L.wet(-M + 6, y + 12)) continue;
+    const g = c.createLinearGradient(-M, 0, -M + 80, 0);
+    g.addColorStop(0, theme.ground);
+    g.addColorStop(1, clear);
+    c.fillStyle = g;
+    c.fillRect(-M, y, 80, 24);
+  }
+  for (let y = -M; y < W.h + M; y += 24) {
+    if (L.wet(W.w + M - 6, y + 12)) continue;
+    const g = c.createLinearGradient(W.w + M, 0, W.w + M - 80, 0);
+    g.addColorStop(0, theme.ground);
+    g.addColorStop(1, clear);
+    c.fillStyle = g;
+    c.fillRect(W.w + M - 80, y, 80, 24);
+  }
+  for (const [edge, dir] of [[-M, 1], [W.h + M, -1]]) {
+    for (let x = -M; x < W.w + M; x += 24) {
+      if (L.wet(x + 12, edge + dir * 6)) continue;
+      const g = c.createLinearGradient(0, edge, 0, edge + dir * 80);
+      g.addColorStop(0, theme.ground);
+      g.addColorStop(1, clear);
+      c.fillStyle = g;
+      c.fillRect(x, Math.min(edge, edge + dir * 80), 24, 80);
     }
   }
-
-  // trees just beyond the fence
-  const outside = [];
-  for (let k = 0; k < 150; k++) {
-    const x = -M + r() * (W.w + 2 * M);
-    const y = -M + r() * (W.h + 2 * M);
-    const inside = x > -20 && x < W.w + 20 && y > 30 && y < W.gateY + 58;
-    const road = Math.abs(x - gx) < 96 && y > W.gateY;
-    if (inTreeBand(x, y) && !inside && !road && !L.wet(x, y) && !L.wet(x, y - 30)) outside.push({ x, y, v: Math.floor(r() * 8), s: 0.9 + r() * 0.5 });
-  }
-  outside.sort((p, q) => p.y - q.y);
-  for (const t of outside) SC.drawTree(c, t.x, t.y, theme, t.v, t.s);
+  c.restore();
   return cv;
 }
 
@@ -289,7 +318,9 @@ function buildGlints(L, seed) {
 
 export function createRenderer(canvas, world, hooks = {}) {
   const ctx = canvas.getContext('2d');
-  const cam = { x: W.w / 2, y: W.h, zoom: 0.5, tx: null, ty: null, minZoom: 0.3, maxZoom: 2.2 };
+  // The camera looks north along the park. (x, y) is the spot on the ground at
+  // the middle of the view and zoom is the scale there; pitch follows zoom.
+  const cam = { x: W.w / 2, y: W.h * 0.6, zoom: 0.4, base: 0.4, tx: null, ty: null, minZoom: 0.2, maxZoom: 1.6 };
   const insets = { top: 104, bottom: 84, right: 0 };
   let vw = 300;
   let vh = 300;
@@ -298,12 +329,14 @@ export function createRenderer(canvas, world, hooks = {}) {
   let town = -1;
   let theme = null;
   let ground = null;
-  let tile = null;
+  let groundLo = null;
   let scenery = [];
   let fixed = [];
   let L = layoutFor(world.state.town);
   let glints = [];
   let shore = null; // the sea's edge, for the surf
+  let trees = []; // one painted sprite per kind of tree
+  const shadows = new Map(); // attraction silhouettes, for casting shadows
   let selected = -1;
   let pointer = -1;
   let sheetCover = 0;
@@ -331,20 +364,24 @@ export function createRenderer(canvas, world, hooks = {}) {
     theme = info.theme;
     L = layoutFor(town);
     if (rebuild || !ground) {
-      ground = buildGround(L, theme, seed);
-      tile = ctx.createPattern(buildTile(theme, seed + 3, L.paved), 'repeat');
-      if (tile.setTransform) tile.setTransform(new DOMMatrix().scale(1 / GROUND_SCALE));
+      ground = buildGround(L, theme, seed, buildTile(theme, seed + 3, L.paved));
+      // a half-size copy for the far distance, where the full one would shimmer
+      groundLo = document.createElement('canvas');
+      groundLo.width = Math.ceil(ground.width / 2);
+      groundLo.height = Math.ceil(ground.height / 2);
+      groundLo.getContext('2d').drawImage(ground, 0, 0, groundLo.width, groundLo.height);
       glints = buildGlints(L, seed + 11);
       const sea = L.water.find((w) => w.kind === 'sea');
-      shore = sea ? sea.pts.filter((pt) => pt[1] > sea.shoreY - 40) : null;
-      for (const w of L.water) {
-        let [y0, y1] = [Infinity, -Infinity];
-        for (const pt of w.pts) {
-          y0 = Math.min(y0, pt[1]);
-          y1 = Math.max(y1, pt[1]);
-        }
-        w.span = [Math.max(y0, -260), y1];
-      }
+      shore = sea ? sea.pts.filter((pt) => pt[1] > sea.shoreY - 40 && pt[0] > -700 && pt[0] < W.w + 700) : null;
+      trees = [0, 1, 2, 3, 4, 5, 6, 7].map((v) => {
+        const cv = document.createElement('canvas');
+        cv.width = 240;
+        cv.height = 300;
+        const c = cv.getContext('2d');
+        c.scale(2, 2);
+        SC.drawTree(c, 60, 140, theme, v, 1);
+        return cv;
+      });
     }
     scenery = buildScenery(L, theme, seed + 5);
     fixed = scenery.map((s) => ({ y: s.y, s }));
@@ -364,22 +401,107 @@ export function createRenderer(canvas, world, hooks = {}) {
   const usableW = () => vw - insets.right;
   const centreX = () => usableW() / 2;
   const centreY = () => insets.top + usableH() / 2;
-  const toScreenX = (x) => centreX() + (x - cam.x) * cam.zoom;
-  const toScreenY = (y) => centreY() + (y - cam.y) * cam.zoom;
-  const toWorld = (sx, sy) => ({ x: cam.x + (sx - centreX()) / cam.zoom, y: cam.y + (sy - centreY()) / cam.zoom });
+
+  // Pulled right back, the camera looks almost straight down; at the usual
+  // distance it tilts to show the park in depth; close in, it swoops low
+  // enough to bring the horizon into view.
+  function pitchFor(zoom) {
+    const r = zoom / cam.base;
+    if (r < 1) return lerp(58, 76, clamp((1 - r) / 0.3, 0, 1)) * RAD;
+    return lerp(58, 28, ease((r - 1) / 2.2)) * RAD;
+  }
+  const view = { x: 0, cos: 0.6, sin: 0.8, Cy: 0, h: 1000, cX: 0, cY: 0, horizon: -1e6 };
+  const calm = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function aim() {
+    const phi = pitchFor(cam.zoom);
+    const d = FOCAL / cam.zoom;
+    // the camera is never quite still: a slow drift from side to side lets near
+    // things slide across far ones, which is most of what makes depth read
+    view.x = cam.x + (calm ? 0 : Math.sin(time * 0.22) * 10);
+    view.cos = Math.cos(phi);
+    view.sin = Math.sin(phi);
+    view.Cy = cam.y + d * view.cos;
+    view.h = d * view.sin;
+    view.cX = centreX();
+    view.cY = centreY();
+    view.horizon = view.cY - FOCAL * Math.tan(phi);
+  }
+  // Where a point on the ground lands on screen. The answer is left in `pt`;
+  // the return value is the scale there (0 if it is behind the camera).
+  const pt = { x: 0, y: 0, s: 0 };
+  function proj(x, y) {
+    const dy = view.Cy - y;
+    const Z = dy * view.cos + view.h * view.sin;
+    if (Z < 70) {
+      pt.s = 0;
+      return 0;
+    }
+    const s = FOCAL / Z;
+    pt.x = view.cX + (x - view.x) * s;
+    pt.y = view.cY - (dy * view.sin - view.h * view.cos) * s;
+    pt.s = s;
+    return s;
+  }
+  // The other way: the spot on the ground under a point on the screen.
+  function unproj(sx, sy) {
+    const t = (view.cY - sy) / FOCAL;
+    const den = Math.max(0.03, view.sin - t * view.cos); // at the horizon and above: a long way off
+    const dy = (view.h * (view.cos + t * view.sin)) / den;
+    const Z = dy * view.cos + view.h * view.sin;
+    return { x: view.x + ((sx - view.cX) * Z) / FOCAL, y: view.Cy - dy };
+  }
+  const toScreen = (x, y) => {
+    aim();
+    proj(x, y);
+    return { x: pt.x, y: pt.y, s: pt.s };
+  };
 
   function clampCam() {
     cam.zoom = clamp(cam.zoom, cam.minZoom, cam.maxZoom);
-    const hw = usableW() / 2 / cam.zoom;
-    const hh = usableH() / 2 / cam.zoom;
-    const loX = -50 + hw;
-    const hiX = W.w + 50 - hw;
-    cam.x = loX > hiX ? W.w / 2 : clamp(cam.x, loX, hiX);
-    const loY = -30 + hh;
+    cam.x = clamp(cam.x, 100, W.w - 100);
     // an open sheet hides the bottom of the map, so allow scrolling further down
     const hidden = Math.max(cam.tx === null ? cover : sheetCover, insets.bottom) - insets.bottom;
-    const hiY = W.h + 46 - hh + hidden / cam.zoom;
-    cam.y = loY > hiY ? (W.h + 16) / 2 : clamp(cam.y, loY, hiY);
+    cam.y = clamp(cam.y, 240, W.h - 180 + hidden / cam.zoom);
+    aim();
+  }
+
+  // The camera's y that puts the road outside the gate at the foot of the view.
+  function homeY() {
+    const want = vh - insets.bottom - 4;
+    let lo = 0;
+    let hi = W.h + 900;
+    for (let i = 0; i < 24; i++) {
+      cam.y = (lo + hi) / 2;
+      aim();
+      proj(W.w / 2, W.gateY + 84);
+      if (!pt.s || pt.y > want) lo = cam.y;
+      else hi = cam.y;
+    }
+    return (lo + hi) / 2;
+  }
+
+  // The zoom at which the park sits nicely in this window.
+  function fitZoom() {
+    const search = (ok) => {
+      let lo = 0.1;
+      let hi = 1.4;
+      for (let i = 0; i < 18; i++) {
+        const z = (lo + hi) / 2;
+        cam.zoom = z;
+        cam.base = z;
+        cam.x = W.w / 2;
+        cam.y = homeY();
+        aim();
+        if (ok()) lo = z;
+        else hi = z;
+      }
+      return lo;
+    };
+    // as wide as the gate row allows...
+    const wide = search(() => proj(70, W.gateY - 140) && pt.x >= 0);
+    // ...and no taller than the space under the counters
+    const tall = search(() => proj(W.w / 2, 150) && pt.y >= insets.top + 60);
+    return clamp(Math.max(Math.min(wide, tall), wide * 0.5), 0.12, 0.95);
   }
 
   function resize() {
@@ -388,19 +510,20 @@ export function createRenderer(canvas, world, hooks = {}) {
     vh = canvas.clientHeight || window.innerHeight;
     canvas.width = Math.round(vw * dpr);
     canvas.height = Math.round(vh * dpr);
-    cam.minZoom = Math.min(usableW() / (W.w + 100), usableH() / (W.h + 76));
+    const keep = { x: cam.x, y: cam.y, rel: cam.zoom / cam.base };
+    const base = fitZoom();
+    cam.base = base;
+    cam.minZoom = base * 0.78;
+    cam.maxZoom = Math.max(1.3, base * 3.3);
+    cam.zoom = base * keep.rel;
+    cam.x = keep.x;
+    cam.y = keep.y;
     clampCam();
-  }
-
-  // the opening view: the gate and the first attractions, low in the frame
-  function homeY() {
-    return W.gateY - 90 - (usableH() / cam.zoom) * 0.2;
   }
 
   function resetView() {
     resize();
-    // fit the park's width on a phone; on a wide screen settle for a good slice of it
-    cam.zoom = clamp(Math.max(Math.min(usableW() / 1010, usableH() / 1000), usableW() / 1900), cam.minZoom, 0.85);
+    cam.zoom = cam.base;
     cam.x = W.w / 2;
     cam.y = homeY();
     cam.tx = cam.ty = null;
@@ -410,25 +533,45 @@ export function createRenderer(canvas, world, hooks = {}) {
 
   // Glide so plot k sits in the clear space above any open sheet.
   function focus(k) {
-    if (introT >= 0) { introT = -1; cam.zoom = introTo; }
+    if (introT >= 0) {
+      introT = -1;
+      cam.zoom = introTo;
+    }
     const p = L.plots[k];
     const d = designAt(world.state, k);
     const clearBottom = vh - Math.max(insets.bottom, sheetCover);
-    const wantY = (insets.top + clearBottom) / 2 + 20;
-    const fits = usableW() / 2 / cam.zoom >= Math.abs(p.x - W.w / 2) + d.w / 2 + 16;
+    const wantY = (insets.top + clearBottom) / 2 + 26;
+    const keep = { x: cam.x, y: cam.y };
+    cam.x = W.w / 2;
+    let lo = 0;
+    let hi = W.h + 1400;
+    for (let i = 0; i < 24; i++) {
+      cam.y = (lo + hi) / 2;
+      aim();
+      proj(p.x, p.y);
+      if (!pt.s || pt.y - d.h * 0.42 * pt.s > wantY) lo = cam.y;
+      else hi = cam.y;
+    }
+    cam.ty = (lo + hi) / 2;
+    cam.y = cam.ty;
+    aim();
+    proj(p.x, p.y);
+    const fits = pt.x - (d.w / 2) * pt.s > 8 && pt.x + (d.w / 2) * pt.s < usableW() - 8;
     cam.tx = fits ? W.w / 2 : p.x + (W.w / 2 - p.x) * 0.35;
-    cam.ty = p.y - d.h * 0.42 - (wantY - centreY()) / cam.zoom;
+    cam.x = keep.x;
+    cam.y = keep.y;
+    aim();
   }
 
-  // First look at the park: start pulled back and settle in.
+  // First look at the park: start high above it and swoop down.
   let introT = -1;
   let introFrom = 0;
   let introTo = 0;
   function intro() {
     resetView();
     introTo = cam.zoom;
-    introFrom = Math.max(cam.minZoom, cam.zoom * 0.7);
-    if (introTo - introFrom < 0.02) return;
+    introFrom = cam.zoom * 0.72;
+    cam.minZoom = Math.min(cam.minZoom, introFrom);
     introT = 0;
     cam.zoom = introFrom;
     cam.y = homeY();
@@ -437,13 +580,16 @@ export function createRenderer(canvas, world, hooks = {}) {
 
   function updateCamera(dt) {
     if (introT >= 0) {
-      introT = Math.min(1, introT + dt / 1.25);
+      introT = Math.min(1, introT + dt / 1.5);
       const u = 1 - Math.pow(1 - introT, 3);
       cam.zoom = lerp(introFrom, introTo, u);
       cam.x = W.w / 2;
       cam.y = homeY();
       clampCam();
-      if (introT >= 1) introT = -1;
+      if (introT >= 1) {
+        introT = -1;
+        cam.minZoom = cam.base * 0.78;
+      }
       return;
     }
     if (cam.tx === null) return;
@@ -486,8 +632,12 @@ export function createRenderer(canvas, world, hooks = {}) {
     if (!drag) return;
     if (!drag.moved && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) > 8) drag.moved = true;
     if (drag.moved) {
-      cam.x -= (e.clientX - drag.x) / cam.zoom;
-      cam.y -= (e.clientY - drag.y) / cam.zoom;
+      // keep the ground under the finger
+      aim();
+      const from = unproj(drag.x, Math.max(drag.y, view.horizon + 24));
+      const to = unproj(e.clientX, Math.max(e.clientY, view.horizon + 24));
+      cam.x += from.x - to.x;
+      cam.y += from.y - to.y;
       cam.tx = cam.ty = null;
       introT = -1;
       clampCam();
@@ -521,9 +671,12 @@ export function createRenderer(canvas, world, hooks = {}) {
 
   function zoomAt(sx, sy, zoom) {
     introT = -1;
-    const before = toWorld(sx, sy);
+    aim();
+    const anchorY = Math.max(sy, view.horizon + 40);
+    const before = unproj(sx, anchorY);
     cam.zoom = clamp(zoom, cam.minZoom, cam.maxZoom);
-    const after = toWorld(sx, sy);
+    aim();
+    const after = unproj(sx, Math.max(anchorY, view.horizon + 40));
     cam.x += before.x - after.x;
     cam.y += before.y - after.y;
     cam.tx = cam.ty = null;
@@ -532,20 +685,22 @@ export function createRenderer(canvas, world, hooks = {}) {
 
   // What is under a tap? Balloons first, then the nearest plot.
   function pick(sx, sy) {
+    aim();
     for (const b of world.balloons) {
-      const reach = Math.max(34, 36 * cam.zoom);
-      if (Math.hypot(sx - toScreenX(b.x), sy - (toScreenY(b.y) + 12 * cam.zoom)) < reach + 10) return { balloon: b };
+      if (!proj(b.x, b.y)) continue;
+      const k = Math.max(pt.s, 0.62);
+      if (Math.hypot(sx - pt.x, sy - (pt.y + 12 * k)) < Math.max(34, 36 * k) + 10) return { balloon: b };
     }
-    const w = toWorld(sx, sy);
     let best = -1;
     let bestD = Infinity;
     for (const p of L.plots) {
+      if (!proj(p.x, p.y)) continue;
       const built = world.state.plots[p.index].stage > 0;
       const d = designAt(world.state, p.index);
-      const top = built ? p.y - d.h - 30 : p.y - 110;
-      const half = built ? d.w / 2 + 16 : 110;
-      if (Math.abs(w.x - p.x) > half || w.y < top || w.y > p.y + 34) continue;
-      const dist = Math.abs(w.y - (p.y - 50)) + Math.abs(w.x - p.x) * 0.5;
+      const top = pt.y - (built ? d.h + 30 : 110) * pt.s;
+      const half = (built ? d.w / 2 + 16 : 110) * pt.s;
+      if (Math.abs(sx - pt.x) > half || sy < top || sy > pt.y + 34 * pt.s) continue;
+      const dist = Math.abs(sy - (pt.y - 50 * pt.s)) + Math.abs(sx - pt.x) * 0.5;
       if (dist < bestD) {
         bestD = dist;
         best = p.index;
@@ -577,6 +732,7 @@ export function createRenderer(canvas, world, hooks = {}) {
       particles.push({
         x: x + (Math.random() - 0.5) * (opts.spread || 10),
         y: y + (Math.random() - 0.5) * (opts.spreadY ?? opts.spread ?? 10),
+        gy: opts.gy ?? y, // the ground row whose upright plane it flies in
         vx: Math.cos(a) * sp,
         vy: Math.sin(a) * sp,
         g: opts.gravity ?? 420,
@@ -659,12 +815,132 @@ export function createRenderer(canvas, world, hooks = {}) {
 
   // ---- drawing -----------------------------------------------------------
 
+  // Point the canvas at a spot on the ground so that whatever is drawn there,
+  // in world coordinates, stands up at the right place and size.
+  function plant(x, y, reach = 200, tall = 320) {
+    const s = proj(x, y);
+    if (!s || s < 0.04) return false;
+    if (pt.y < -12 || pt.y - tall * s > vh || pt.x + reach * s < 0 || pt.x - reach * s > vw) return false;
+    ctx.setTransform(dpr * s, 0, 0, dpr * s, dpr * (pt.x - x * s), dpr * (pt.y - y * s));
+    return true;
+  }
+  const flat = () => ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  // The dark outline of an attraction, kept for throwing its shadow.
+  function silhouette(d) {
+    let sil = shadows.get(d.index);
+    if (!sil) {
+      const cv = document.createElement('canvas');
+      cv.width = d.w + 80;
+      cv.height = d.h + 70;
+      const c = cv.getContext('2d');
+      c.translate(d.w / 2 + 40, d.h + 50);
+      A.drawAttraction(c, d.index, { t: 0.4, anim: 0.6, run: false, p: 0, riders: 0 });
+      c.setTransform(1, 0, 0, 1, 0, 0);
+      c.globalCompositeOperation = 'source-in';
+      c.fillStyle = '#0c1826';
+      c.fillRect(0, 0, cv.width, cv.height);
+      sil = { cv, ox: d.w / 2 + 40, oy: d.h + 50 };
+      shadows.set(d.index, sil);
+    }
+    return sil;
+  }
+
+  function drawFence(f) {
+    flat();
+    const n = Math.max(1, Math.round(Math.hypot(f.x2 - f.x1, f.y2 - f.y1) / 30));
+    let [px, py, ps] = [0, 0, 0];
+    ctx.fillStyle = theme.fence;
+    ctx.strokeStyle = theme.fence;
+    for (let k = 0; k <= n; k++) {
+      const s = proj(f.x1 + ((f.x2 - f.x1) * k) / n, f.y1 + ((f.y2 - f.y1) * k) / n);
+      if (!s || pt.y < -20 || pt.y > vh + 40) {
+        ps = 0;
+        continue;
+      }
+      if (ps) {
+        ctx.lineWidth = 2.6 * s;
+        ctx.beginPath();
+        ctx.moveTo(px, py - 12 * ps);
+        ctx.lineTo(pt.x, pt.y - 12 * s);
+        ctx.moveTo(px, py - 6 * ps);
+        ctx.lineTo(pt.x, pt.y - 6 * s);
+        ctx.stroke();
+      }
+      ctx.fillRect(pt.x - 2.5 * s, pt.y - 16 * s, 5 * s, 17 * s);
+      [px, py, ps] = [pt.x, pt.y, s];
+    }
+  }
+
+  // Paper lanterns strung from one bank of the canal to the other.
+  function drawLanterns(it, lit) {
+    if (!proj(it.x - 14, it.y - it.half - 12)) return;
+    const a = { x: pt.x, y: pt.y, s: pt.s };
+    if (!proj(it.x + 14, it.y + it.half + 12)) return;
+    const b = { x: pt.x, y: pt.y, s: pt.s };
+    if (b.y < -40 || a.y > vh + 80) return;
+    flat();
+    ctx.strokeStyle = '#27343f';
+    for (const q of [a, b]) {
+      ctx.lineWidth = 2.6 * q.s;
+      ctx.beginPath();
+      ctx.moveTo(q.x, q.y);
+      ctx.lineTo(q.x, q.y - 36 * q.s);
+      ctx.stroke();
+    }
+    const [ay, by] = [a.y - 36 * a.s, b.y - 36 * b.s];
+    const mx = (a.x + b.x) / 2;
+    const my = (ay + by) / 2 + 16 * b.s;
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = 'rgba(30,40,50,0.7)';
+    ctx.beginPath();
+    ctx.moveTo(a.x, ay);
+    ctx.quadraticCurveTo(mx, my, b.x, by);
+    ctx.stroke();
+    const cols = ['#e2572b', '#f7b733', '#e06a8a', '#f08a2c'];
+    for (let k = 1; k <= 4; k++) {
+      const u = k / 5;
+      const s = lerp(a.s, b.s, u);
+      const lx = (1 - u) * (1 - u) * a.x + 2 * (1 - u) * u * mx + u * u * b.x + Math.sin(time * 1.2 + k) * 1.2 * s;
+      const ly = (1 - u) * (1 - u) * ay + 2 * (1 - u) * u * my + u * u * by + 5 * s;
+      if (lit) {
+        ctx.fillStyle = 'rgba(255,190,110,0.28)';
+        ctx.beginPath();
+        ctx.arc(lx, ly, 9 * s, 0, TAU);
+        ctx.fill();
+      }
+      ctx.fillStyle = cols[k % 4];
+      ctx.beginPath();
+      ctx.ellipse(lx, ly, 4.6 * s, 6 * s, 0, 0, TAU);
+      ctx.fill();
+      ctx.fillStyle = '#27343f';
+      ctx.fillRect(lx - 2.4 * s, ly - 7 * s, 4.8 * s, 2 * s);
+    }
+  }
+
   function drawFixed(item, dark) {
     const s = item.s;
     if (s) {
       const lit = dark > 0.3;
+      if (s.kind === 'tree') {
+        // trees are stamped from a painted sprite: there are a lot of them
+        if (!plant(s.x, s.y, 60, 150)) return;
+        ctx.drawImage(trees[s.v], s.x - 60 * s.s, s.y - 140 * s.s, 120 * s.s, 150 * s.s);
+        return;
+      }
+      if (s.kind === 'fence') return drawFence(s);
+      if (s.kind === 'lanterns') return drawLanterns(s, lit);
+      if (s.kind === 'barge') {
+        // barges work up and down the canal for ever
+        const canal = L.water[0];
+        const span = W.w + 2 * M;
+        const u = (((s.t0 + (time * s.speed) / span) % 1) + 1) % 1;
+        const x = -M + u * span;
+        if (plant(x, canal.mid(x), 80, 60)) SC.drawBarge(ctx, x, canal.mid(x), time, s.hue, Math.sign(s.speed));
+        return;
+      }
+      if (!plant(s.x, s.y, 180, 260)) return;
       switch (s.kind) {
-        case 'tree': SC.drawTree(ctx, s.x, s.y, theme, s.v, s.s); break;
         case 'lamp': SC.drawLamp(ctx, s.x, s.y, lit); break;
         case 'bench': A.drawBench(ctx, s.x, s.y); break;
         case 'bunting': A.drawBunting(ctx, s.x - s.half, s.y - 72, s.x + s.half, s.y - 72, 9, time); break;
@@ -672,11 +948,9 @@ export function createRenderer(canvas, world, hooks = {}) {
         case 'booth': A.drawTicketBooth(ctx, s.x, s.y); break;
         case 'bandstand': A.drawBandstand(ctx, s.x, s.y, time); break;
         case 'pavilion':
-          ctx.save();
           ctx.translate(s.x, s.y);
           ctx.scale(1.25, 1.25);
           A.drawBandstand(ctx, 0, 0, time);
-          ctx.restore();
           break;
         case 'fountain': SC.drawFountain(ctx, s.x, s.y, time); break;
         case 'bonfire': SC.drawBonfire(ctx, s.x, s.y, time); break;
@@ -688,22 +962,13 @@ export function createRenderer(canvas, world, hooks = {}) {
         case 'buoy': SC.drawBuoy(ctx, s.x, s.y, time); break;
         case 'parasol': SC.drawParasol(ctx, s.x, s.y, s.hue); break;
         case 'bales': SC.drawBales(ctx, s.x, s.y); break;
-        case 'lanterns': SC.drawLanterns(ctx, s.x, s.y, s.half, time, lit); break;
-        case 'barge': {
-          // barges work up and down the canal for ever
-          const canal = L.water[0];
-          const span = W.w + 2 * M;
-          const u = (((s.t0 + (time * s.speed) / span) % 1) + 1) % 1;
-          const x = -M + u * span;
-          SC.drawBarge(ctx, x, canal.mid(x), time, s.hue, Math.sign(s.speed));
-          break;
-        }
         default: break;
       }
       return;
     }
     const k = item.k;
     const p = L.plots[k];
+    if (!plant(p.x, p.y, 240, 340)) return;
     const plot = world.state.plots[k];
     if (plot.stage === 0) {
       A.drawForSale(ctx, p.x, p.y - 28, world.state.coins >= E.stageCost(world.state.town, k, 1) ? 'afford' : 'open');
@@ -711,7 +976,6 @@ export function createRenderer(canvas, world, hooks = {}) {
     }
     const d = designAt(world.state, k);
     const rt = world.rt[k];
-    ctx.save();
     ctx.translate(p.x, p.y - 4);
     A.drawPlotBack(ctx, d.w, plot.stage, time + k);
     ctx.save();
@@ -735,7 +999,6 @@ export function createRenderer(canvas, world, hooks = {}) {
     ctx.restore();
     if (plot.splat) A.drawSplat(ctx, d.w, d.h, time);
     A.drawPlotFront(ctx, d.w, p.side, plot.stage, time + k);
-    ctx.restore();
   }
 
   // A small label on the map: dark glass, hairline edge, one accent colour.
@@ -772,25 +1035,24 @@ export function createRenderer(canvas, world, hooks = {}) {
 
   function drawOverlays() {
     const s = world.state;
-    const z = cam.zoom;
-    const size = clamp(8 + z * 7, 10, 13.5);
     const right = usableW();
     for (const p of L.plots) {
       const k = p.index;
       const plot = s.plots[k];
-      const sx = toScreenX(p.x);
-      const sy = toScreenY(p.y);
-      if (sx < -160 || sx > vw + 160 || sy < -80 || sy > vh + 320) continue;
+      const d = designAt(s, k);
+      if (!proj(plot.stage === 0 ? p.x : p.x + p.side * (d.w / 2 - 44), p.y)) continue;
+      const size = clamp(7 + pt.s * 10, 9.5, 14);
+      const sx = pt.x;
+      if (sx < -160 || sx > vw + 160 || pt.y < -80 || pt.y > vh + 320) continue;
       if (plot.stage === 0) {
         const cost = E.stageCost(s.town, k, 1);
-        pill(sx, toScreenY(p.y - 6) + size, money(cost), s.coins >= cost ? TONE.go : TONE.plain, size + 1);
+        pill(sx, pt.y - 6 * pt.s + size, money(cost), s.coins >= cost ? TONE.go : TONE.plain, size + 1);
         continue;
       }
-      const d = designAt(s, k);
       const rt = world.rt[k];
       const edge = size * 3;
-      const px = clamp(toScreenX(p.x + p.side * (d.w / 2 - 44)), Math.min(edge, sx), Math.max(right - edge, sx));
-      const py = toScreenY(p.y + 18) + size;
+      const px = clamp(sx, edge, Math.max(right - edge, edge));
+      const py = pt.y + 18 * pt.s + size;
       if (plot.splat) {
         pill(px, py, 'Clean up ' + money(E.repairCost(s.town, k, plot.stage)), TONE.alert, size);
         continue;
@@ -801,22 +1063,24 @@ export function createRenderer(canvas, world, hooks = {}) {
     }
     if (pointer >= 0) {
       const p = L.plots[pointer];
-      const built = s.plots[pointer].stage > 0;
-      const d = designAt(s, pointer);
-      const top = toScreenY(built ? p.y - d.h - 6 : p.y - 96) - 14;
-      const by = top - Math.abs(Math.sin(time * 3.2)) * 10;
-      const sx = toScreenX(p.x);
-      ctx.beginPath();
-      ctx.moveTo(sx - 12, by - 19);
-      ctx.lineTo(sx + 12, by - 19);
-      ctx.lineTo(sx, by);
-      ctx.closePath();
-      ctx.fillStyle = '#e0be78';
-      ctx.fill();
-      ctx.strokeStyle = '#0e1622';
-      ctx.lineWidth = 2.5;
-      ctx.lineJoin = 'round';
-      ctx.stroke();
+      if (proj(p.x, p.y)) {
+        const built = s.plots[pointer].stage > 0;
+        const d = designAt(s, pointer);
+        const top = pt.y - (built ? d.h + 6 : 96) * pt.s - 14;
+        const by = top - Math.abs(Math.sin(time * 3.2)) * 10;
+        const sx = pt.x;
+        ctx.beginPath();
+        ctx.moveTo(sx - 12, by - 19);
+        ctx.lineTo(sx + 12, by - 19);
+        ctx.lineTo(sx, by);
+        ctx.closePath();
+        ctx.fillStyle = '#e0be78';
+        ctx.fill();
+        ctx.strokeStyle = '#0e1622';
+        ctx.lineWidth = 2.5;
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+      }
     }
   }
 
@@ -845,49 +1109,124 @@ export function createRenderer(canvas, world, hooks = {}) {
     }
   }
 
-  // Water beyond the cached layer, so a lake or the sea runs on to the horizon.
-  function drawFarWater(view) {
+  // The sky, when the camera is low enough to see it, and the plain colour of
+  // the land (or water) that runs off to the horizon.
+  function drawBackdrop(dark) {
+    flat();
+    const hz = clamp(view.horizon, -1, vh);
+    const gold = clamp(dark / 0.45, 0, 1);
+    const mix = (a, b) => Math.round(lerp(a, b, gold));
+    const low = `rgb(${mix(214, 255)},${mix(232, 214)},${mix(238, 176)})`;
+    if (hz > 0) {
+      const sky = ctx.createLinearGradient(0, hz - Math.max(240, hz), 0, hz);
+      sky.addColorStop(0, `rgb(${mix(84, 70)},${mix(150, 104)},${mix(204, 168)})`);
+      sky.addColorStop(1, low);
+      ctx.fillStyle = sky;
+      ctx.fillRect(0, 0, vw, hz + 1);
+      // the sun, low to the left
+      const sunX = vw * 0.22 - cam.x * 0.02;
+      const sunY = hz - 26 - (1 - gold) * 60;
+      const halo = ctx.createRadialGradient(sunX, sunY, 0, sunX, sunY, 150);
+      halo.addColorStop(0, 'rgba(255,244,210,0.95)');
+      halo.addColorStop(0.12, 'rgba(255,236,190,0.7)');
+      halo.addColorStop(1, 'rgba(255,220,160,0)');
+      ctx.fillStyle = halo;
+      ctx.fillRect(sunX - 150, sunY - 150, 300, 300);
+      // far hills, sliding a little as the camera moves
+      for (const [lift, amp, alpha, drift] of [[26, 16, 0.45, 0.05], [12, 10, 0.75, 0.09]]) {
+        ctx.beginPath();
+        ctx.moveTo(0, hz + 1);
+        for (let x = 0; x <= vw + 24; x += 24) {
+          const u = (x + cam.x * drift) * 0.006;
+          ctx.lineTo(x, hz - lift - Math.sin(u) * amp - Math.sin(u * 2.7 + 1) * amp * 0.5);
+        }
+        ctx.lineTo(vw, hz + 1);
+        ctx.closePath();
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = theme.weather === 'snow' ? '#c9d6e4' : '#6f8f8a';
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+    ctx.fillStyle = theme.ground;
+    ctx.fillRect(0, Math.max(0, hz), vw, vh - Math.max(0, hz));
+    // open water carries on to the horizon
     for (const w of L.water) {
-      const [deep, shallow] = theme.water;
+      const [deep] = theme.water;
+      ctx.fillStyle = deep;
       if (w.kind === 'canal') {
-        ctx.fillStyle = deep;
-        for (const [xa, xb] of [[view.x0, -M + 4], [W.w + M - 4, view.x1]]) {
-          if (xb <= xa) continue;
+        for (const [xa, xb] of [[-1500, -M + 6], [W.w + M - 6, W.w + 1500]]) {
+          const corners = [[xa, w.mid(xa) - w.half], [xb, w.mid(xb) - w.half], [xb, w.mid(xb) + w.half], [xa, w.mid(xa) + w.half]];
           ctx.beginPath();
-          ctx.moveTo(xa, w.mid(xa) - w.half);
-          ctx.lineTo(xb, w.mid(xb) - w.half);
-          ctx.lineTo(xb, w.mid(xb) + w.half);
-          ctx.lineTo(xa, w.mid(xa) + w.half);
-          ctx.fill();
+          let ok = true;
+          for (const [x, y] of corners) {
+            if (!proj(x, y)) ok = false;
+            ctx.lineTo(pt.x, pt.y);
+          }
+          if (ok) ctx.fill();
         }
         continue;
       }
-      const edge = w.kind === 'sea' ? w.shoreY : 250;
-      if (view.y0 > edge) continue;
-      const grad = ctx.createLinearGradient(0, w.span[0], 0, w.span[1]);
-      grad.addColorStop(0, deep);
-      grad.addColorStop(w.kind === 'sea' ? 0.72 : 1, shallow);
-      if (w.kind === 'sea') grad.addColorStop(1, theme.foam);
-      ctx.fillStyle = grad;
-      ctx.fillRect(view.x0, view.y0, view.x1 - view.x0, edge - view.y0);
+      if (proj(view.x, w.kind === 'sea' ? w.shoreY - 14 : 250) && pt.y > hz) ctx.fillRect(0, Math.max(0, hz), vw, pt.y - Math.max(0, hz));
+    }
+    return low;
+  }
+
+  // The painted ground, laid down in thin strips: each a little wider than the
+  // one behind it, which is all perspective is.
+  function drawGround() {
+    flat();
+    let r = Math.max(0, Math.ceil(view.horizon) + 1);
+    const rowAt = (sy) => {
+      const t = (view.cY - sy) / FOCAL;
+      const den = view.sin - t * view.cos;
+      return den > 0.004 ? (view.h * (view.cos + t * view.sin)) / den : Infinity;
+    };
+    while (r < vh) {
+      const dy0 = rowAt(r);
+      let step = 2;
+      let dy1 = rowAt(r + step);
+      if (dy0 - dy1 > 9) {
+        step = 1;
+        dy1 = rowAt(r + 1);
+      }
+      const ya = view.Cy - dy0; // the far edge of this strip, in the world
+      const yb = view.Cy - dy1;
+      if (!(yb > -M)) {
+        r += step;
+        continue;
+      }
+      if (ya >= W.h + M) break;
+      const s = FOCAL / (((dy0 + dy1) / 2) * view.cos + view.h * view.sin);
+      const xl = Math.max(view.x - view.cX / s, -M);
+      const xr = Math.min(view.x + (vw - view.cX) / s, W.w + M);
+      if (xr > xl) {
+        const y0 = Math.max(ya, -M);
+        const y1 = Math.min(yb, W.h + M);
+        const far = (yb - ya) * GROUND_SCALE > step * dpr * 1.7;
+        const k = far ? GROUND_SCALE / 2 : GROUND_SCALE;
+        const top = r + ((y0 - ya) / (yb - ya)) * step;
+        const bot = r + ((y1 - ya) / (yb - ya)) * step;
+        ctx.drawImage(far ? groundLo : ground, (xl + M) * k, (y0 + M) * k, (xr - xl) * k, Math.max(0.5, y1 - y0) * k, view.cX + (xl - view.x) * s, top, (xr - xl) * s, bot - top + 0.7);
+      }
+      r += step;
     }
   }
 
   // Light on the water: glints that come and go, and surf along a beach.
-  function drawWaterLife(view, dark) {
+  function drawWaterLife(dark) {
+    flat();
     if (glints.length) {
       ctx.lineCap = 'round';
-      ctx.lineWidth = 1.6;
       ctx.strokeStyle = dark > 0.6 ? 'rgba(255,226,170,0.9)' : 'rgba(255,255,255,0.9)';
       for (const g of glints) {
-        if (g.y < view.y0 || g.y > view.y1) continue;
         const a = 0.5 + 0.5 * Math.sin(time * 1.4 + g.ph);
-        if (a < 0.15) continue;
-        const x = g.x + Math.sin(time * 0.5 + g.ph) * 8;
+        if (a < 0.15 || !proj(g.x + Math.sin(time * 0.5 + g.ph) * 8, g.y) || pt.y < 0 || pt.y > vh) continue;
         ctx.globalAlpha = a * 0.5;
+        ctx.lineWidth = Math.max(1, 1.8 * pt.s);
         ctx.beginPath();
-        ctx.moveTo(x - g.l, g.y);
-        ctx.lineTo(x + g.l, g.y);
+        ctx.moveTo(pt.x - g.l * pt.s, pt.y);
+        ctx.lineTo(pt.x + g.l * pt.s, pt.y);
         ctx.stroke();
       }
       ctx.globalAlpha = 1;
@@ -897,14 +1236,17 @@ export function createRenderer(canvas, world, hooks = {}) {
       for (let k = 0; k < 2; k++) {
         const wash = Math.sin(time * 0.7 + k * 1.8);
         ctx.beginPath();
-        for (let i = 0; i < shore.length; i++) {
-          const [x, y] = shore[i];
-          const yy = y - 6 - k * 16 + wash * (5 - k * 2) + Math.sin(x * 0.05 + time * 1.1) * 2;
-          if (i) ctx.lineTo(x, yy);
-          else ctx.moveTo(x, yy);
+        let started = false;
+        let s = 0.4;
+        for (const [x, y] of shore) {
+          if (!proj(x, y - 6 - k * 16 + wash * (5 - k * 2) + Math.sin(x * 0.05 + time * 1.1) * 2)) continue;
+          if (started) ctx.lineTo(pt.x, pt.y);
+          else ctx.moveTo(pt.x, pt.y);
+          started = true;
+          s = pt.s;
         }
         ctx.strokeStyle = `rgba(255,255,255,${k ? 0.32 : 0.75})`;
-        ctx.lineWidth = k ? 2 : 4;
+        ctx.lineWidth = (k ? 2 : 4) * Math.max(0.5, s * 1.6);
         ctx.stroke();
       }
     }
@@ -922,72 +1264,63 @@ export function createRenderer(canvas, world, hooks = {}) {
     updateCamera(dt);
     updateEffects(dt);
     for (const p of PLOTS) if (world.rt[p.index].phase === 'run') animT[p.index] += dt;
+    aim();
 
     const s = world.state;
     const dark = darkness(s.clock);
-    const z = cam.zoom;
-    const ox = centreX() - cam.x * z;
-    const oy = centreY() - cam.y * z;
-
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.fillStyle = theme.ground;
-    ctx.fillRect(0, 0, vw, vh);
-    ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * ox, dpr * oy);
-    const view = { x0: -ox / z - 180, x1: (vw - ox) / z + 180, y0: -oy / z - 40, y1: (vh - oy) / z + 300 };
-    ctx.fillStyle = tile;
-    ctx.fillRect(view.x0, view.y0, view.x1 - view.x0, view.y1 - view.y0);
-    const beyond = view.x0 < -M + 50 || view.x1 > W.w + M - 50 || view.y0 < -M + 110;
-    if (beyond) {
-      drawFarWater(view);
-      // distant trees, only where the view reaches past the cached layer
-      for (let gy = Math.floor(view.y0 / FAR_CELL); gy * FAR_CELL < view.y1; gy++) {
-        for (let gx = Math.floor(view.x0 / FAR_CELL); gx * FAR_CELL < view.x1; gx++) {
-          const hsh = cellHash(gx, gy);
-          if (hsh > 0.4) continue;
-          const x = (gx + ((hsh * 13.7) % 1)) * FAR_CELL;
-          const y = (gy + ((hsh * 7.3) % 1)) * FAR_CELL;
-          if (inTreeBand(x, y) || L.wet(x, y) || L.wet(x, y - 30)) continue;
-          SC.drawTree(ctx, x, y, theme, Math.floor(hsh * 97) % 8, 0.9 + ((hsh * 31) % 1) * 0.5);
-        }
-      }
-    }
-    ctx.drawImage(ground, -M, -M, W.w + 2 * M, W.h + 2 * M);
-    drawWaterLife(view, dark);
-
-    // long evening shadows, thrown to the right of everything that stands up
     const lowSun = clamp(dark / 0.45, 0, 1);
-    const shade = 0.17 * (1 - clamp((dark - 0.5) / 0.4, 0, 1) * 0.7);
-    ctx.fillStyle = `rgba(14,26,40,${shade})`;
-    for (const p of L.plots) {
-      if (s.plots[p.index].stage === 0) continue;
-      const d = designAt(s, p.index);
-      const reach = d.h * (0.34 + lowSun * 0.4);
-      ctx.beginPath();
-      ctx.ellipse(p.x + reach * 0.5, p.y + 4 + reach * 0.07, d.w * 0.5 + reach * 0.5, 15 + reach * 0.06, 0.05, 0, TAU);
-      ctx.fill();
+
+    const haze = drawBackdrop(dark);
+    drawGround();
+    // distance softens everything towards the horizon
+    if (view.horizon > -200) {
+      const hz = Math.max(0, view.horizon);
+      const fog = ctx.createLinearGradient(0, hz, 0, hz + 130);
+      fog.addColorStop(0, haze);
+      fog.addColorStop(1, haze.replace('rgb(', 'rgba(').replace(')', ',0)'));
+      ctx.fillStyle = fog;
+      ctx.globalAlpha = 0.8;
+      ctx.fillRect(0, hz, vw, 130);
+      ctx.globalAlpha = 1;
     }
+    drawWaterLife(dark);
+
+    // every attraction throws a shadow of its own shape, longer as the sun drops
+    const shade = 0.26 * (1 - clamp((dark - 0.5) / 0.4, 0, 1) * 0.75);
+    for (const p of L.plots) {
+      if (s.plots[p.index].stage === 0 || !plant(p.x, p.y, 420, 120)) continue;
+      const d = designAt(s, p.index);
+      const sil = silhouette(d);
+      ctx.translate(p.x, p.y + 2);
+      ctx.transform(1, 0, -(0.55 + lowSun * 0.6), 0.24 * view.sin, 0, 0);
+      ctx.globalAlpha = shade;
+      ctx.drawImage(sil.cv, -sil.ox, -sil.oy);
+    }
+    ctx.globalAlpha = 1;
 
     if (selected >= 0) {
       const p = L.plots[selected];
       const d = designAt(s, selected);
-      ctx.beginPath();
-      ctx.ellipse(p.x, p.y - 4, d.w / 2 + 14, 30, 0, 0, TAU);
-      ctx.strokeStyle = `rgba(255,236,190,${0.6 + Math.sin(time * 4) * 0.25})`;
-      ctx.lineWidth = 4;
-      ctx.setLineDash([14, 10]);
-      ctx.lineDashOffset = -time * 30;
-      ctx.stroke();
-      ctx.setLineDash([]);
+      if (proj(p.x, p.y - 4)) {
+        flat();
+        ctx.beginPath();
+        ctx.ellipse(pt.x, pt.y, (d.w / 2 + 14) * pt.s, 34 * pt.s * view.sin, 0, 0, TAU);
+        ctx.strokeStyle = `rgba(255,236,190,${0.6 + Math.sin(time * 4) * 0.25})`;
+        ctx.lineWidth = 3.5;
+        ctx.setLineDash([12, 9]);
+        ctx.lineDashOffset = -time * 30;
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
     }
 
-    // depth-sorted sprites: merge the fixed list with this frame's guests
+    // everything that stands up, from the back of the park to the front
     sorted.length = 0;
-    for (const g of world.guests) {
-      if (g.alpha > 0.02 && g.y > view.y0 && g.y < view.y1 && g.x > view.x0 && g.x < view.x1) sorted.push(g);
-    }
+    for (const g of world.guests) if (g.alpha > 0.02) sorted.push(g);
     sorted.sort((p, q) => p.y - q.y);
     let gi = 0;
     const drawGuestAt = (g) => {
+      if (!plant(g.x, g.y, 30, 60)) return;
       const fade = g.mode === 'leave' ? clamp((W.spawnY + 40 - g.y) / 34, 0, 1) : 1;
       const al = g.alpha * fade;
       if (al < 1) ctx.globalAlpha = al;
@@ -996,35 +1329,40 @@ export function createRenderer(canvas, world, hooks = {}) {
     };
     for (const item of fixed) {
       while (gi < sorted.length && sorted[gi].y <= item.y) drawGuestAt(sorted[gi++]);
-      if (item.y > view.y0 - 60 && item.y < view.y1 + 40) drawFixed(item, dark);
+      drawFixed(item, dark);
     }
     while (gi < sorted.length) drawGuestAt(sorted[gi++]);
 
     for (const g of sorted) {
-      if (g.emoteT > 0 && g.emote) {
+      if (g.emoteT > 0 && g.emote && plant(g.x, g.y, 30, 90)) {
         const u = 1 - g.emoteT / 1.5;
         A.drawEmote(ctx, g.emote, g.x, g.y - 44 - u * 12, clamp(g.emoteT * 3, 0, 1) * g.alpha);
       }
     }
 
+    // particles fly in the upright plane they were thrown from
+    flat();
     for (const p of particles) {
+      const sc = proj(p.x, p.gy);
+      if (!sc) continue;
+      const [x, y, size] = [pt.x, pt.y + (p.y - p.gy) * sc, p.size * sc * 1.25];
       const a = clamp(1 - p.t / p.life, 0, 1);
       ctx.globalAlpha = Math.min(1, a * 2);
       ctx.fillStyle = p.color;
       if (p.shape === 'puff') {
         ctx.globalAlpha = a * 0.55;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size * (1 + (1 - a) * 1.4), 0, TAU);
+        ctx.arc(x, y, size * (1 + (1 - a) * 1.4), 0, TAU);
         ctx.fill();
       } else if (p.shape === 'coin') {
         ctx.beginPath();
-        ctx.ellipse(p.x, p.y, p.size * Math.abs(Math.cos(p.rot)) + 1, p.size, 0, 0, TAU);
+        ctx.ellipse(x, y, size * Math.abs(Math.cos(p.rot)) + 1, size, 0, 0, TAU);
         ctx.fill();
       } else {
         ctx.save();
-        ctx.translate(p.x, p.y);
+        ctx.translate(x, y);
         ctx.rotate(p.rot);
-        ctx.fillRect(-p.size / 2, -p.size / 3, p.size, p.size * 0.66);
+        ctx.fillRect(-size / 2, -size / 3, size, size * 0.66);
         ctx.restore();
       }
     }
@@ -1036,16 +1374,17 @@ export function createRenderer(canvas, world, hooks = {}) {
       for (const [phase, row, width, pace] of clouds) {
         const cx = ((phase * span + time * pace) % span) - M - 400;
         const cy = -80 + row * (W.h + 160) + Math.sin(time * 0.05 + phase * 9) * 40;
-        if (cx + width < view.x0 || cx - width > view.x1) continue;
+        if (!proj(cx, cy)) continue;
+        const [rw, rh] = [width * pt.s, width * 0.42 * pt.s * view.sin];
+        if (pt.x + rw < 0 || pt.x - rw > vw || pt.y + rh < 0 || pt.y - rh > vh) continue;
         ctx.globalAlpha = 0.16 * (1 - dark / 0.6);
-        ctx.drawImage(cloud, cx - width, cy - width * 0.42, width * 2, width * 0.84);
+        ctx.drawImage(cloud, pt.x - rw, pt.y - rh, rw * 2, rh * 2);
       }
       ctx.globalAlpha = 1;
     }
 
     // The light. A warm wash from the sun's side at every hour, deepening to
     // gold and then to blue dusk, with the lamps coming on as it goes.
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const sun = ctx.createLinearGradient(0, 0, vw, vh);
     sun.addColorStop(0, `rgba(255,232,188,${0.3 + lowSun * 0.2})`);
     sun.addColorStop(0.55, 'rgba(255,240,220,0)');
@@ -1064,32 +1403,36 @@ export function createRenderer(canvas, world, hooks = {}) {
       ctx.fillStyle = `rgb(${cr},${cg},${cb})`;
       ctx.fillRect(0, 0, vw, vh);
       ctx.globalCompositeOperation = 'lighter';
-      ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * ox, dpr * oy);
-      const glow = (x, y, r, tint, a, squash = 1) => {
-        if (x < view.x0 - r || x > view.x1 + r || y < view.y0 - r || y > view.y1 + r) return;
-        ctx.globalAlpha = a;
-        ctx.drawImage(glows[tint], x - r, y - r * squash, r * 2, r * 2 * squash);
+      // a light `up` above the ground at (x, y)
+      const glow = (x, y, up, r, tint, a, squash = 1) => {
+        const sc = proj(x, y);
+        if (!sc) return;
+        const [gx, gy, gr] = [pt.x, pt.y - up * sc, r * sc];
+        if (gx < -gr || gx > vw + gr || gy < -gr || gy > vh + gr) return;
+        ctx.globalAlpha = a * clamp(0.62 / sc, 0.4, 1);
+        ctx.drawImage(glows[tint], gx - gr, gy - gr * squash, gr * 2, gr * 2 * squash);
       };
       const lit = clamp((dark - 0.25) / 0.5, 0, 1);
+      const lie = 0.5 * view.sin; // how flat a pool of light on the ground looks from here
       for (const sc of scenery) {
         switch (sc.kind) {
           case 'lamp':
-            glow(sc.x, sc.y - 56, 66, 0, 0.9 * lit);
-            glow(sc.x, sc.y + 2, 120, 0, 0.5 * lit, 0.42);
+            glow(sc.x, sc.y, 56, 66, 0, 0.9 * lit);
+            glow(sc.x, sc.y, -2, 120, 0, 0.5 * lit, lie);
             break;
-          case 'gate': glow(sc.x, sc.y - 124, 160, 0, 0.5 * lit, 0.6); break;
-          case 'bandstand': glow(sc.x, sc.y - 50, 130, 0, 0.6 * lit); break;
-          case 'pavilion': glow(sc.x, sc.y - 60, 170, 0, 0.6 * lit); break;
+          case 'gate': glow(sc.x, sc.y, 124, 160, 0, 0.5 * lit, 0.6); break;
+          case 'bandstand': glow(sc.x, sc.y, 50, 130, 0, 0.6 * lit); break;
+          case 'pavilion': glow(sc.x, sc.y, 60, 170, 0, 0.6 * lit); break;
           case 'bonfire': {
             const flick = 0.85 + Math.sin(time * 9) * 0.08 + Math.sin(time * 14.3) * 0.06;
-            glow(sc.x, sc.y - 26, 190, 0, 0.75 * flick * Math.max(lit, 0.35));
-            glow(sc.x, sc.y + 4, 240, 0, 0.3 * flick * Math.max(lit, 0.35), 0.4);
+            glow(sc.x, sc.y, 26, 190, 0, 0.75 * flick * Math.max(lit, 0.35));
+            glow(sc.x, sc.y, -4, 240, 0, 0.3 * flick * Math.max(lit, 0.35), lie);
             break;
           }
-          case 'fir': glow(sc.x, sc.y - 80, 130, 2, 0.4 * lit); break;
-          case 'fountain': glow(sc.x, sc.y - 40, 90, 2, 0.35 * lit); break;
-          case 'lanterns': glow(sc.x, sc.y - 10, 86, 0, 0.55 * lit, 0.9); break;
-          case 'boat': glow(sc.x + Math.sin(time * 0.13 + sc.hue * 2) * sc.drift, sc.y - 14, 40, 0, 0.4 * lit); break;
+          case 'fir': glow(sc.x, sc.y, 80, 130, 2, 0.4 * lit); break;
+          case 'fountain': glow(sc.x, sc.y, 40, 90, 2, 0.35 * lit); break;
+          case 'lanterns': glow(sc.x, sc.y, 22, 86, 0, 0.55 * lit, 0.9); break;
+          case 'boat': glow(sc.x + Math.sin(time * 0.13 + sc.hue * 2) * sc.drift, sc.y, 14, 40, 0, 0.4 * lit); break;
           default: break;
         }
       }
@@ -1099,29 +1442,38 @@ export function createRenderer(canvas, world, hooks = {}) {
         const stage = s.plots[p.index].stage;
         const flick = 0.9 + Math.sin(time * 5 + p.index) * 0.06;
         const strength = (0.5 + 0.06 * stage) * lit * flick;
-        for (const [lx, ly, lr, tint] of A.LIGHTS[d.index]) glow(p.x + lx, p.y + ly, lr, tint, strength);
+        for (const [lx, ly, lr, tint] of A.LIGHTS[d.index]) glow(p.x + lx, p.y, -ly, lr, tint, strength);
         // a pool of light spilling on to the ground in front
-        glow(p.x, p.y - d.h * 0.4, Math.max(d.w, d.h) * 0.75, 0, 0.3 * lit);
-        glow(p.x, p.y + 14, d.w * 0.9, 0, 0.34 * lit, 0.3);
-        if (stage >= 3) glow(p.x, p.y - 140, d.w * 0.7, 1, 0.3 * lit, 0.35);
+        glow(p.x, p.y, d.h * 0.4, Math.max(d.w, d.h) * 0.75, 0, 0.3 * lit);
+        glow(p.x, p.y, -14, d.w * 0.9, 0, 0.34 * lit, lie);
+        if (stage >= 3) glow(p.x, p.y, 140, d.w * 0.7, 1, 0.3 * lit, 0.35);
       }
       ctx.globalAlpha = 1;
+      // stars come out over the hills
+      if (view.horizon > 8 && dark > 0.6) {
+        ctx.fillStyle = '#ffffff';
+        for (let k = 0; k < 46; k++) {
+          const sx = (cellHash(k, 3) * 1.3 * vw - cam.x * 0.01 + vw) % vw;
+          const sy = cellHash(k, 9) * (view.horizon - 30);
+          ctx.globalAlpha = (0.35 + 0.5 * cellHash(k, 5)) * (0.7 + 0.3 * Math.sin(time * 2 + k)) * clamp((dark - 0.6) / 0.3, 0, 1);
+          ctx.fillRect(sx, sy, 1.6, 1.6);
+        }
+        ctx.globalAlpha = 1;
+      }
       ctx.globalCompositeOperation = 'source-over';
     }
 
     // balloons float above the lighting so they are always easy to spot
-    ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * ox, dpr * oy);
     for (const b of world.balloons) {
-      const k = Math.max(1, 0.62 / z);
-      ctx.save();
+      if (!plant(b.x, b.y, 80, 120)) continue;
+      const k = Math.max(1, 0.62 / pt.s);
       ctx.translate(b.x, b.y);
       ctx.scale(k, k);
       A.drawBalloon(ctx, 0, 0, b.color, b.t);
-      ctx.restore();
     }
 
     // screen space from here on
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    flat();
     // a soft vignette pulls the eye to the middle of the park
     const vg = ctx.createRadialGradient(usableW() / 2, vh * 0.46, Math.min(vw, vh) * 0.36, usableW() / 2, vh * 0.46, Math.max(vw, vh) * 0.78);
     vg.addColorStop(0, 'rgba(10,18,30,0)');
@@ -1130,11 +1482,11 @@ export function createRenderer(canvas, world, hooks = {}) {
     ctx.fillRect(0, 0, vw, vh);
     drawOverlays();
     for (const p of popups) {
+      if (!proj(p.x, p.y)) continue;
       const u = p.t / 1.3;
-      const x = toScreenX(p.x);
-      const y = toScreenY(p.y) - u * 46;
+      const [x, y] = [pt.x, pt.y - u * 46];
       ctx.globalAlpha = clamp((1 - u) * 2.2, 0, 1);
-      ctx.font = A.uiFont(Math.round(p.size * clamp(0.6 + cam.zoom * 0.8, 0.75, 1.2) * 1.05), 800);
+      ctx.font = A.uiFont(Math.round(p.size * clamp(0.5 + pt.s * 1.1, 0.75, 1.25) * 1.05), 800);
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.lineWidth = 3.5;
@@ -1185,8 +1537,7 @@ export function createRenderer(canvas, world, hooks = {}) {
     pop: (k) => { pops[k] = 1; },
     burst,
     cam,
-    toScreenX,
-    toScreenY,
+    toScreen,
     fireworks: (seconds = 5) => { showUntil = time + seconds; },
     setSelected: (k) => { selected = k; },
     setPointer: (k) => { pointer = k; },

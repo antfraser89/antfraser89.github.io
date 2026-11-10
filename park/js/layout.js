@@ -274,7 +274,7 @@ function ring(key, opts) {
   for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) L.props.push({ kind: 'topiary', x: CX + dx * 112, y: cy + dy * 198 });
 
   if (opts.lake) {
-    const shore = [[-320, -320], [W.w + 320, -320], [W.w + 320, 250], [W.w - 40, 312], [930, 300], [770, 322], [700, 392], [640, 452], [CX, 470], [440, 452], [380, 392], [310, 322], [150, 300], [40, 312], [-320, 250]];
+    const shore = [[-1600, -1400], [W.w + 1600, -1400], [W.w + 1600, 250], [W.w + 320, 250], [W.w - 40, 312], [930, 300], [770, 322], [700, 392], [640, 452], [CX, 470], [440, 452], [380, 392], [310, 322], [150, 300], [40, 312], [-320, 250], [-1600, 250]];
     L.water.push({ kind: opts.frozen ? 'ice' : 'lake', pts: smooth(shore, true, 18), frozen: !!opts.frozen, sparkle: [CX, 230, 520, 200] });
     L.island = { x: CX, y: 236, rx: 104, ry: 62 };
     L.bridges.push({ x: CX, y: 402, w: 34, len: 150, angle: Math.PI / 2 });
@@ -322,8 +322,8 @@ function pier(key) {
   L.decks.push({ x: CX - 46, y: 250, w: 92, h: 1092 - 250 - 30, r: 4, spine: true });
   L.head = { x: CX, y: 232, r: 132 };
   L.props.push({ kind: 'pavilion', x: CX, y: 262 });
-  const sea = [[-320, -320], [W.w + 320, -320], [W.w + 320, shoreY]];
-  for (let x = W.w + 320; x >= -320; x -= 80) sea.push([x, shoreY + Math.sin(x * 0.011) * 16 + Math.sin(x * 0.027) * 7]);
+  const sea = [[-1600, -1400], [W.w + 1600, -1400], [W.w + 1600, shoreY]];
+  for (let x = W.w + 1600; x >= -1600; x -= 80) sea.push([x, shoreY + Math.sin(x * 0.011) * 16 + Math.sin(x * 0.027) * 7]);
   L.water.push({ kind: 'sea', pts: sea, shoreY, sparkle: [CX, 300, 620, 300] });
   L.props.push({ kind: 'boat', x: 150, y: 300, drift: 40, hue: 2 }, { kind: 'boat', x: 930, y: 640, drift: 30, hue: 0 }, { kind: 'buoy', x: 250, y: 720 }, { kind: 'buoy', x: 820, y: 250 });
   for (const [x, y, hue] of [[150, 1160, 0], [250, 1338, 1], [830, 1344, 2], [960, 1168, 1], [112, 1300, 2]]) L.props.push({ kind: 'parasol', x, y, hue });
@@ -350,8 +350,8 @@ function canal(key) {
     L.plot(px, y, s, [[px - s * 128, y + 10], [CX + s * AVE, y + 10]], { kind: 'cobble' });
   }
   const band = [];
-  for (let x = -320; x <= W.w + 320; x += 60) band.push([x, mid(x) - half]);
-  for (let x = W.w + 320; x >= -320; x -= 60) band.push([x, mid(x) + half]);
+  for (let x = -1600; x <= W.w + 1600; x += 60) band.push([x, mid(x) - half]);
+  for (let x = W.w + 1600; x >= -1600; x -= 60) band.push([x, mid(x) + half]);
   L.water.push({ kind: 'canal', pts: band, mid, half, sparkle: [CX, 640, 700, 60] });
   L.bridges.push({ x: CX, y: mid(CX), w: 78, len: half * 2 + 36, angle: Math.PI / 2, stone: true });
   L.bridges.push({ x: 250, y: mid(250), w: 36, len: half * 2 + 30, angle: Math.PI / 2, stone: true });

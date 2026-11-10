@@ -44,11 +44,13 @@ Each kind of town has its own map, and guests really walk it: they follow the pa
 | Winter | A frozen lake with skaters, and a lit fir where the fountain would be. |
 | Canal town | Cobbled quays either side of a canal, two bridges, strings of paper lanterns and barges working up and down. |
 
+The park is seen in perspective. The ground is painted flat and laid down receding into the distance; attractions, trees, lamps and guests stand up on it and shrink as they get further away, and each attraction throws a shadow of its own shape. Pinch or scroll to zoom: pulled back, the camera looks down on the whole park; close in, it swoops low enough to bring the horizon, the hills and the sky into view. Drag to pan and near things slide across far ones.
+
 The day runs from soft daylight through a long golden hour to a lamp-lit night. Shadows lengthen as the sun drops and every lamp, ride and lantern throws its own light after dark.
 
 ## The look
 
-Ink, brass and ivory: dark glass panels with fine brass edges, a serif display face, small-capital labels and one red button. The slot machine is a green lacquer cabinet with a brass inlay, and the eight reel symbols share one style (lit from the upper left, fine dark outline). The colours, type and radii all come from the variables at the top of `css/style.css`.
+Ink, brass and ivory: dark glass panels with fine brass edges, a serif display face, small-capital labels and one red button. The slot machine is a green lacquer cabinet with a brass inlay and real depth: it leans toward the pointer (or sways gently on a phone) so the sign, bulbs and glass part from the reels, and each reel is a drum whose symbols foreshorten as they turn away. The eight reel symbols share one style (lit from the upper left, fine dark outline). The colours, type and radii all come from the variables at the top of `css/style.css`.
 
 ## How the game works
 
@@ -107,8 +109,8 @@ js/format.js          number and time formatting
 js/art.js             attractions, slot symbols, decorations
 js/scenery.js         landscape: water, bridges, piers, gardens, trees, boats, lamps
 js/cardart.js         the 54 card paintings and the card frame
-js/render.js          the park canvas: camera, ground, water, evening light, particles, labels
-js/slotview.js        the reels
+js/render.js          the park canvas: perspective camera, ground, standing sprites, shadows, sky, evening light, labels
+js/slotview.js        the reels, drawn as drums
 js/fx.js              the coin shower
 js/ui.js              HUD, tab bar, the machine and park pages, sheets, mini-games, shop, modals
 js/audio.js           sound effects and the organ waltz

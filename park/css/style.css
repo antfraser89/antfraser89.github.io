@@ -538,7 +538,11 @@ button.stat-card:active, .round-btn:active, .town-chip:active, .side-btn:active 
 }
 .machine.win .m-bg .rays { filter: brightness(2.4); }
 .machine.win .m-bg b { background: radial-gradient(closest-side, rgba(217, 185, 118, 0.5), transparent); }
-.m-col { position: relative; width: min(100%, 540px); display: flex; flex-direction: column; justify-content: center; gap: 10px; min-height: 0; }
+.m-col { position: relative; width: min(100%, 540px); display: flex; flex-direction: column; justify-content: center; gap: 10px; min-height: 0; perspective: 1000px; perspective-origin: 50% 38%; }
+/* The machine is a solid thing: it leans a little (ui.js moves --rx and --ry
+   with the pointer, or sways it gently), and its parts sit at different depths. */
+.topper, .m-cab { transform: rotateX(var(--rx, 4deg)) rotateY(var(--ry, 0deg)); transform-style: preserve-3d; }
+.topper { transform: rotateX(var(--rx, 4deg)) rotateY(var(--ry, 0deg)) translateZ(46px); }
 
 /* the sign: black lacquer in a brass frame */
 .topper {
@@ -589,12 +593,12 @@ button.stat-card:active, .round-btn:active, .town-chip:active, .side-btn:active 
 .m-cab { position: relative; flex: 1 1 auto; min-height: 170px; max-height: 480px; display: flex; }
 .m-cab.shake { animation: shake 0.45s; }
 @keyframes shake {
-  0%, 100% { transform: none; }
-  15% { transform: translateX(-7px) rotate(-0.6deg); }
-  30% { transform: translateX(6px) rotate(0.5deg); }
-  45% { transform: translateX(-4px); }
-  60% { transform: translateX(3px); }
-  80% { transform: translateX(-2px); }
+  0%, 100% { translate: 0 0; }
+  15% { translate: -7px 0; }
+  30% { translate: 6px 0; }
+  45% { translate: -4px 0; }
+  60% { translate: 3px 0; }
+  80% { translate: -2px 0; }
 }
 /* the cabinet: green lacquer, a brass edge and a fine inlaid line */
 .cabinet {
@@ -611,9 +615,13 @@ button.stat-card:active, .round-btn:active, .town-chip:active, .side-btn:active 
     radial-gradient(120% 60% at 50% 0%, rgba(255, 255, 255, 0.1), transparent 60%) padding-box,
     linear-gradient(180deg, #17594a, #0e3d33 50%, #07241f) padding-box,
     var(--brass) border-box;
-  box-shadow: inset 0 0 30px rgba(0, 0, 0, 0.35), 0 22px 44px rgba(0, 0, 0, 0.55), 0 2px 0 rgba(0, 0, 0, 0.5);
+  box-shadow:
+    inset 0 0 30px rgba(0, 0, 0, 0.35),
+    0 2px 0 #c9a55c, 0 4px 0 #a8853f, 0 6px 0 #86692f, 0 8px 0 #654e22, 0 10px 0 #453516, 0 11px 0 #2a200c,
+    0 34px 50px rgba(0, 0, 0, 0.6);
+  transform-style: preserve-3d;
 }
-.cabinet::before { content: ''; position: absolute; inset: 8px; border-radius: 15px; border: 1px solid rgba(217, 185, 118, 0.45); pointer-events: none; }
+.cabinet::before { content: ''; position: absolute; inset: 8px; border-radius: 15px; border: 1px solid rgba(217, 185, 118, 0.45); pointer-events: none; transform: translateZ(4px); }
 .window {
   position: relative;
   flex: 1;
@@ -622,6 +630,7 @@ button.stat-card:active, .round-btn:active, .town-chip:active, .side-btn:active 
   padding: 5px;
   background: #05080c;
   box-shadow: inset 0 6px 14px rgba(0, 0, 0, 0.9), 0 0 0 1.5px var(--gold), 0 0 0 4px rgba(0, 0, 0, 0.35);
+  transform-style: preserve-3d;
 }
 .window::after {
   content: '';
@@ -630,9 +639,11 @@ button.stat-card:active, .round-btn:active, .town-chip:active, .side-btn:active 
   border-radius: 9px;
   background: linear-gradient(118deg, rgba(255, 255, 255, 0.22) 0 14%, rgba(255, 255, 255, 0.04) 15% 30%, transparent 31%);
   pointer-events: none;
+  /* the glass stands proud of the reels, so its shine slides as the machine leans */
+  transform: translateZ(16px);
 }
 .reels { position: absolute; left: 5px; top: 5px; width: calc(100% - 10px); height: calc(100% - 10px); display: block; }
-.bulbs { position: absolute; inset: -1px; pointer-events: none; }
+.bulbs { position: absolute; inset: -1px; pointer-events: none; transform: translateZ(10px); }
 .bulbs i {
   position: absolute;
   left: var(--x);
@@ -697,7 +708,7 @@ button.stat-card:active, .round-btn:active, .town-chip:active, .side-btn:active 
 .win-banner.quiet { font-family: var(--font); font-weight: 600; font-size: 13.5px; color: var(--muted); border-color: var(--hair); text-shadow: none; box-shadow: 0 10px 22px rgba(0, 0, 0, 0.5); }
 
 /* the pull lever, on screens with room for it */
-.lever { display: none; position: relative; flex: none; width: 44px; margin-left: 8px; background: none; padding: 0; }
+.lever { display: none; position: relative; flex: none; width: 44px; margin-left: 8px; background: none; padding: 0; transform: translateZ(14px); }
 .lever::before { content: ''; position: absolute; left: 17px; top: 14%; bottom: 14%; width: 10px; border-radius: 5px; background: linear-gradient(90deg, #7a5f2c, #f5e6bd 45%, #8d6f33); box-shadow: 0 6px 12px rgba(0, 0, 0, 0.45); }
 .lever i { position: absolute; left: 4px; top: 10%; width: 36px; height: 36px; border-radius: 50%; background: radial-gradient(circle at 35% 28%, var(--red-lite), var(--red) 58%, var(--red-dark)); box-shadow: 0 0 0 2px var(--gold), 0 10px 14px rgba(0, 0, 0, 0.5); transition: top 0.18s cubic-bezier(0.3, 0, 0.6, 1); }
 .lever.pulled i { top: calc(86% - 36px); }
@@ -705,13 +716,13 @@ button.stat-card:active, .round-btn:active, .town-chip:active, .side-btn:active 
   .lever { display: block; }
 }
 /* Chips keeps an eye on things from the top of the cabinet */
-.perch { position: absolute; z-index: 3; left: 0; top: -44px; width: 70px; background: none; padding: 0; transform-origin: 50% 100%; animation: perch 5s ease-in-out infinite; }
+.perch { position: absolute; z-index: 3; left: 0; top: -44px; width: 70px; background: none; padding: 0; transform-origin: 50% 100%; transform: translateZ(40px); animation: perch 5s ease-in-out infinite; }
 .perch img { display: block; width: 100%; filter: drop-shadow(0 5px 4px rgba(0, 0, 0, 0.45)); }
 .perch .badge { top: 4px; right: 2px; }
 @keyframes perch {
-  0%, 88%, 100% { transform: rotate(0); }
-  92% { transform: rotate(-6deg); }
-  96% { transform: rotate(4deg); }
+  0%, 88%, 100% { rotate: 0deg; }
+  92% { rotate: -6deg; }
+  96% { rotate: 4deg; }
 }
 .pay-btn {
   position: absolute;
@@ -732,9 +743,10 @@ button.stat-card:active, .round-btn:active, .town-chip:active, .side-btn:active 
   letter-spacing: 0.16em;
   text-transform: uppercase;
   box-shadow: 0 6px 12px rgba(0, 0, 0, 0.4);
+  transform: translateZ(30px);
 }
 .pay-btn svg { display: block; width: 15px; height: 15px; color: var(--gold); }
-.pay-btn:active { transform: scale(0.96); }
+.pay-btn:active { scale: 0.96; }
 
 /* the cabinet's own credit meter */
 .gauge {
@@ -748,6 +760,7 @@ button.stat-card:active, .round-btn:active, .town-chip:active, .side-btn:active 
   color: var(--ivory);
   text-align: left;
   box-shadow: inset 0 4px 9px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(217, 185, 118, 0.55);
+  transform: translateZ(5px);
 }
 .gauge img { flex: none; width: 26px; height: 26px; filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.4)); }
 .gauge b { flex: none; font-weight: 700; font-size: 20px; font-variant-numeric: tabular-nums; color: #fff; }
@@ -802,9 +815,9 @@ button.stat-card:active, .round-btn:active, .town-chip:active, .side-btn:active 
     radial-gradient(130% 100% at 50% 0%, var(--red-lite), var(--red) 46%, var(--red-dark)) padding-box,
     var(--brass) border-box;
   color: #fff;
-  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -10px 18px rgba(0, 0, 0, 0.28), 0 14px 30px rgba(0, 0, 0, 0.55), 0 0 0 6px rgba(217, 185, 118, 0.1);
+  box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -10px 18px rgba(0, 0, 0, 0.28), 0 2px 0 #9a7634, 0 5px 0 #6e5220, 0 8px 0 #3d2c10, 0 20px 30px rgba(0, 0, 0, 0.55), 0 0 0 6px rgba(217, 185, 118, 0.1);
   padding: 0;
-  transition: filter 0.2s, transform 0.1s;
+  transition: filter 0.2s, transform 0.08s, box-shadow 0.08s;
   overflow: hidden;
 }
 .spin-btn::before {
@@ -820,10 +833,10 @@ button.stat-card:active, .round-btn:active, .town-chip:active, .side-btn:active 
 }
 .spin-btn.ready { animation: beckon 2.6s ease-in-out infinite; }
 @keyframes beckon {
-  0%, 100% { box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -10px 18px rgba(0, 0, 0, 0.28), 0 14px 30px rgba(0, 0, 0, 0.55), 0 0 0 6px rgba(217, 185, 118, 0.12); }
-  50% { box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -10px 18px rgba(0, 0, 0, 0.28), 0 14px 30px rgba(0, 0, 0, 0.55), 0 0 0 14px rgba(217, 185, 118, 0); }
+  0%, 100% { box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -10px 18px rgba(0, 0, 0, 0.28), 0 2px 0 #9a7634, 0 5px 0 #6e5220, 0 8px 0 #3d2c10, 0 20px 30px rgba(0, 0, 0, 0.55), 0 0 0 6px rgba(217, 185, 118, 0.12); }
+  50% { box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -10px 18px rgba(0, 0, 0, 0.28), 0 2px 0 #9a7634, 0 5px 0 #6e5220, 0 8px 0 #3d2c10, 0 20px 30px rgba(0, 0, 0, 0.55), 0 0 0 14px rgba(217, 185, 118, 0); }
 }
-.spin-btn:active { transform: scale(0.96); filter: brightness(0.92); animation: none; }
+.spin-btn:active { transform: translateY(6px); filter: brightness(0.92); animation: none; box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.3), inset 0 -10px 18px rgba(0, 0, 0, 0.28), 0 2px 0 #3d2c10, 0 8px 14px rgba(0, 0, 0, 0.5); }
 .spin-face { position: relative; display: block; }
 .spin-face b { display: block; font-weight: 800; font-size: 26px; letter-spacing: 0.24em; margin-right: -0.24em; line-height: 1; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.3); }
 .spin-face small { display: block; margin-top: 6px; font-size: 10px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.85; font-variant-numeric: tabular-nums; }
@@ -1365,7 +1378,7 @@ h5 { margin: 16px 2px 8px; font-size: 10px; color: var(--gold); }
 #ui.landscape .tab.t-machine small { display: block; font-size: 9px; }
 #ui.landscape .tab.t-machine svg { display: none; }
 #ui.landscape .machine { padding: calc(var(--top, 60px) + 2px) 12px 22px; }
-#ui.landscape .m-col { width: min(100%, 860px); display: grid; grid-template-columns: 1.2fr 1fr; grid-template-rows: 1fr 1fr; gap: 12px 14px; }
+#ui.landscape .m-col { perspective: 1400px; width: min(100%, 860px); display: grid; grid-template-columns: 1.2fr 1fr; grid-template-rows: 1fr 1fr; gap: 12px 14px; }
 #ui.landscape .m-cab { grid-column: 1; grid-row: 1 / -1; max-height: none; min-height: 0; margin: 0; }
 #ui.landscape .topper { grid-column: 2; grid-row: 1; align-self: end; justify-content: center; padding: 3px 14px 5px; margin-bottom: 0; }
 #ui.landscape .topper .wordmark { font-size: 26px; }

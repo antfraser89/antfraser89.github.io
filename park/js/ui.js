@@ -317,6 +317,33 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     h('div', { class: 'm-col' }, topper, mCab,
       h('div', { class: 'marquee' }, townEl, h('div', { class: 'event-wrap' }, eventEl, h('div', { class: 'bar' }, eventBar))),
       h('div', { class: 'controls' }, betBox, spinBtn, autoBtn)));
+  // The cabinet leans toward the pointer, or sways a touch when left alone, so
+  // that the sign, the bulbs and the glass can be seen to sit at different depths.
+  const mCol = machine.querySelector('.m-col');
+  const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const tilt = { rx: 4, ry: 0, wantX: 4, wantY: 0, at: 0, shown: '' };
+  machine.addEventListener('pointermove', (e) => {
+    if (e.pointerType !== 'mouse') return;
+    const r = machine.getBoundingClientRect();
+    tilt.wantY = ((e.clientX - r.left) / r.width - 0.5) * 9;
+    tilt.wantX = 4 - ((e.clientY - r.top) / r.height - 0.5) * 7;
+    tilt.at = performance.now();
+  });
+  function lean(dt) {
+    if (still || !root.classList.contains('on-machine')) return;
+    const now = performance.now();
+    const idle = now - tilt.at > 2500;
+    const goX = idle ? 4 + Math.sin(now * 0.00043) * 1.3 : tilt.wantX;
+    const goY = idle ? Math.sin(now * 0.00031) * 3.4 : tilt.wantY;
+    const k = 1 - Math.exp(-dt * 6);
+    tilt.rx += (goX - tilt.rx) * k;
+    tilt.ry += (goY - tilt.ry) * k;
+    const shown = `${tilt.rx.toFixed(2)}|${tilt.ry.toFixed(2)}`;
+    if (shown === tilt.shown) return;
+    tilt.shown = shown;
+    mCol.style.setProperty('--rx', tilt.rx.toFixed(2) + 'deg');
+    mCol.style.setProperty('--ry', tilt.ry.toFixed(2) + 'deg');
+  }
   // tokens live in the cabinet's meter on the machine page and in the top bar elsewhere
   const tokenTarget = () => (root.classList.contains('on-machine') ? gauge : tokenCard);
   const fxCanvas = h('canvas', { id: 'fx', 'aria-hidden': 'true' });
@@ -1774,6 +1801,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
   // Every frame: reels and the coin counter.
   function frame(dt) {
     slot.draw(dt);
+    lean(dt);
     fx.draw(dt);
     const s = st();
     // while the reels turn, do not give the result away in the totals

@@ -155,8 +155,11 @@ export function createSlotView(canvas, hooks = {}) {
       spriteSize = symSize;
       sprites.clear();
     }
-    const rows = Math.ceil(h / cell / 2) + 1;
     const cy = h / 2;
+    // each reel is a drum: symbols ride round it, foreshortening as they turn away
+    const R = h * 0.57;
+    const arc = cell / R; // the angle between one symbol and the next
+    const rows = Math.ceil(1.5 / arc);
     const flashing = time < flashUntil;
     const beat = Math.sin((flashUntil - time) * 14);
     for (let i = 0; i < 3; i++) {
@@ -189,23 +192,26 @@ export function createSlotView(canvas, hooks = {}) {
       for (let o = -rows; o <= rows + 1; o++) {
         const idx = base + o;
         const sym = r.ring[((idx % RING) + RING) % RING];
-        const y = cy - (idx - r.pos) * cell;
-        if (y < -cell || y > h + cell) continue;
-        const off = Math.abs(idx - r.pos);
-        const centre = off < 0.02;
-        // symbols shrink a little toward the top and bottom of the drum
-        let size = symSize * (1 - Math.min(1, off) * 0.14);
+        const turn = (idx - r.pos) * arc;
+        if (Math.abs(turn) > 1.5) continue;
+        const y = cy - Math.sin(turn) * R;
+        const facing = Math.cos(turn);
+        const centre = Math.abs(idx - r.pos) < 0.02;
+        let size = symSize;
         if (flashing && centre && flashMask[i]) size *= 1.08 + beat * 0.08;
-        ctx.globalAlpha = r.spinning ? 1 - blur * 0.45 : centre ? 1 : 0.5;
-        if (blur > 0.05) {
-          // smear the symbol along its direction of travel
-          ctx.save();
-          ctx.translate(x + rw / 2, y);
-          ctx.scale(1, 1 + blur * 1.3);
-          stamp(sym, 0, 0, size);
-          ctx.restore();
-        } else {
-          stamp(sym, x + rw / 2, y, size);
+        ctx.globalAlpha = (r.spinning ? 1 - blur * 0.45 : centre ? 1 : 0.72) * Math.min(1, facing * 1.6);
+        ctx.save();
+        ctx.translate(x + rw / 2, y);
+        // squashed by the curve of the drum, and smeared along its travel at speed
+        ctx.scale(1, facing * (1 + blur * 1.3));
+        stamp(sym, 0, 0, size);
+        ctx.restore();
+        // the joint in the reel strip between this symbol and the next
+        const seam = (idx + 0.5 - r.pos) * arc;
+        if (Math.abs(seam) < 1.5) {
+          ctx.globalAlpha = 0.16 * Math.cos(seam);
+          ctx.fillStyle = '#5a4628';
+          ctx.fillRect(x, cy - Math.sin(seam) * R - 0.75, rw, 1.5);
         }
       }
       ctx.globalAlpha = 1;
@@ -228,10 +234,12 @@ export function createSlotView(canvas, hooks = {}) {
       }
       // shade the top and bottom so the reel looks curved
       const shade = ctx.createLinearGradient(0, 0, 0, h);
-      shade.addColorStop(0, 'rgba(48,30,14,0.62)');
-      shade.addColorStop(0.24, 'rgba(60,40,20,0)');
-      shade.addColorStop(0.76, 'rgba(60,40,20,0)');
-      shade.addColorStop(1, 'rgba(48,30,14,0.62)');
+      shade.addColorStop(0, 'rgba(20,12,6,0.9)');
+      shade.addColorStop(0.1, 'rgba(40,26,12,0.55)');
+      shade.addColorStop(0.32, 'rgba(60,40,20,0)');
+      shade.addColorStop(0.68, 'rgba(60,40,20,0)');
+      shade.addColorStop(0.9, 'rgba(40,26,12,0.55)');
+      shade.addColorStop(1, 'rgba(20,12,6,0.9)');
       ctx.fillStyle = shade;
       ctx.fillRect(x, 0, rw, h);
       // a soft highlight down the left of the drum

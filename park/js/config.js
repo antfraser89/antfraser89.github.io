@@ -2,7 +2,7 @@
 // game, the tests and the balance tool all read the same numbers.
 
 export const GAME_TITLE = 'Park!';
-export const VERSION = '4.0.0';
+export const VERSION = '4.1.0';
 export const SAVE_KEY = 'park.save.v1';
 // saves written under an earlier name are picked up once and carried over
 export const LEGACY_SAVE_KEYS = ['starlight-funfair.save.v2'];
