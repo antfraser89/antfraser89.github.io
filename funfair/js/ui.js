@@ -554,7 +554,10 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
 
   let prompted = -1; // the town we have already offered to leave
   function townDone() {
-    if (!E.townComplete(st())) return;
+    if (!E.townComplete(st())) {
+      nextPopup(); // already moved on: let anything queued behind this show
+      return;
+    }
     const s = st();
     audio.play('tour');
     modal([
@@ -1110,6 +1113,10 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     if (!R.dailyReady(st(), clock())) return;
     popup(() => {
       const s = st();
+      if (!R.dailyReady(s, clock())) {
+        nextPopup(); // collected in the meantime
+        return;
+      }
       const today = s.daily.day % DAILY.length;
       modal([
         h('div', { class: 'kicker' }, 'Daily gift'),
