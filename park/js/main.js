@@ -6,6 +6,7 @@ import { plotAt } from './layout.js';
 import * as E from './economy.js';
 import { money } from './format.js';
 import { createRenderer } from './render.js';
+import { createRenderer3D } from './world3d.js';
 import * as R from './rules.js';
 import * as S from './sim.js';
 import { newState, parseSave, serialize } from './state.js';
@@ -72,7 +73,16 @@ function replaceSave(next) {
 
 const audio = createAudio(() => world.state.settings);
 const canvas = document.getElementById('game');
-const renderer = createRenderer(canvas, world, { onTap, onBang: () => audio.play('bang') });
+// The park is drawn in 3D where the device can manage it, and flat where it cannot.
+const hooks = { onTap, onBang: () => audio.play('bang') };
+let renderer;
+try {
+  if (new URLSearchParams(location.search).has('flat')) throw new Error('flat renderer asked for');
+  renderer = createRenderer3D(canvas, world, hooks);
+} catch (err) {
+  console.info('Park!: using the flat renderer.', err && err.message);
+  renderer = createRenderer(canvas, world, hooks);
+}
 const ui = createUI({
   world,
   renderer,

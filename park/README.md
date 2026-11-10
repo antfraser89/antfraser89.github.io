@@ -6,7 +6,7 @@ It follows the "spin and build" formula of mobile games such as Carnival Tycoon,
 
 Play it at `https://antfraser89.github.io/park/` once this folder is on the default branch.
 
-No build step and no dependencies: the art is drawn with canvas paths and the audio is synthesised with Web Audio. The only thing fetched from elsewhere is the type (Playfair Display and Jost, from Google Fonts); without it the game falls back to system fonts. The folder is self-contained, so it can be moved to its own repository as-is.
+No build step. The park is rendered in real-time 3D with [three.js](https://threejs.org) (MIT licence), which is vendored in `js/vendor/` so nothing has to be installed; every model is built in code from simple solids, the audio is synthesised with Web Audio, and the only thing fetched from elsewhere is the type (Playfair Display and Jost, from Google Fonts). The folder is self-contained, so it can be moved to its own repository as-is.
 
 ## Run it locally
 
@@ -44,7 +44,11 @@ Each kind of town has its own map, and guests really walk it: they follow the pa
 | Winter | A frozen lake with skaters, and a lit fir where the fountain would be. |
 | Canal town | Cobbled quays either side of a canal, two bridges, strings of paper lanterns and barges working up and down. |
 
-The park is seen in perspective. The ground is painted flat and laid down receding into the distance; attractions, trees, lamps and guests stand up on it and shrink as they get further away, and each attraction throws a shadow of its own shape. Pinch or scroll to zoom: pulled back, the camera looks down on the whole park; close in, it swoops low enough to bring the horizon, the hills and the sky into view. Drag to pan and near things slide across far ones.
+The park is a real 3D scene. Every attraction is a model with moving parts: the big wheel turns with its cars hanging level, the carousel's horses rise and fall, the coaster train runs its loop, dodgems wander their floor. Guests are little figures walking the paths; trees, lamps, fences, the gate and the pier's legs are all solid. One sun lights it and everything casts a shadow. Water sits below the level of the ground and catches the light.
+
+Drag to pan, pinch or scroll to zoom, twist with two fingers (or shift-scroll, or drag with the right button) to turn the view; there are two buttons on the park page that turn it an eighth of a circle. Pulled back, the camera looks down on the whole park; close in, it drops low enough to look across it to the horizon.
+
+On a device without WebGL the game falls back to a flat renderer that draws the same map with painted sprites in perspective. Add `?flat` to the address to see it.
 
 The day runs from soft daylight through a long golden hour to a lamp-lit night. Shadows lengthen as the sun drops and every lamp, ride and lantern throws its own light after dark.
 
@@ -103,13 +107,18 @@ js/economy.js         pure maths: units, costs, bets, the gate
 js/rules.js           spins, rivals, building, cards, pet, events, league, daily gift
 js/layout.js          the map for each kind of town: paths, plots, water, and the guests' route network
 js/sim.js             the living park: guests, queues, rides, balloons
+js/world3d.js         the 3D park: scene, camera, sun and sky, water, labels, picking
+js/geo.js             a kit for building models from simple solids, baked to one mesh each
+js/models.js          the twelve attractions as 3D models, with their moving parts
+js/props3d.js         3D scenery: trees, lamps, gate, bandstand, boats, pier legs, the crowd
+js/vendor/            three.js (MIT)
 js/goals.js           missions
 js/state.js           save state, validation, export codes
 js/format.js          number and time formatting
-js/art.js             attractions, slot symbols, decorations
+js/art.js             2D art: slot symbols, cards' attraction pictures, the flat renderer's sprites
 js/scenery.js         landscape: water, bridges, piers, gardens, trees, boats, lamps
 js/cardart.js         the 54 card paintings and the card frame
-js/render.js          the park canvas: perspective camera, ground, standing sprites, shadows, sky, evening light, labels
+js/render.js          the painted ground (shared with the 3D park) and the flat fallback renderer
 js/slotview.js        the reels, drawn as drums
 js/fx.js              the coin shower
 js/ui.js              HUD, tab bar, the machine and park pages, sheets, mini-games, shop, modals
@@ -119,7 +128,7 @@ tests/                unit tests for the rules
 tools/balance.mjs     a bot that plays the real rules to check pacing
 ```
 
-Everything except `render.js`, `scenery.js`, `slotview.js`, `fx.js`, `ui.js`, `cardart.js`, `audio.js` and `main.js` runs without a browser, which is what lets the tests and the balance bot use the real rules.
+Everything except the renderers (`world3d.js`, `geo.js`, `models.js`, `props3d.js`, `render.js`, `scenery.js`), `slotview.js`, `fx.js`, `ui.js`, `cardart.js`, `audio.js` and `main.js` runs without a browser, which is what lets the tests and the balance bot use the real rules.
 
 ## How the numbers hang together
 

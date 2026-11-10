@@ -11,8 +11,8 @@ import { designAt, isOpen, mulberry32 } from './sim.js';
 
 const TAU = Math.PI * 2;
 const RAD = Math.PI / 180;
-const M = 240; // ground detail is painted this far beyond the world edge
-const GROUND_SCALE = 1.25;
+export const M = 240; // ground detail is painted this far beyond the world edge
+export const GROUND_SCALE = 1.25;
 const FOCAL = 760; // the lens: a smaller number is a wider angle and a steeper perspective
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -53,9 +53,11 @@ const cellHash = (gx, gy) => {
 };
 
 // Everything that stands up and never moves, to be depth-sorted with the guests.
-function buildScenery(L, theme, seed) {
+// `deep` leaves room behind each plot for a model with some depth to it.
+export function buildScenery(L, theme, seed, deep = false) {
   const r = mulberry32(seed);
   const items = [];
+  const onPlot = (x, y, pad) => L.onPlot(x, y, pad) || (deep && L.plots.some((p) => Math.abs(x - p.x) < 152 + pad && y > p.y - 216 - pad && y < p.y + 40 + pad));
   const gx = L.gate.x;
   const crowded = (x, y, gap) => items.some((it) => Math.hypot(it.x - x, it.y - y) < gap);
   items.push({ kind: 'gate', x: gx, y: W.gateY });
@@ -81,14 +83,14 @@ function buildScenery(L, theme, seed) {
       const off = board ? path.w / 2 - 8 : path.w / 2 + 13;
       const x = bx - ((by - ay) / len) * off * side;
       const y = by + ((bx - ax) / len) * off * side;
-      if (y > W.gateY - 130 || L.onPlot(x, y, 6) || L.wet(x, y) || crowded(x, y, 70)) continue;
+      if (y > W.gateY - 130 || onPlot(x, y, 6) || L.wet(x, y) || crowded(x, y, 70)) continue;
       if (!board && L.onPath(x, y, -5)) continue;
       run = 0;
       side = -side;
       items.push({ kind: 'lamp', x, y });
       const bxp = x + ((bx - ax) / len) * 34;
       const byp = y + ((by - ay) / len) * 34;
-      if (!board && r() < 0.45 && !L.onPath(bxp, byp, 2) && !L.onPlot(bxp, byp, 6) && !L.wet(bxp, byp)) items.push({ kind: 'bench', x: bxp, y: byp });
+      if (!board && r() < 0.45 && !L.onPath(bxp, byp, 2) && !onPlot(bxp, byp, 6) && !L.wet(bxp, byp)) items.push({ kind: 'bench', x: bxp, y: byp, ry: Math.atan2(bx - ax, by - ay) + (side > 0 ? Math.PI / 2 : -Math.PI / 2) });
     }
   }
 
@@ -99,7 +101,7 @@ function buildScenery(L, theme, seed) {
     const x = 44 + r() * (W.w - 88);
     const y = 84 + r() * (W.gateY - 110);
     if (L.noTreesAbove && y < L.noTreesAbove) continue;
-    if (L.wet(x, y) || L.wet(x, y - 30) || L.onPath(x, y, 26) || L.onPath(x, y - 42, 12) || L.onPlot(x, y, 18)) continue;
+    if (L.wet(x, y) || L.wet(x, y - 30) || L.onPath(x, y, 26) || L.onPath(x, y - 42, 12) || onPlot(x, y, 18)) continue;
     if (L.garden && inEllipse(L.garden, x, y, 40)) continue;
     if (L.plaza && inEllipse(L.plaza, x, y, 30)) continue;
     if (L.island && inEllipse(L.island, x, y, 30)) continue;
@@ -140,7 +142,7 @@ function buildScenery(L, theme, seed) {
 }
 
 // A small repeating tile of grass (or sand, snow, cobbles) that fills the whole view.
-function buildTile(theme, seed, paved) {
+export function buildTile(theme, seed, paved) {
   const size = 320;
   const cv = document.createElement('canvas');
   cv.width = cv.height = Math.round(size * GROUND_SCALE);
@@ -195,7 +197,8 @@ function buildTile(theme, seed, paved) {
 }
 
 // Everything flat: grass, water, paths, boards, gardens. Painted once per town.
-function buildGround(L, theme, seed, tileCv) {
+// `hollow` leaves the water out, as holes, for the 3D renderer to fill with the real thing.
+export function buildGround(L, theme, seed, tileCv, hollow = false) {
   const cv = document.createElement('canvas');
   cv.width = Math.round((W.w + 2 * M) * GROUND_SCALE);
   cv.height = Math.round((W.h + 2 * M) * GROUND_SCALE);
@@ -210,12 +213,14 @@ function buildGround(L, theme, seed, tileCv) {
   const stone = L.paved || theme.key === 'sand';
 
   for (const w of L.water) {
-    SC.paintWater(c, w, theme);
+    SC.paintWater(c, w, theme, hollow && !w.frozen);
     if (w.frozen) SC.paintIce(c, w, r);
   }
   if (L.island) SC.paintIsland(c, L.island, theme);
-  for (const d of L.decks) SC.paintDeck(c, d, theme, 0);
-  if (L.head) SC.paintPierHead(c, L.head, theme, 0);
+  if (!hollow) {
+    for (const d of L.decks) SC.paintDeck(c, d, theme, 0);
+    if (L.head) SC.paintPierHead(c, L.head, theme, 0);
+  }
   for (const d of L.decks) SC.paintDeck(c, d, theme, 1);
   if (L.head) SC.paintPierHead(c, L.head, theme, 1);
 
@@ -237,11 +242,11 @@ function buildGround(L, theme, seed, tileCv) {
   };
   if (L.garden) {
     SC.paintGarden(c, L.garden, theme, L.beds, r, snow);
-    if (L.feature && L.feature.kind === 'fountain') SC.paintFountainBasin(c, L.feature.x, L.feature.y - 4, theme);
+    if (!hollow && L.feature && L.feature.kind === 'fountain') SC.paintFountainBasin(c, L.feature.x, L.feature.y - 4, theme);
   }
   for (const p of L.plots) {
     const decked = L.decks.some((d) => p.x > d.x && p.x < d.x + d.w && p.y > d.y && p.y < d.y + d.h);
-    if (!decked) SC.paintPad(c, p.x, p.y, theme, L.paved ? 'cobble' : 'lawn');
+    if (!decked) SC.paintPad(c, p.x, p.y, theme, L.paved ? 'cobble' : 'lawn', hollow);
   }
   square({ x: gx, y: W.gateY - 4, rx: 134, ry: 66 });
   if (L.plaza) square(L.plaza);
@@ -1167,7 +1172,7 @@ export function createRenderer(canvas, world, hooks = {}) {
         }
         continue;
       }
-      if (proj(view.x, w.kind === 'sea' ? w.shoreY - 14 : 250) && pt.y > hz) ctx.fillRect(0, Math.max(0, hz), vw, pt.y - Math.max(0, hz));
+      if (proj(view.x, w.kind === 'sea' ? w.shoreY - 14 : 214) && pt.y > hz) ctx.fillRect(0, Math.max(0, hz), vw, pt.y - Math.max(0, hz));
     }
     return low;
   }

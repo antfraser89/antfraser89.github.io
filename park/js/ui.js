@@ -84,7 +84,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     if (!cache.has(key)) cache.set(key, make());
     return cache.get(key);
   };
-  const thumbURL = (design) => memo('thumb' + design.index, () => thumbnail(design, 88, 74).toDataURL());
+  const thumbURL = (design) => memo('thumb' + design.index, () => (renderer.thumbnail ? renderer.thumbnail(design, 88, 74) : thumbnail(design, 88, 74)).toDataURL());
   const packURL = (type) => memo('pack' + type, () => {
     const cv = document.createElement('canvas');
     cv.width = 160;
@@ -263,7 +263,12 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
   const townChipText = h('span');
   const townChipBar = h('i');
   const townChip = h('button', { class: 'town-chip', 'aria-label': 'Your park', onclick: () => { click(); openBuild(); } }, townChipText, h('div', { class: 'bar' }, townChipBar));
-  const parkUI = h('div', { class: 'park-ui' }, townChip, h('div', { class: 'park-side' }, petBtn, newsBtn), buildFab);
+  // in 3D the view can be turned
+  const TURN = (flip) => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"${flip ? ' style="transform:scaleX(-1)"' : ''}><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v4.5h-4.5"/></svg>`;
+  const turnBtns = renderer.rotate ? h('div', { class: 'park-turn' },
+    h('button', { class: 'turn-btn', 'aria-label': 'Turn the view left', html: TURN(true), onclick: () => { click(); renderer.rotate(-1); } }),
+    h('button', { class: 'turn-btn', 'aria-label': 'Turn the view right', html: TURN(false), onclick: () => { click(); renderer.rotate(1); } })) : null;
+  const parkUI = h('div', { class: 'park-ui' }, townChip, h('div', { class: 'park-side' }, petBtn, newsBtn), turnBtns, buildFab);
 
   // ---- the machine page -------------------------------------------------------
 

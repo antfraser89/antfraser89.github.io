@@ -72,8 +72,9 @@ export function paintPath(c, path, theme, rand) {
 }
 
 // A patch of lawn (or boards, or flagstones) for an attraction to stand on.
-export function paintPad(c, x, y, theme, kind) {
-  const [px, py, w, h] = [x - 140, y - 106, 280, 132];
+// `deep` is the bigger pad a 3D model stands on.
+export function paintPad(c, x, y, theme, kind, deep = false) {
+  const [px, py, w, h] = deep ? [x - 146, y - 208, 292, 234] : [x - 140, y - 106, 280, 132];
   if (kind === 'board') return; // the pier's decks are painted separately
   c.beginPath();
   c.roundRect(px - 3, py - 3, w + 6, h + 6, 26);
@@ -105,7 +106,7 @@ export function paintPad(c, x, y, theme, kind) {
 }
 
 // A lake, a canal, the sea or a sheet of ice.
-export function paintWater(c, water, theme) {
+export function paintWater(c, water, theme, hollow = false) {
   const { pts, kind } = water;
   let [y0, y1] = [Infinity, -Infinity];
   for (const p of pts) {
@@ -120,6 +121,14 @@ export function paintWater(c, water, theme) {
     c.lineWidth = kind === 'canal' ? 20 : 16;
     c.lineJoin = 'round';
     c.stroke();
+  }
+  if (hollow) {
+    // cut the water out of the ground altogether
+    c.globalCompositeOperation = 'destination-out';
+    c.fillStyle = '#000';
+    c.fill();
+    c.globalCompositeOperation = 'source-over';
+    return;
   }
   const g = c.createLinearGradient(0, y0, 0, y1);
   const [deep, shallow] = theme.water;

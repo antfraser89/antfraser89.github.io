@@ -84,6 +84,7 @@ svg { display: block; }
   cursor: grab;
 }
 #game:active { cursor: grabbing; }
+#labels { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 #fx { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 44; pointer-events: none; }
 
 /* small capitals, used for every label */
@@ -445,6 +446,22 @@ button.stat-card:active, .round-btn:active, .town-chip:active, .side-btn:active 
 .town-chip .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; border-radius: 0; }
 .town-chip .bar > i { border-radius: 0; }
 .park-side { position: absolute; left: 10px; bottom: 12px; display: flex; gap: 8px; }
+.park-turn { position: absolute; right: 10px; bottom: 78px; display: flex; gap: 8px; }
+.turn-btn {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--glass);
+  border: 1px solid var(--hair);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), var(--lift);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  color: var(--gold);
+}
+.turn-btn svg { width: 20px; height: 20px; }
+.turn-btn:active { transform: scale(0.94); filter: brightness(1.2); }
 .side-btn {
   position: relative;
   width: 54px;

@@ -274,7 +274,7 @@ function ring(key, opts) {
   for (const [dx, dy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) L.props.push({ kind: 'topiary', x: CX + dx * 112, y: cy + dy * 198 });
 
   if (opts.lake) {
-    const shore = [[-1600, -1400], [W.w + 1600, -1400], [W.w + 1600, 250], [W.w + 320, 250], [W.w - 40, 312], [930, 300], [770, 322], [700, 392], [640, 452], [CX, 470], [440, 452], [380, 392], [310, 322], [150, 300], [40, 312], [-320, 250], [-1600, 250]];
+    const shore = [[-1600, -1400], [W.w + 1600, -1400], [W.w + 1600, 214], [W.w + 320, 214], [W.w - 40, 262], [930, 250], [770, 284], [700, 392], [640, 452], [CX, 470], [440, 452], [380, 392], [310, 284], [150, 250], [40, 262], [-320, 214], [-1600, 214]];
     L.water.push({ kind: opts.frozen ? 'ice' : 'lake', pts: smooth(shore, true, 18), frozen: !!opts.frozen, sparkle: [CX, 230, 520, 200] });
     L.island = { x: CX, y: 236, rx: 104, ry: 62 };
     L.bridges.push({ x: CX, y: 402, w: 34, len: 150, angle: Math.PI / 2 });
@@ -284,7 +284,7 @@ function ring(key, opts) {
     } else {
       L.props.push({ kind: 'skaters', x: 250, y: 190 }, { kind: 'skaters', x: 840, y: 170 });
     }
-    L.fence.push([[18, 322], [18, W.gateY + 8], [CX - 104, W.gateY + 8]], [[CX + 104, W.gateY + 8], [W.w - 18, W.gateY + 8], [W.w - 18, 322]]);
+    L.fence.push([[18, 280], [18, W.gateY + 8], [CX - 104, W.gateY + 8]], [[CX + 104, W.gateY + 8], [W.w - 18, W.gateY + 8], [W.w - 18, 280]]);
   } else {
     // no water here: a bandstand on its own lawn, ringed by an orchard
     L.path([[CX, cy - ry], [CX, 300]], { w: 52, straight: true });
@@ -316,7 +316,7 @@ function pier(key) {
   for (const [s, y] of arms) {
     const px = CX + s * 316;
     L.plot(px, y, s, [[px - s * 128, y + 10], [CX + s * 46, y + 10]], { kind: 'board', spurTo: CX + s * 40 });
-    L.decks.push({ x: px - 150, y: y - 116, w: 300, h: 160, r: 16 });
+    L.decks.push({ x: px - 150, y: y - 212, w: 300, h: 256, r: 16 });
     L.decks.push({ x: Math.min(px - s * 150, CX + s * 40), y: y - 10, w: Math.abs(px - s * 150 - (CX + s * 40)), h: 62, r: 6 });
   }
   L.decks.push({ x: CX - 46, y: 250, w: 92, h: 1092 - 250 - 30, r: 4, spine: true });
@@ -344,7 +344,7 @@ function canal(key) {
   L.path(quay(-half - 44), { w: 50, kind: 'cobble' });
   L.path([[250, mid(250) + half + 44], [250, mid(250) - half - 44]], { w: 30, kind: 'cobble', straight: true });
   gateRow(L, 1240, 'cobble');
-  const spots = [[-1, 980], [1, 900], [-1, 500], [1, 410]];
+  const spots = [[-1, 980], [1, 930], [-1, 500], [1, 410]];
   for (const [s, y] of spots) {
     const px = CX + s * (y > 700 ? 340 : 316);
     L.plot(px, y, s, [[px - s * 128, y + 10], [CX + s * AVE, y + 10]], { kind: 'cobble' });
