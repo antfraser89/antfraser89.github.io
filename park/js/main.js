@@ -1,5 +1,4 @@
 // Boot, the frame loop, saving, and turning what happens into feedback.
-import { setDisplayFont } from './art.js';
 import { createAudio } from './audio.js';
 import { GAME_TITLE, LEGACY_SAVE_KEYS, OPENING_SPINS, PLOTS, SAVE_KEY, TUNING } from './config.js';
 import * as E from './economy.js';
@@ -39,10 +38,7 @@ const fontReady = await Promise.race([
     : false,
   new Promise((resolve) => setTimeout(() => resolve(false), 1800)),
 ]);
-if (fontReady) {
-  document.documentElement.classList.add('fonts-ready');
-  setDisplayFont(true);
-}
+if (fontReady) document.documentElement.classList.add('fonts-ready');
 
 const loaded = readSave();
 const state = loaded || newState(clock());

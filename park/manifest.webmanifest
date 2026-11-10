@@ -1,11 +1,11 @@
 {
   "name": "Park!",
   "short_name": "Park!",
-  "description": "Spin, build your park, pie your rivals and collect them all.",
+  "description": "Spin, build your park, win turns on the prize wheel and collect every card.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "orientation": "any",
+  "orientation": "portrait",
   "background_color": "#2aa6ff",
   "theme_color": "#2aa6ff",
   "icons": [

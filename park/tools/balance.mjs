@@ -20,7 +20,7 @@ state.seed = seed;
 const world = S.createWorld(state, rand);
 const tally = { fromRegen: 0, sessions: 0 };
 
-// The till: measure what a finished fair takes per hour, in units.
+// The gate: measure what a finished park takes per hour, in units.
 {
   const probe = newState(now);
   probe.plots.forEach((p) => { p.stage = STAGES; p.cap = true; });
@@ -28,8 +28,8 @@ const tally = { fromRegen: 0, sessions: 0 };
   for (let t = 0; t < 900; t += 0.1) S.step(w, 0.1);
   w.events.length = 0;
   const perHour = (E.idleRate(probe) * 3600) / E.unit(0);
-  console.log(`A finished fair takes ${perHour.toFixed(1)} units an hour from guests; a spin is worth ${E.spinEV().toFixed(2)} units.`);
-  console.log(`So the till is worth about ${(perHour / E.spinEV()).toFixed(1)} spins an hour.\n`);
+  console.log(`A finished park takes ${perHour.toFixed(1)} units an hour at the gate; a spin is worth ${E.spinEV().toFixed(2)} units.`);
+  console.log(`So the gate is worth about ${(perHour / E.spinEV()).toFixed(1)} spins an hour.\n`);
 }
 
 function spendCoins() {
@@ -38,7 +38,7 @@ function spendCoins() {
       const from = state.town;
       R.travel(state);
       S.resetWorld(world);
-      console.log(`  day ${(((now - 20000 * DAY) / DAY) + 1).toFixed(1).padStart(4)}  finished town ${from + 1} after ${state.stats.spins} spins (${state.stats.tokensSpent} tokens)`);
+      console.log(`  day ${(((now - 20000 * DAY) / DAY) + 1).toFixed(1).padStart(4)}  finished park ${from + 1} after ${state.stats.spins} spins (${state.stats.tokensSpent} spin tickets)`);
       continue;
     }
     let best = -1;
@@ -107,18 +107,18 @@ for (let d = 0; d < days; d++) {
     S.applyOffline(world, 2 * 3600); // the till, between sessions
     tally.idle = (tally.idle || 0) + state.coins - before;
     session();
-    // keep the fair's flow estimate alive for the till
+    // keep the park's flow estimate alive for the gate
     for (let t = 0; t < 120; t += 0.1) S.step(world, 0.1);
     world.events.length = 0;
   }
   now = dayStart + DAY;
   const owned = R.cardsOwned(state);
   console.log(
-    `day ${String(d + 1).padStart(2)}: town ${state.town + 1}, ${state.stats.spins} spins, ${state.stats.tokensSpent} tokens spent, ` +
+    `day ${String(d + 1).padStart(2)}: park ${state.town + 1}, ${state.stats.spins} spins, ${state.stats.tokensSpent} tickets spent, ` +
     `cards ${owned}/${CARDS.length} (season ${state.cards.season}), sets ${state.cards.sets.filter(Boolean).length}, ` +
-    `Chips lv ${state.pet.level}, mission #${state.mission.index}, coins ${fmt(state.coins)}`,
+    `pet lv ${state.pet.level}, mission #${state.mission.index}, coins ${fmt(state.coins)}`,
   );
 }
 
-console.log(`\nTokens from the timer: ${tally.fromRegen} of ${state.stats.tokensSpent} spent (${Math.round((tally.fromRegen / state.stats.tokensSpent) * 100)}%).`);
-console.log(`Attacks ${state.stats.attacks}, lucky dips ${state.stats.raids}, jackpots ${state.stats.jackpots}, pies taken ${state.stats.pied}, pies blocked ${state.stats.shielded}.`);
+console.log(`\nSpin tickets from the timer: ${tally.fromRegen} of ${state.stats.tokensSpent} spent (${Math.round((tally.fromRegen / state.stats.tokensSpent) * 100)}%).`);
+console.log(`Pearl dives ${state.stats.raids}, prize wheel turns ${state.wheel.spun}, jackpots ${state.stats.jackpots}.`);

@@ -195,7 +195,7 @@ export const PRODUCTS = [
   { id: 'coins', group: 'bundle', name: 'Sack of coins', price: '£2.99', grant: { coins: 400 } },
   {
     id: 'noads', group: 'extra', name: 'No interruptions', price: '£3.99', once: true, noAds: true,
-    desc: 'Removes the adverts between towns. Adverts you choose to watch for a reward stay.',
+    desc: 'Removes the adverts between parks. Adverts you choose to watch for a reward stay.',
   },
 ];
 export const ADS = { tokens: 25, perDay: 6 };
@@ -203,47 +203,56 @@ export const ADS = { tokens: 25, perDay: 6 };
 // ---- cards ------------------------------------------------------------------
 
 // Nine cards a set: rarity is the star count; the five-star card is the gold one.
+// The pictures are the painted cards from the album mock-ups, packed nine to a
+// sheet (img/cards-<set>.webp); each card names its cell on the sheet, counted
+// along the rows from the top left.
 const RARITY = [1, 1, 2, 2, 3, 3, 4, 4, 5];
-const SET = (id, name, color, reward, cards) => ({ id, name, color, reward, cards });
+const SET = (id, name, color, reward, cards) => ({ id, name, color, reward, sheet: 'cards-' + id, cards });
 
 export const CARD_SETS = [
-  SET('sweets', 'Sweet Tooth', '#e93d82', 40, [
-    ['toffeeapple', 'Toffee Apple'], ['lolly', 'Swirly Lolly'], ['floss', 'Candy Floss'], ['rock', 'Stick of Rock'],
-    ['icecream', 'Ninety-Nine'], ['doughnut', 'Hot Doughnut'], ['popcorn', 'Popcorn Tub'], ['humbug', 'Mint Humbug'],
-    ['sundae', 'Knickerbocker Glory'],
+  SET('pond', 'Pond Life', '#2aa6c9', 40, [
+    [8, 'Peeping Frog'], [5, 'Sunset Fish'], [6, 'Busy Beaver'], [3, 'Darting Dragonfly'],
+    [4, 'Paddling Turtle'], [0, 'Lilypad Leaper'], [2, 'Patient Heron'], [1, 'Floating Otter'], [7, 'Bath-time Duck'],
   ]),
-  SET('prizes', 'Every One a Winner', '#3e63dd', 60, [
-    ['duck', 'Rubber Duck'], ['coconut', 'Coconut'], ['hoopla', 'Hoopla Ring'], ['mallet', 'Test-Your-Strength Mallet'],
-    ['dart', 'Lucky Dart'], ['cans', 'Tin Can Alley'], ['goldfish', 'Goldie'], ['yoyo', 'Light-up Yo-yo'],
-    ['teddy', 'Giant Teddy'],
+  SET('desert', 'Desert Days', '#e9a23b', 60, [
+    [5, 'Flowering Cactus'], [2, 'Sunning Gecko'], [8, 'Thorny Lizard'], [6, 'Coiled Snake'],
+    [3, 'Sand Chick'], [7, 'Desert Tortoise'], [1, 'Little Camel'], [0, 'Fennec Pup'], [4, 'Big-eared Fox'],
   ]),
-  SET('showfolk', 'The Showfolk', '#8e4ec6', 90, [
-    ['tophat', "Ringmaster's Hat"], ['megaphone', 'Megaphone'], ['tickets', 'Roll of Tickets'], ['clubs', 'Juggling Clubs'],
-    ['dumbbell', "Strongman's Dumbbell"], ['crystal', 'Crystal Ball'], ['drum', 'Big Bass Drum'], ['moustache', 'Waxed Moustache'],
-    ['organ', 'Barrel Organ'],
+  SET('hatch', 'Hatch Day', '#7c6ee6', 80, [
+    [8, 'Full Nest'], [1, 'Green Peeper'], [0, 'First Roar'], [7, 'Blue Splash'],
+    [5, 'Purple Stretch'], [3, 'Bluebird Baby'], [4, 'Tiny Tricorn'], [6, 'Violet Horns'], [2, 'Pink Flutter'],
   ]),
-  SET('lights', 'Bright Lights', '#f76b15', 120, [
-    ['bulb', 'Fairground Bulb'], ['lantern', 'Paper Lantern'], ['bunting', 'String of Bunting'], ['sparkler', 'Sparkler'],
-    ['rocket', 'Sky Rocket'], ['glitter', 'Glitter Ball'], ['moon', 'Harvest Moon'], ['neon', 'Neon Star'],
-    ['catherine', 'Catherine Wheel'],
+  SET('tropic', 'Tropical Crew', '#2fae5a', 100, [
+    [0, 'Tree Frog'], [7, 'Emerald Snake'], [8, 'Blue Dart Frog'], [6, 'Cheeky Monkey'],
+    [2, 'Sleepy Sloth'], [5, 'Toucan'], [1, 'Scarlet Macaw'], [3, 'Blue Morpho'], [4, 'Jaguar Cub'],
   ]),
-  SET('seaside', 'Seaside Special', '#12a594', 160, [
-    ['bucket', 'Bucket and Spade'], ['beachball', 'Beach Ball'], ['deckchair', 'Deckchair'], ['chipcone', 'Cone of Chips'],
-    ['crab', 'Cheeky Crab'], ['sandcastle', 'Sandcastle'], ['postcard', 'Saucy Postcard'], ['lighthouse', 'Lighthouse'],
-    ['gull', 'Chips the Gull'],
+  SET('garden', 'Garden Party', '#ec6aa0', 130, [
+    [8, 'Ladybird Hat'], [2, 'Lotus Frog'], [1, 'Tortoise in Bloom'], [3, 'Bluebird Bonnet'],
+    [4, 'Sunday Squirrel'], [6, 'Sunflower Hedgehog'], [5, 'Dapper Fox'], [7, 'Daisy Butterfly'], [0, 'Bonnet Bunny'],
   ]),
-  SET('rides', 'Grand Rides', '#e5484d', 220, [
-    ['ride:teacups', 'Teacup Twirl'], ['ride:dodgems', 'Dodgems'], ['ride:helter', 'Helter Skelter'], ['ride:ghost', 'Ghost Train'],
-    ['ride:waltzer', 'Whirling Waltzer'], ['ride:carousel', 'Galloping Carousel'], ['ride:coaster', 'Comet Coaster'],
-    ['ride:wheel', 'Big Wheel'], ['bandstand', 'The Bandstand'],
+  SET('leafy', 'Leafy Lane', '#5fb236', 160, [
+    [6, 'Little Sprout'], [5, 'Happy Frog'], [8, 'Bumblebee'], [0, 'Leaf Turtle'],
+    [4, 'Curly Chameleon'], [2, 'Blossom Frog'], [7, 'Calling Toucan'], [1, 'Swinging Sloth'], [3, 'Garden Sprite'],
+  ]),
+  SET('grotto', 'Glitter Grotto', '#6a5be0', 200, [
+    [6, 'Grotto Crab'], [3, 'Pink Bat'], [4, 'Sparkle Hedgehog'], [0, 'Jewel Turtle'],
+    [5, 'Glass Serpent'], [7, 'Lantern Owl'], [1, 'Frosty Fox'], [8, 'Grotto Giant'], [2, 'Crystal Deer'],
+  ]),
+  SET('ember', 'Little Embers', '#f0642c', 250, [
+    [3, 'Lava Egg'], [1, 'Flame Sprite'], [5, 'Spark Cub'], [7, 'Horned Cub'],
+    [2, 'Blaze Pup'], [8, 'Magma Tortoise'], [0, 'Ember Dragon'], [4, 'Sun Dragon'], [6, 'Phoenix Chick'],
+  ]),
+  SET('lava', 'Lava Lodge', '#d8432c', 320, [
+    [1, 'Steam Puff'], [6, 'Spotted Gecko'], [2, 'Boulder Tortoise'], [0, 'Lava Paddler'],
+    [3, 'Crystal-back Lizard'], [7, 'Stone Rhino'], [4, 'Flame Parrot'], [5, 'Cinder Fox'], [8, 'Mountain Keeper'],
   ]),
 ];
 
 export const CARDS = [];
 CARD_SETS.forEach((set, s) => {
   set.index = s;
-  set.cards = set.cards.map(([art, name], k) => {
-    const card = { id: `${set.id}-${k}`, set: s, slot: k, art, name, stars: RARITY[k], gold: RARITY[k] === 5 };
+  set.cards = set.cards.map(([cell, name], k) => {
+    const card = { id: `${set.id}-${k}`, set: s, slot: k, sheet: set.sheet, cell, name, stars: RARITY[k], gold: RARITY[k] === 5 };
     CARDS.push(card);
     return card;
   });
@@ -270,7 +279,9 @@ export const ALBUM_REWARD = { tokens: 500 };
 // ---- pet --------------------------------------------------------------------
 
 export const PET = {
-  name: 'Chips',
+  name: 'Puddle',
+  kind: 'duck',
+  card: 'pond-8', // the pet's portrait is this card's painting
   xpFor: (level) => 6 + level * 6 + level * level,
   maxLevel: 30,
   raidBonusPerLevel: 0.05,
@@ -281,10 +292,10 @@ export const PET = {
 // ---- events -----------------------------------------------------------------
 
 export const EVENT_THEMES = [
-  { name: 'Bulb Rush', blurb: 'Every spin lights another bulb.' },
+  { name: 'Tide Rush', blurb: 'Every spin brings the tide a little higher.' },
   { name: 'Ticket Frenzy', blurb: 'Tear through the roll, one spin at a time.' },
-  { name: 'Bunting Bash', blurb: 'String it from the gate to the bandstand.' },
-  { name: 'Organ Marathon', blurb: 'Keep the organ wheezing all weekend.' },
+  { name: 'Shell Hunt', blurb: 'Comb the beach from the pier to the rocks.' },
+  { name: 'Sunset Splash', blurb: 'Keep the park busy until the lights come on.' },
 ];
 export const EVENT_POINTS = { spin: 1, triple: 3, attack: 8, raid: 12, jackpot: 25 };
 // reward: tokens, coins (in units), treats or a pack

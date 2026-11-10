@@ -1851,10 +1851,10 @@ body::before { content: ''; position: fixed; inset: -60px; background: url(../im
 #ui .stat-card.coins { left: 93px; width: 162px; }
 #ui .stat-card.tokens { left: 260px; width: 83px; display: flex; }
 #ui .round-btn { left: 349px; width: 39px; padding: 0; justify-content: center; color: #8a4b12; }
-#ui.on-machine .stat-card.stars { width: 95px; }
-#ui.on-machine .stat-card.coins { left: 106px; width: 146px; }
-#ui.on-machine .stat-card.tokens { left: 261px; width: 82px; }
-#ui.on-machine .round-btn { left: 347px; }
+#ui.hud-machine .stat-card.stars { width: 95px; }
+#ui.hud-machine .stat-card.coins { left: 106px; width: 146px; }
+#ui.hud-machine .stat-card.tokens { left: 261px; width: 82px; }
+#ui.hud-machine .round-btn { left: 347px; }
 #ui .round-btn svg { width: 22px; height: 22px; }
 #ui .ico-wrap, #ui .ico-wrap .ico { width: 27px; height: 27px; }
 #ui .ico-wrap .ico { object-fit: contain; }
@@ -2046,7 +2046,40 @@ body::before { content: ''; position: fixed; inset: -60px; background: url(../im
 #ui .modal { width: 350px; }
 #ui .modal-host { height: 130px; margin: -76px auto -4px; }
 #ui .zoom-card { width: 250px; }
-#ui.on-machine .stat-card.tokens { display: flex; }
+#ui.on-machine .stat-card.tokens, #ui.hud-machine .stat-card.tokens { display: flex; }
 .tub img { height: 62px; object-fit: contain; }
 .tub.empty img { filter: grayscale(1) brightness(0.8); opacity: 0.7; }
 .dive-how { font-size: 15px !important; color: #fff !important; margin-bottom: 14px !important; }
+
+
+/* ---- painted cards ---------------------------------------------------------
+   A card is built in the page from its set's painted sheet, so it stays sharp
+   at any size. Sizes inside are in cqw: hundredths of the card's own width. */
+.cardf { position: relative; display: block; width: 100%; aspect-ratio: 150 / 204; container-type: inline-size; border-radius: 9% / 6.6%; background: linear-gradient(#fffaf0, #f6e8c9); box-shadow: inset 0 0 0 1.5px #fff, inset 0 0 0 2.5px #e2c98f, 0 3px 0 #c9a765, 0 6px 10px rgba(15, 40, 110, 0.28); color: #5a3418; text-align: center; }
+.cardf-art { position: absolute; left: 6cqw; right: 6cqw; top: 10cqw; aspect-ratio: 1; border-radius: 7cqw; background-size: 300% 300%; background-repeat: no-repeat; box-shadow: inset 0 0 0 1px rgba(60, 30, 0, 0.25); }
+.cardf-gems { position: absolute; left: 0; right: 0; top: 1.5cqw; z-index: 2; display: flex; justify-content: center; gap: 1cqw; }
+.cardf-gems i { width: 12.5cqw; height: 12.5cqw; background: linear-gradient(135deg, #bfeaff 0 34%, #49b5ff 34% 66%, #1f7fe0 66%); clip-path: polygon(50% 100%, 0 38%, 22% 6%, 78% 6%, 100% 38%); filter: drop-shadow(0 0.8cqw 0 rgba(10, 50, 120, 0.55)); }
+.cardf.gold .cardf-gems i { background: linear-gradient(135deg, #fff3b0 0 34%, #ffc83d 34% 66%, #e08a00 66%); filter: drop-shadow(0 0.8cqw 0 rgba(120, 60, 0, 0.6)); }
+.cardf-tag { position: absolute; right: 2cqw; top: 6cqw; z-index: 2; min-width: 30cqw; padding: 1.5cqw 3cqw 2cqw; border-radius: 5cqw; background: #fffaf0; box-shadow: 0 0 0 1px #d8bd85, 0 1.2cqw 0 rgba(90, 52, 24, 0.35); font: 800 12.5cqw/1.15 'Baloo 2', system-ui, sans-serif; color: #8a3b12; transform: rotate(8deg); }
+.cardf-name { position: absolute; left: 4cqw; right: 4cqw; top: 100cqw; bottom: 3cqw; display: grid; place-items: center; font: 800 10.4cqw/1.08 'Baloo 2', system-ui, sans-serif; text-wrap: balance; }
+.cardf.gold { background: linear-gradient(#fff6c9, #ffd45e); box-shadow: inset 0 0 0 1.5px #fff8d8, inset 0 0 0 3px #f0a400, 0 3px 0 #b9770a, 0 6px 12px rgba(120, 70, 0, 0.35); }
+.cardf.missing { background: #efe6d2; box-shadow: inset 0 0 0 1.5px #fff, inset 0 0 0 2.5px #d9cdb2, 0 3px 0 #c5b592; color: #a09173; }
+.cardf.missing .cardf-art { filter: grayscale(1) brightness(0.55) contrast(0.55); opacity: 0.32; }
+.cardf.missing .cardf-gems i { background: #cfc5ae; filter: none; }
+.cardf.missing .cardf-tag { color: #a09173; }
+.card-cell .cardf { transition: transform 0.15s; }
+.card-grid { gap: 12px 10px; padding: 4px 2px 10px; }
+.flip-front.cardf { position: absolute; inset: 0; width: 100%; height: 100%; }
+.zoom-inner .cardf { width: 100%; }
+.zoom-inner, .zoom-inner::after { border-radius: 22px; }
+.zoom-card { width: 230px; }
+/* the set's cover: the middle band of its gold card, clear of the painted corner tag */
+div.set-art { position: relative; overflow: hidden; aspect-ratio: 220 / 150; }
+div.set-art i { display: block; width: 100%; aspect-ratio: 1; margin-top: -26%; background-size: 300% 300%; background-repeat: no-repeat; }
+.sets { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.set-tile .set-name { font-size: 12.5px; margin: -14px 5px 0; padding: 2px 3px 3px; }
+.set-tile .dots { margin: 7px 8px 4px; }
+.set-tile .set-state { font-size: 10.5px; line-height: 1.2; padding: 0 4px; }
+.set-tile .btn { position: static; margin: 2px auto 0; }
+div.pet-pic { position: relative; container-type: inline-size; width: 112px; height: 112px; flex: none; border-radius: 26px; background-size: 300% 300%; background-repeat: no-repeat; border: 4px solid #fff; box-shadow: 0 4px 0 #d2b06e, 0 8px 14px rgba(15, 40, 110, 0.3); filter: none; }
+div.pet-pic .cardf-tag { top: -2cqw; right: -3cqw; min-width: 34cqw; font-size: 13cqw; }

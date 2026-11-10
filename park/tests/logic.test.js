@@ -187,7 +187,7 @@ test('packs give cards from unlocked sets; spares become stars', () => {
   }
   assert.equal(state.cards.stars, stars);
   assert.ok(stars > 0);
-  state.town = 5;
+  state.town = CARD_SETS.length - 1;
   assert.equal(R.unlockedSets(state).length, CARD_SETS.length);
 });
 
@@ -353,12 +353,12 @@ test('hydrate survives junk and clamps bad values', () => {
   }
   const s = hydrate({
     plots: [{ stage: 99, splat: true }, { stage: 0, splat: true }],
-    cards: { owned: { 'sweets-0': 2, nonsense: 5 }, packs: { gold: 1e9 } },
+    cards: { owned: { 'pond-0': 2, nonsense: 5 }, packs: { gold: 1e9 } },
     pending: { type: 'raid', rival: {}, tubs: [1, 2, 3] },
   });
   assert.equal(s.plots[0].stage, STAGES);
   assert.equal(s.plots[1].splat, false);
-  assert.deepEqual(s.cards.owned, { 'sweets-0': 2 });
+  assert.deepEqual(s.cards.owned, { 'pond-0': 2 });
   assert.equal(s.cards.packs.gold, 9999);
   assert.equal(s.pending, null, 'a broken pending raid is dropped rather than trusted');
   assert.equal(parseSave('{broken'), null);

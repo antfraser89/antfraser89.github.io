@@ -6,8 +6,6 @@ import {
   ADS, CARDS, CARD_SETS, CURRENCY, DAILY, EVENT_MILESTONES, GAME_TITLE, GUEST_LOOKS, LEAGUE_PRIZES, PACKS, PARKS_TOTAL, PAY, PET, PLOTS, STAGES, SYMBOL_ART, WHEEL,
   PRODUCTS, STORE_PREVIEW, TOWN_REWARD, TUNING, UPGRADE_REWARDS, VAULT, VERSION, setUnlockTown, townInfo,
 } from './config.js';
-import * as A from './art.js';
-import { cardImage, symbolImage } from './cardart.js';
 import * as E from './economy.js';
 import { createFx } from './fx.js';
 import { fmt, fmtClock, fmtTime, money } from './format.js';
@@ -83,22 +81,49 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     if (!cache.has(key)) cache.set(key, make());
     return cache.get(key);
   };
+  // A card pack: a foil pouch, drawn as a small SVG so it is sharp at any size.
+  const PACK_FOIL = {
+    bronze: ['#f0a064', '#c66a2c', '#7c3a12', '#ffd9b0'],
+    silver: ['#eef3fa', '#aab8cc', '#5f6f8a', '#ffffff'],
+    gold: ['#fff0a0', '#ffc02e', '#b86a00', '#fffbe0'],
+  };
   const packURL = (type) => memo('pack' + type, () => {
-    const cv = document.createElement('canvas');
-    cv.width = 160;
-    cv.height = 220;
-    A.drawPack(cv.getContext('2d'), 80, 112, 2, type);
-    return cv.toDataURL();
+    const [hi, mid, lo, shine] = PACK_FOIL[type] || PACK_FOIL.bronze;
+    const teeth = (y, dir) => Array.from({ length: 13 }, (_, i) => `${18 + i * 10.33},${y + (i % 2 ? dir * 7 : 0)}`).join(' ');
+    const star = Array.from({ length: 10 }, (_, i) => { const r = i % 2 ? 11 : 26; const a = -Math.PI / 2 + (i * Math.PI) / 5; return `${(80 + Math.cos(a) * r).toFixed(1)},${(112 + Math.sin(a) * r).toFixed(1)}`; }).join(' ');
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 220">
+<defs><linearGradient id="f" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${hi}"/><stop offset=".5" stop-color="${mid}"/><stop offset="1" stop-color="${lo}"/></linearGradient>
+<linearGradient id="s" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${shine}" stop-opacity="0"/><stop offset=".5" stop-color="${shine}" stop-opacity=".75"/><stop offset="1" stop-color="${shine}" stop-opacity="0"/></linearGradient></defs>
+<ellipse cx="80" cy="208" rx="52" ry="7" fill="#0b2a66" opacity=".28"/>
+<polygon points="${teeth(14, 1)} 142,196 ${teeth(196, -1).split(' ').reverse().join(' ')} 18,14" fill="url(#f)" stroke="${lo}" stroke-width="4" stroke-linejoin="round"/>
+<rect x="20" y="32" width="120" height="5" fill="${lo}" opacity=".35"/><rect x="20" y="180" width="120" height="5" fill="${lo}" opacity=".35"/>
+<polygon points="34,40 62,40 40,178 22,178 22,60" fill="url(#s)" opacity=".8"/>
+<circle cx="80" cy="112" r="40" fill="#fffaf0" stroke="${lo}" stroke-width="4"/>
+<circle cx="80" cy="112" r="33" fill="none" stroke="${mid}" stroke-width="2" stroke-dasharray="3 5"/>
+<polygon points="${star}" fill="${mid}" stroke="${lo}" stroke-width="3" stroke-linejoin="round"/>
+</svg>`;
+    return 'data:image/svg+xml,' + encodeURIComponent(svg);
   });
   // the pearl dive's shells: closed, opened on treasure, or opened on nothing
   const tubURL = (open, found) => (open && found ? symURL('sack') : symURL('barrel'));
-  const gullURL = (happy) => memo('gull' + happy, () => {
-    const cv = document.createElement('canvas');
-    cv.width = 300;
-    cv.height = 240;
-    A.drawGull(cv.getContext('2d'), 130, 220, 2, 0.5, happy);
-    return cv.toDataURL();
-  });
+  // One cell of a set's painted sheet, as a background.
+  const cellStyle = (card) => `background-image:url(${ART(card.sheet)});background-position:${(card.cell % 3) * 50}% ${Math.floor(card.cell / 3) * 50}%`;
+  // A card: its painting, its name, a gem for each star, and a corner tag.
+  // The tag sits where the mock-up painted a count, so it is always there.
+  function cardFace(card, cls = '') {
+    const tag = h('b', { class: 'cardf-tag' }, '×1');
+    const el = h('div', { class: `cardf ${cls}${card.gold ? ' gold' : ''}`, role: 'img', 'aria-label': card.name },
+      h('div', { class: 'cardf-gems' }, Array.from({ length: card.stars }, () => h('i'))),
+      h('div', { class: 'cardf-art', style: cellStyle(card) }),
+      tag,
+      h('div', { class: 'cardf-name' }, card.name));
+    el.setCount = (n) => {
+      toggle(el, 'missing', n < 1);
+      setText(tag, n < 1 ? '?' : '×' + n);
+    };
+    return el;
+  }
+  const PET_CARD = CARDS.find((c) => c.id === PET.card) || CARDS[0];
   const faceURL = (id) => memo('face' + id, () => {
     const cv = document.createElement('canvas');
     cv.width = cv.height = 96;
@@ -349,6 +374,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     const page = !!(current && current.page);
     toggle(parkUI, 'on', base === 'park' && !page);
     toggle(root, 'on-machine', base === 'machine' && !page);
+    toggle(root, 'hud-machine', base === 'machine'); // the painted bar behind it is laid out differently on each page
   }
 
   // Switch between the machine and the park.
@@ -596,7 +622,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
         fly(TOKEN, reelCanvas, tokenTarget(), 6);
         break;
       case 'treats':
-        say(`+${res.treats} chips for ${PET.name}`, 'treats');
+        say(`+${res.treats} cherries for ${PET.name}`, 'treats');
         audio.play('token');
         fly(CHIPS, reelCanvas, perch, 5);
         break;
@@ -1081,7 +1107,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
         refresh();
       } }, 'Claim');
       const el = h('button', { class: 'set-tile', style: `--set:${set.color}`, onclick: () => { click(); openSet(s); } },
-        h('img', { class: 'set-art', src: ART('cover-' + (['sweets', 'games', 'show', 'lights', 'seaside', 'rides'][set.index] || 'rides')), alt: '' }),
+        h('div', { class: 'set-art' }, h('i', { style: cellStyle(set.cards[8]) })),
         h('div', { class: 'set-name' }, set.name), h('div', { class: 'dots' }, dots), state, claim);
       return { s, set, dots, state, claim, el };
     });
@@ -1109,7 +1135,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
         });
         const complete = R.setComplete(s, t.s);
         show(t.claim, complete && !s.cards.sets[t.s]);
-        setHTML(t.state, !unlocked ? `Arrives in ${townInfo(setUnlockTown(t.s)).name}`
+        setHTML(t.state, !unlocked ? `Opens at park ${setUnlockTown(t.s) + 1}`
           : s.cards.sets[t.s] ? 'Complete ✓'
             : complete ? '' : `${R.setCount(s, t.s)}/9 · prize ${TOKEN}${t.set.reward}`);
       }
@@ -1119,16 +1145,15 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
   function openSet(s) {
     const set = CARD_SETS[s];
     const cells = set.cards.map((c) => {
-      const image = h('img', { alt: c.name });
-      const count = h('i', { class: 'count' });
+      const face = cardFace(c);
       const el = h('div', { class: 'card-cell', onclick: () => {
         const n = st().cards.owned[c.id] || 0;
         if (n > 0) {
           click();
           zoomCard(c, n);
         }
-      } }, image, count);
-      return { c, image, count, el };
+      } }, face);
+      return { c, face, el };
     });
     const note = h('div', { class: 'note' });
     setSheet('set:' + s, set.name, [note, h('div', { class: 'card-grid' }, cells.map((c) => c.el))], () => {
@@ -1136,14 +1161,8 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
       setHTML(note, `Collect all nine for <b>${TOKEN}${set.reward}</b>. The five-star card is gold: it only comes from gold packs and the star vault.`);
       for (const cell of cells) {
         const n = state.cards.owned[cell.c.id] || 0;
-        const key = n > 0 ? 1 : 0;
-        if (cell.image.__k !== key) {
-          cell.image.__k = key;
-          cell.image.src = cardImage(cell.c, n > 0);
-        }
+        cell.face.setCount(n);
         toggle(cell.el, 'has', n > 0);
-        show(cell.count, n > 1);
-        setText(cell.count, '×' + n);
       }
     }, { back: openAlbum, page: true, tab: 'album' });
   }
@@ -1198,7 +1217,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
       const el = h('div', { class: 'flip' + (def.gold ? ' gold' : '') },
         h('div', { class: 'flip-inner' },
           h('div', { class: 'flip-back' }),
-          h('img', { class: 'flip-front', src: cardImage(def, true), alt: def.name })),
+          cardFace(def, 'flip-front')),
         h('div', { class: 'shine' }), tag);
       return { el, def, c };
     });
@@ -1264,10 +1283,11 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     if (toLeague) sheetBody.querySelector('.league-banner').scrollIntoView({ block: 'start' });
   }
 
-  // ---- Chips ------------------------------------------------------------------
+  // ---- the pet ----------------------------------------------------------------
 
   function openPet() {
-    const pic = h('img', { class: 'pet-pic', src: gullURL(false), alt: '' });
+    const petTag = h('b', { class: 'cardf-tag' });
+    const pic = h('div', { class: 'pet-pic', style: cellStyle(PET_CARD) }, petTag);
     const level = h('h3');
     const bar = h('i');
     const xp = h('span');
@@ -1276,14 +1296,12 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
       const fed = R.feedPet(st());
       if (!fed) return nope();
       audio.play(fed.levels ? 'milestone' : 'token');
-      pic.src = gullURL(true);
-      pic.animate([{ transform: 'translateY(0)' }, { transform: 'translateY(-14px)' }, { transform: 'translateY(0)' }], { duration: 360 });
-      setTimeout(() => { pic.src = gullURL(false); }, 1400);
+      pic.animate([{ transform: 'translateY(0) rotate(0)' }, { transform: 'translateY(-14px) rotate(-6deg)' }, { transform: 'translateY(0) rotate(4deg)' }, { transform: 'translateY(0) rotate(0)' }], { duration: 480 });
       if (fed.levels) toast(`${PET.name} reached level ${st().pet.level}! ${TOKEN}${fed.tokens}`, 'gold');
       onSave();
       refresh();
     } });
-    setSheet('pet', `${PET.name} the gull`, [
+    setSheet('pet', `${PET.name} the ${PET.kind}`, [
       h('div', { class: 'pet-top' }, pic, h('div', { class: 'meta' }, level, h('div', { class: 'bar' }, bar), h('div', { class: 'ms-line' }, xp))),
       perks, feedBtn,
     ], () => {
@@ -1291,10 +1309,11 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
       const need = PET.xpFor(s.pet.level);
       const maxed = s.pet.level >= PET.maxLevel;
       setText(level, `Level ${s.pet.level}`);
+      setText(petTag, 'Lv.' + s.pet.level);
       bar.style.width = maxed ? '100%' : Math.min(100, (s.pet.xp / need) * 100) + '%';
-      setHTML(xp, maxed ? 'Top level' : `${s.pet.xp}/${need} chips to level ${s.pet.level + 1} · prize ${TOKEN}${PET.levelTokens(s.pet.level + 1)}`);
-      setHTML(perks, `${PET.name} sniffs out the best shells and keeps watch over your spins.<br><b>Pearl dives pay +${Math.round((E.raidBonus(s) - 1) * 100)}%</b> · <b>Token meter holds ${E.tokenCap(s)}</b><br>Win chips on the machine (three cones), from balloons and from events.`);
-      setHTML(feedBtn, s.pet.treats > 0 ? `Feed ${PET.name} ${CHIPS}${s.pet.treats}` : 'No chips to feed');
+      setHTML(xp, maxed ? 'Top level' : `${s.pet.xp}/${need} cherries to level ${s.pet.level + 1} · prize ${TOKEN}${PET.levelTokens(s.pet.level + 1)}`);
+      setHTML(perks, `${PET.name} sniffs out the best shells and keeps watch over your spins.<br><b>Pearl dives pay +${Math.round((E.raidBonus(s) - 1) * 100)}%</b> · <b>Spin meter holds ${E.tokenCap(s)}</b><br>Win cherries on the machine (three in a row), on the prize wheel and from events.`);
+      setHTML(feedBtn, s.pet.treats > 0 ? `Feed ${PET.name} ${CHIPS}${s.pet.treats}` : 'No cherries to feed');
       feedBtn.disabled = !(s.pet.treats > 0);
     });
   }
@@ -1322,9 +1341,9 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
   function lootItems(reward, raw = false) {
     const items = [];
     if (!reward) return items;
-    if (reward.tokens) items.push([symURL('token'), fmt(reward.tokens), 'tokens']);
+    if (reward.tokens) items.push([symURL('token'), fmt(reward.tokens), 'spins']);
     if (reward.coins) items.push([symURL('coin'), money(raw ? reward.coins * E.unit(st().town) : reward.coins), 'coins']);
-    if (reward.treats) items.push([symURL('chips'), String(reward.treats), 'chips']);
+    if (reward.treats) items.push([symURL('chips'), String(reward.treats), 'cherries']);
     if (reward.pack) items.push([packURL(reward.pack), '×1', PACKS[reward.pack].name]);
     if (reward.packs) {
       for (const type of Object.keys(PACKS)) if (reward.packs[type]) items.push([packURL(type), '×' + reward.packs[type], PACKS[type].name]);
@@ -1355,7 +1374,9 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
 
   // A card held up to the light: it tilts and catches a shine under the finger.
   function zoomCard(card, count) {
-    const inner = h('div', { class: 'zoom-inner' }, h('img', { src: cardImage(card, true, 300), alt: card.name }));
+    const face = cardFace(card);
+    face.setCount(count);
+    const inner = h('div', { class: 'zoom-inner' }, face);
     const wrap = h('div', { class: 'zoom-card' + (card.gold ? ' gold' : '') }, inner);
     const tilt = (e) => {
       const r = wrap.getBoundingClientRect();
@@ -1517,7 +1538,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
       h('ul', null,
         h('li', null, h('i', null, '1'), 'Spin the machine to win coins.'),
         h('li', null, h('i', null, '2'), 'Spend coins on four rides, the entrance, parking, restrooms and food stalls. Take them all to level 100 to open the next park.'),
-        h('li', null, h('i', null, '3'), 'Win turns on the prize wheel, go pearl diving, collect cards and look after Chips.')),
+        h('li', null, h('i', null, '3'), `Win turns on the prize wheel, go pearl diving, collect cards and look after ${PET.name}.`)),
       h('div', { class: 'actions' },
         h('button', { class: 'btn big wide', onclick: () => { audio.unlock(); click(); closeModal(); } }, 'Open the gates')),
     ], { dismiss: false }));
@@ -1555,7 +1576,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
   function showLeague(result) {
     if (!result) return;
     popup(() => celebrate({
-      kicker: 'The Pie League',
+      kicker: 'Club League',
       title: result.rank === 1 ? 'You won the league!' : `You came ${['', '1st', '2nd', '3rd'][result.rank] || result.rank + 'th'}`,
       sub: `${fmt(result.points)} points yesterday.`,
       reward: result.reward,
@@ -1604,7 +1625,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     const msg = h('p', { class: 'fineprint' }, 'Your game saves on this device automatically.');
     const stats = [
       ['Parks finished', fmt(s.stats.towns)], ['Spins', fmt(s.stats.spins)], ['Coins won', money(s.stats.coinsWon)],
-      ['Pies thrown', fmt(s.stats.attacks)], ['Lucky dips', fmt(s.stats.raids)], ['Jackpots', fmt(s.stats.jackpots)],
+      ['Prize wheel turns', fmt(s.wheel.spun)], ['Pearl dives', fmt(s.stats.raids)], ['Jackpots', fmt(s.stats.jackpots)],
       ['Cards collected', fmt(s.stats.cards)], ['Guests served', fmt(s.stats.served)], ['Time played', fmtTime(s.stats.playTime)],
     ];
     modal([
@@ -1647,7 +1668,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
   function confirmReset() {
     modal([
       h('h2', null, 'Start over?'),
-      h('p', null, 'This wipes everything: your parks, cards, spins and Chips. It cannot be undone.'),
+      h('p', null, `This wipes everything: your parks, cards, spins and ${PET.name}. It cannot be undone.`),
       h('div', { class: 'actions' },
         h('button', { class: 'btn plain big', onclick: () => { click(); openSettings(); } }, 'Keep my park'),
         h('button', { class: 'btn red big', onclick: () => onReset() }, 'Wipe it')),
@@ -1717,7 +1738,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
       modal([
         h('div', { class: 'kicker' }, 'Preview purchase'),
         h('h2', null, product.name),
-        h('div', { class: 'prize', html: describe(product.grant, true) || 'No more adverts between towns' }),
+        h('div', { class: 'prize', html: describe(product.grant, true) || 'No more adverts between parks' }),
         h('p', null, `In the finished game this costs ${priceOf(product)}. No payment provider is connected in this build, so nothing is charged.`),
         h('div', { class: 'actions' },
           h('button', { class: 'btn plain big', onclick: () => { click(); done(false); } }, 'Cancel'),

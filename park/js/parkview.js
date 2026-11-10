@@ -254,6 +254,8 @@ export function createParkView(world, hooks = {}) {
   function setShift(px) {
     shift = px;
     layer.style.transform = `translateY(${-shift}px)`;
+    // labels that would slide under the top bar step aside
+    SITES.forEach((site, k) => { sites[k].tag.style.opacity = px > 0 && site.tag[1] - px < 104 ? '0' : ''; });
   }
   function select(k) {
     selected = k;
@@ -265,7 +267,9 @@ export function createParkView(world, hooks = {}) {
     const s = SITES[k];
     ring.style.cssText = `left:${s.x}px;top:${Math.max(s.y, 26)}px;width:${s.hit[2] + 14}px;height:${Math.min(s.hit[3], 130) * 0.72 + 14}px`;
     ring.classList.add('on');
-    setShift(Math.max(0, Math.min(278, s.y - 250)));
+    // only the low sites need it; then go far enough that the top of the
+    // painting is clear of the screen
+    setShift(s.y > 330 ? Math.min(240, s.y - 250) : 0);
   }
   function setPointer(k) {
     if (k === pointAt) return;
