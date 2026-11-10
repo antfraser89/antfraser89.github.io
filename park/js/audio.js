@@ -136,6 +136,7 @@ export function createAudio(getSettings) {
       noise({ dur: 0.06, vol: 0.16, freq: 420, q: 0.7 });
       tone(160, { to: 90, dur: 0.08, vol: 0.14 });
     },
+    tease: () => arp([67, 69, 71, 72, 74, 76, 77, 79, 81, 83, 84], 0.085, { type: 'square', dur: 0.09, vol: 0.045 }),
     win: () => arp([72, 76, 79, 84], 0.07, { vol: 0.14 }),
     bigwin: () => arp([72, 76, 79, 84, 88, 91, 96], 0.07, { dur: 0.22, vol: 0.15 }),
     jackpot: () => {

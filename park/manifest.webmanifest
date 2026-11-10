@@ -1,7 +1,7 @@
 {
-  "name": "Starlight Funfair",
-  "short_name": "Funfair",
-  "description": "Build a twinkling travelling funfair and take it on tour.",
+  "name": "Park!",
+  "short_name": "Park!",
+  "description": "Spin, build your park, pie your rivals and collect them all.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

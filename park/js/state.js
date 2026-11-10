@@ -1,5 +1,5 @@
 // The persistent game state, plus save / load / validation.
-import { CARD_BY_ID, CARD_SETS, PACKS, PLOTS, STAGES, TUNING, VERSION } from './config.js';
+import { CARD_BY_ID, CARD_SETS, PACKS, PLOTS, PRODUCTS, STAGES, TUNING, VERSION } from './config.js';
 
 const newPlot = () => ({ stage: 0, splat: false, flow: 0, served: 0 });
 
@@ -29,6 +29,7 @@ export function newState(now = 0) {
     league: { start: 0, points: 0, last: null },
     daily: { day: 0, last: -1 },
     mission: { index: 0, extra: null },
+    shop: { noAds: false, owned: {}, adDay: -1, adCount: 0, bought: 0 },
     news: [],
     nextAttackAt: 0,
     stats: {
@@ -131,6 +132,13 @@ export function hydrate(raw) {
     if (e && typeof e === 'object' && typeof e.type === 'string') {
       s.mission.extra = { type: e.type, target: Math.max(1, num(e.target, 1)), base: num(e.base) };
     }
+  }
+  if (raw.shop && typeof raw.shop === 'object') {
+    s.shop.noAds = !!raw.shop.noAds;
+    for (const p of PRODUCTS) if (p.once && raw.shop.owned && raw.shop.owned[p.id]) s.shop.owned[p.id] = true;
+    s.shop.adDay = typeof raw.shop.adDay === 'number' && Number.isFinite(raw.shop.adDay) ? Math.floor(raw.shop.adDay) : -1;
+    s.shop.adCount = int(raw.shop.adCount);
+    s.shop.bought = int(raw.shop.bought);
   }
   if (Array.isArray(raw.news)) {
     s.news = raw.news.slice(0, 12).filter((n) => n && typeof n === 'object').map((n) => ({

@@ -1,9 +1,9 @@
 {
-  "name": "starlight-funfair",
+  "name": "park",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Starlight Funfair - an idle funfair management game for the browser",
+  "description": "Park! - a spin-and-build theme park game for the browser",
   "scripts": {
     "test": "node --test",
     "balance": "node tools/balance.mjs",

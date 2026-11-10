@@ -10,15 +10,15 @@ export const MISSIONS = [
   { text: 'Build your first attraction', target: 1, reward: { tokens: 5 }, go: 'build', cur: (s) => Math.min(1, s.stats.upgrades) },
   { text: 'Upgrade an attraction to two stars', target: 2, reward: { pack: 'bronze' }, go: 'build', cur: (s) => Math.max(maxStage(s), s.stats.towns ? 2 : 0) },
   stat('packs', 1, { tokens: 10 }, 'Open a card pack', 'cards'),
-  stat('attacks', 1, { tokens: 10 }, 'Splat a rival fair with a pie', 'spin'),
+  stat('attacks', 1, { tokens: 10 }, 'Splat a rival park with a pie', 'spin'),
   stat('raids', 1, { tokens: 10 }, "Rummage through a rival's lucky dip", 'spin'),
   { text: 'Take an attraction to five stars', target: 5, reward: { pack: 'silver' }, go: 'build', cur: (s) => Math.max(maxStage(s), s.stats.towns ? 5 : 0) },
   stat('fed', 6, { tokens: 10 }, 'Feed Chips 6 treats', 'pet'),
   { text: 'Collect 8 different cards', target: 8, reward: { tokens: 15 }, go: 'cards', cur: (s) => Math.max(cardsOwned(s), s.cards.season > 1 ? 8 : 0) },
-  { text: `Finish the fair at ${townInfo(0).name}`, target: 1, reward: { tokens: 25 }, go: 'build', cur: (s) => Math.min(1, s.stats.towns) },
+  { text: `Finish your park in ${townInfo(0).name}`, target: 1, reward: { tokens: 25 }, go: 'build', cur: (s) => Math.min(1, s.stats.towns) },
   stat('spins', 100, { tokens: 20 }, 'Spin the machine 100 times', 'spin'),
   stat('sets', 1, { pack: 'gold' }, 'Complete a card set', 'cards'),
-  stat('attacks', 10, { tokens: 20 }, 'Splat 10 rival fairs', 'spin'),
+  stat('attacks', 10, { tokens: 20 }, 'Splat 10 rival parks', 'spin'),
   { text: `Open in ${townInfo(2).name}`, target: 2, reward: { tokens: 30 }, go: 'build', cur: (s) => s.stats.towns },
   { text: 'Raise Chips to level 3', target: 3, reward: { tokens: 20 }, go: 'pet', cur: (s) => s.pet.level },
   stat('raids', 5, { tokens: 20 }, 'Win 5 lucky dips', 'spin'),
@@ -32,10 +32,10 @@ export const MISSIONS = [
 // the last one was claimed, and stored in the save.
 const ENDLESS = [
   { type: 'spins', step: 150, reward: { tokens: 25 }, text: (n) => `Spin the machine ${n} more times`, go: 'spin' },
-  { type: 'attacks', step: 10, reward: { tokens: 25 }, text: (n) => `Splat ${n} more rival fairs`, go: 'spin' },
+  { type: 'attacks', step: 10, reward: { tokens: 25 }, text: (n) => `Splat ${n} more rival parks`, go: 'spin' },
   { type: 'upgrades', step: 20, reward: { pack: 'silver' }, text: (n) => `Make ${n} more upgrades`, go: 'build' },
   { type: 'raids', step: 6, reward: { tokens: 25 }, text: (n) => `Win ${n} more lucky dips`, go: 'spin' },
-  { type: 'towns', step: 1, reward: { pack: 'gold' }, text: () => 'Finish another fair', go: 'build' },
+  { type: 'towns', step: 1, reward: { pack: 'gold' }, text: () => 'Finish another park', go: 'build' },
   { type: 'cards', step: 30, reward: { tokens: 30 }, text: (n) => `Collect ${n} more cards`, go: 'cards' },
 ];
 

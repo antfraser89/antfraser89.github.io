@@ -2,8 +2,8 @@
 // timed events. Everything here works on plain state with the clock and the
 // random source passed in, so it runs the same in the browser and in tests.
 import {
-  ALBUM_REWARD, CARDS, CARD_SETS, DAILY, EVENT_MILESTONES, EVENT_POINTS, EVENT_THEMES, LEAGUE_POINTS, LEAGUE_PRIZES,
-  MIXED_WEIGHTS, OPENING_SPINS, OUTCOMES, PACKS, PAY, PET, PLOTS, RIVALS, STAGES, TOWN_REWARD, TRIPLE, TUNING as T,
+  ADS, ALBUM_REWARD, CARDS, CARD_SETS, DAILY, EVENT_MILESTONES, EVENT_POINTS, EVENT_THEMES, LEAGUE_POINTS, LEAGUE_PRIZES,
+  MIXED_WEIGHTS, OPENING_SPINS, OUTCOMES, PACKS, PAY, PET, PLOTS, PRODUCTS, RIVALS, STAGES, TOWN_REWARD, TRIPLE, TUNING as T,
   UPGRADE_REWARDS, VAULT, setUnlockTown, townInfo,
 } from './config.js';
 import * as E from './economy.js';
@@ -29,8 +29,18 @@ function earn(state, coins) {
 // Hand over a reward ({tokens, coins (in units), treats, pack}) and report
 // what was actually given, in real amounts.
 export function grant(state, reward) {
-  const out = { tokens: 0, coins: 0, treats: 0, pack: null };
+  const out = { tokens: 0, coins: 0, treats: 0, pack: null, packs: null };
   if (!reward) return out;
+  if (reward.packs) {
+    out.packs = {};
+    for (const type of Object.keys(PACKS)) {
+      const n = reward.packs[type] || 0;
+      if (n > 0) {
+        out.packs[type] = n;
+        state.cards.packs[type] += n;
+      }
+    }
+  }
   if (reward.tokens) {
     out.tokens = reward.tokens;
     state.tokens += reward.tokens;
@@ -98,7 +108,7 @@ function makeRival(state, rand, id = Math.floor(rand() * RIVALS.length)) {
 }
 
 export const rivalName = (id) => RIVALS[id % RIVALS.length].name;
-export const rivalFair = (id) => RIVALS[id % RIVALS.length].fair;
+export const rivalPark = (id) => RIVALS[id % RIVALS.length].park;
 
 // ---- the machine ------------------------------------------------------------
 
@@ -308,7 +318,7 @@ export function repairPlot(state, k) {
   return { cost };
 }
 
-// Pack up a finished fair and move to the next town.
+// Pack up a finished park and move to the next town.
 export function travel(state) {
   if (!E.townComplete(state)) return null;
   const reward = grant(state, TOWN_REWARD);
@@ -539,6 +549,39 @@ export function claimDaily(state, now) {
   state.daily.day++;
   state.daily.last = dayNumber(now);
   return { reward, index };
+}
+
+// ---- shop and adverts ---------------------------------------------------------
+
+export const productById = (id) => PRODUCTS.find((p) => p.id === id) || null;
+export const productOwned = (state, id) => !!state.shop.owned[id];
+
+// Hand over what a completed purchase paid for. Taking the money is the
+// payment provider's job; this only runs once that has succeeded.
+export function applyPurchase(state, id) {
+  const product = productById(id);
+  if (!product || (product.once && state.shop.owned[id])) return null;
+  const reward = grant(state, product.grant || {});
+  if (product.once) state.shop.owned[id] = true;
+  if (product.noAds) state.shop.noAds = true;
+  state.shop.bought++;
+  return reward;
+}
+
+// Free tokens for watching an advert, a few times a day.
+export function adTokensLeft(state, now) {
+  return state.shop.adDay === dayNumber(now) ? Math.max(0, ADS.perDay - state.shop.adCount) : ADS.perDay;
+}
+
+export function claimAdTokens(state, now) {
+  if (adTokensLeft(state, now) <= 0) return null;
+  const day = dayNumber(now);
+  if (state.shop.adDay !== day) {
+    state.shop.adDay = day;
+    state.shop.adCount = 0;
+  }
+  state.shop.adCount++;
+  return grant(state, { tokens: ADS.tokens });
 }
 
 // ---- time passing -----------------------------------------------------------

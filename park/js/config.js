@@ -1,9 +1,11 @@
 // Game data and tuning. Everything that shapes the economy lives here so the
 // game, the tests and the balance tool all read the same numbers.
 
-export const GAME_TITLE = 'Starlight Funfair';
-export const VERSION = '2.0.0';
-export const SAVE_KEY = 'starlight-funfair.save.v2';
+export const GAME_TITLE = 'Park!';
+export const VERSION = '3.0.0';
+export const SAVE_KEY = 'park.save.v1';
+// saves written under an earlier name are picked up once and carried over
+export const LEGACY_SAVE_KEYS = ['starlight-funfair.save.v2'];
 export const CURRENCY = '£';
 
 // One avenue running north from the gate, three rows of two plots.
@@ -113,13 +115,13 @@ export const ATTRACTIONS = [
   A('carousel', 'Galloping Carousel', 'ride', 10, 9, 'Painted horses and a wheezy organ.', 240, 210),
   A('ghost', 'Ghost Train', 'ride', 6, 8, 'Cobwebs, cackles and one very damp curtain.', 250, 190),
   A('waltzer', 'Whirling Waltzer', 'ride', 9, 8, 'Scream if you want to go faster.', 250, 170),
-  A('wheel', 'Big Wheel', 'ride', 12, 12, 'The whole fair laid out below you.', 240, 280),
+  A('wheel', 'Big Wheel', 'ride', 12, 12, 'The whole park laid out below you.', 240, 280),
   A('coaster', 'Comet Coaster', 'ride', 12, 9, 'One lift hill, one loop, no regrets.', 270, 230),
 ];
 ATTRACTIONS.forEach((d, i) => { d.index = i; });
 const idx = (id) => ATTRACTIONS.findIndex((d) => d.id === id);
 
-// Which six attractions each fair has, by plot. The tall ones sit in the back row.
+// Which six attractions each park has, by plot. The tall ones sit in the back row.
 const LINEUPS = [
   ['toffee', 'ducks', 'teacups', 'coconut', 'floss', 'helter'],
   ['coconut', 'floss', 'dodgems', 'carousel', 'ghost', 'wheel'],
@@ -186,16 +188,40 @@ export function townInfo(t) {
 // ---- rivals -----------------------------------------------------------------
 
 export const RIVALS = [
-  { name: 'Dotty Marlowe', fair: "Marlowe's Mirth" },
-  { name: 'Big Reg Pickles', fair: 'Pickles Pleasure Park' },
-  { name: 'Madame Zelda Finch', fair: "Finch's Fortunes" },
-  { name: 'Cornelius Quill', fair: 'The Quill Carnival' },
-  { name: 'Nan Bramble', fair: "Bramble's Bonanza" },
-  { name: 'Lord Flashbang', fair: 'Flashbang Follies' },
-  { name: 'Mabel Sprocket', fair: 'Sprocket & Daughters' },
-  { name: 'The Tiddler Twins', fair: 'Tiddler Towers' },
-  { name: 'Captain Humbug', fair: "Humbug's Hullabaloo" },
+  { name: 'Dotty Marlowe', park: "Marlowe's Mirth" },
+  { name: 'Big Reg Pickles', park: 'Pickles Pleasure Park' },
+  { name: 'Madame Zelda Finch', park: "Finch's Fortunes" },
+  { name: 'Cornelius Quill', park: 'The Quill Carnival' },
+  { name: 'Nan Bramble', park: "Bramble's Bonanza" },
+  { name: 'Lord Flashbang', park: 'Flashbang Follies' },
+  { name: 'Mabel Sprocket', park: 'Sprocket & Daughters' },
+  { name: 'The Tiddler Twins', park: 'Tiddler Towers' },
+  { name: 'Captain Humbug', park: "Humbug's Hullabaloo" },
 ];
+
+// ---- shop and adverts ---------------------------------------------------------
+
+// Until a real payment and advert provider is connected (see the README), the
+// shop runs in preview mode: adverts are a short stand-in and purchases are
+// granted without any payment. Turn this off to show "coming soon" instead.
+export const STORE_PREVIEW = true;
+
+// Display prices are placeholders; a real store supplies localised ones.
+// Coins are in units, so a sack is worth the same number of spins in any town.
+export const PRODUCTS = [
+  { id: 'tokens_s', group: 'tokens', name: 'Pocketful', price: '£0.99', grant: { tokens: 60 } },
+  { id: 'tokens_m', group: 'tokens', name: 'Bagful', price: '£2.99', grant: { tokens: 220 }, tag: 'Popular' },
+  { id: 'tokens_l', group: 'tokens', name: 'Bucketful', price: '£6.99', grant: { tokens: 600 } },
+  { id: 'tokens_xl', group: 'tokens', name: 'Wheelbarrow', price: '£14.99', grant: { tokens: 1500 }, tag: 'Best value' },
+  { id: 'starter', group: 'bundle', name: 'Starter bundle', price: '£1.99', grant: { tokens: 120, coins: 150, packs: { gold: 1 } }, once: true, tag: 'One time only' },
+  { id: 'goldpacks', group: 'bundle', name: 'Three gold packs', price: '£3.99', grant: { packs: { gold: 3 } } },
+  { id: 'coins', group: 'bundle', name: 'Sack of coins', price: '£2.99', grant: { coins: 400 } },
+  {
+    id: 'noads', group: 'extra', name: 'No interruptions', price: '£3.99', once: true, noAds: true,
+    desc: 'Removes the adverts between towns. Adverts you choose to watch for a reward stay.',
+  },
+];
+export const ADS = { tokens: 10, perDay: 5 };
 
 // ---- cards ------------------------------------------------------------------
 

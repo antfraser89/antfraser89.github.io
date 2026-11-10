@@ -2,12 +2,13 @@
 // Sheets are built once when opened and refreshed in place, so buttons never
 // get replaced under the player's finger.
 import {
-  CARDS, CARD_SETS, CURRENCY, DAILY, EVENT_MILESTONES, GAME_TITLE, GUEST_LOOKS, LEAGUE_PRIZES, PACKS, PET, PLOTS, STAGES,
-  TOWN_REWARD, TUNING, UPGRADE_REWARDS, VAULT, VERSION, setUnlockTown, townInfo,
+  ADS, CARDS, CARD_SETS, CURRENCY, DAILY, EVENT_MILESTONES, GAME_TITLE, GUEST_LOOKS, LEAGUE_PRIZES, PACKS, PET, PLOTS, STAGES,
+  PRODUCTS, STORE_PREVIEW, TOWN_REWARD, TUNING, UPGRADE_REWARDS, VAULT, VERSION, setUnlockTown, townInfo,
 } from './config.js';
 import * as A from './art.js';
 import { cardImage, symbolImage } from './cardart.js';
 import * as E from './economy.js';
+import { createFx } from './fx.js';
 import { fmt, fmtClock, fmtTime, money } from './format.js';
 import { currentMission } from './goals.js';
 import { thumbnail } from './render.js';
@@ -140,6 +141,9 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     return cv.toDataURL();
   });
 
+  // "Park!" with its exclamation mark set apart, so it can bounce
+  const wordmark = () => h('div', { class: 'wordmark', html: GAME_TITLE.replace(/!$/, '<i>!</i>') });
+
   const click = () => audio.play('click');
   const nope = () => audio.play('error');
   const buzz = (ms) => {
@@ -160,6 +164,12 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     if (reward.coins) parts.push(`${COIN}${fmt(raw ? reward.coins * E.unit(st().town) : reward.coins)}`);
     if (reward.treats) parts.push(`${CHIPS}${reward.treats}`);
     if (reward.pack) parts.push(`<span class="pk ${reward.pack}">${PACKS[reward.pack].name}</span>`);
+    if (reward.packs) {
+      for (const type of Object.keys(PACKS)) {
+        const n = reward.packs[type] || 0;
+        if (n > 0) parts.push(`<span class="pk ${type}">${n} × ${PACKS[type].name}</span>`);
+      }
+    }
     return parts.join(' ');
   }
 
@@ -170,8 +180,10 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
   const tokensEl = h('b', null, '0');
   const tokenTimer = h('small');
   const shieldEls = [0, 1, 2].map(() => h('img', { src: LOCK, alt: '' }));
-  const coinCard = h('div', { class: 'stat-card coins' }, h('span', { class: 'ico-wrap', html: COIN }), h('div', null, coinsEl, tillEl));
-  const tokenCard = h('div', { class: 'stat-card tokens' }, h('span', { class: 'ico-wrap', html: TOKEN }), h('div', null, tokensEl, tokenTimer));
+  const coinCard = h('button', { class: 'stat-card coins', 'aria-label': 'Coins. Open the shop', onclick: () => { click(); openShop(); } },
+    h('span', { class: 'ico-wrap', html: COIN }), h('div', null, coinsEl, tillEl));
+  const tokenCard = h('button', { class: 'stat-card tokens', 'aria-label': 'Tokens. Open the shop', onclick: () => { click(); openShop(); } },
+    h('span', { class: 'ico-wrap', html: TOKEN }), h('div', null, tokensEl, tokenTimer), h('i', { class: 'plus' }, '+'));
   const shieldCard = h('div', { class: 'stat-card shields', title: 'Padlocks stop pies thrown by rivals' }, shieldEls);
   const gearBtn = h('button', { class: 'round-btn', 'aria-label': 'Settings', html: ICON.gear, onclick: () => { click(); openSettings(); } });
   const missionText = h('div', { class: 'goal-text' });
@@ -230,11 +242,20 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
   const spinLabel = h('b', null, 'SPIN');
   const spinCost = h('small');
   const spinBtn = h('button', { class: 'spin-btn', 'aria-label': 'Spin' }, h('span', { class: 'spin-face' }, spinLabel, spinCost));
-  const bulbs = h('div', { class: 'bulbs' }, Array.from({ length: 12 }, () => h('i')));
+  const bulbAt = (x, y, k) => h('i', { style: `--x:${x};--y:${y};--k:${k % 3}` });
+  const bulbList = [];
+  for (let k = 0; k < 9; k++) bulbList.push(bulbAt(`${7 + k * 10.75}%`, '7px', k));
+  for (let k = 0; k < 3; k++) bulbList.push(bulbAt('calc(100% - 7px)', `${27 + k * 23}%`, 9 + k));
+  for (let k = 0; k < 9; k++) bulbList.push(bulbAt(`${93 - k * 10.75}%`, 'calc(100% - 7px)', 12 + k));
+  for (let k = 0; k < 3; k++) bulbList.push(bulbAt('7px', `${73 - k * 23}%`, 21 + k));
+  const bulbs = h('div', { class: 'bulbs' }, bulbList);
+  const cabinet = h('div', { class: 'cabinet' }, h('div', { class: 'window' }, reelCanvas), bulbs, banner);
   const dock = h('div', { class: 'dock' },
     h('div', { class: 'marquee' }, townEl, h('div', { class: 'event-wrap' }, eventEl, h('div', { class: 'bar' }, eventBar))),
-    h('div', { class: 'cabinet' }, bulbs, reelCanvas, banner),
+    cabinet,
     h('div', { class: 'controls' }, buildBtn, spinBtn, betBtn));
+  const fxCanvas = h('canvas', { id: 'fx', 'aria-hidden': 'true' });
+  const fx = createFx(fxCanvas);
 
   let auto = false;
   let held = null; // the result waiting for the reels to stop
@@ -247,8 +268,26 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
       audio.play('clunk');
       buzz(8);
     },
+    onTease: () => {
+      audio.play('tease');
+      buzz([10, 50, 10, 50, 10]);
+    },
     onStop: () => reveal(),
   });
+
+  function shake() {
+    dock.classList.remove('shake');
+    void dock.offsetWidth; // restart the animation
+    dock.classList.add('shake');
+    setTimeout(() => dock.classList.remove('shake'), 500);
+  }
+
+  // The headline moment: huge lettering over the park.
+  function bigWin(title, sub) {
+    const el = h('div', { class: 'bigwin' }, h('span', null, title), h('b', null, sub));
+    root.append(el);
+    setTimeout(() => el.remove(), 2300);
+  }
 
   // press and hold the spin button for auto-spin
   let holdTimer = null;
@@ -304,18 +343,22 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     }
     const res = R.spin(s, rand, clock());
     if (!res.ok) {
+      const wasAuto = auto;
       setAuto(false);
       nope();
       const secs = R.nextTokenIn(s, clock());
       say(secs > 0 ? `Out of tokens. Next one in ${fmtClock(secs)}` : 'Out of tokens', 'quiet', 2200);
       tokenCard.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(-5px)' }, { transform: 'translateX(5px)' }, { transform: 'translateX(0)' }], { duration: 260 });
+      if (!wasAuto) outOfTokens();
       return;
     }
     held = res;
     banner.classList.remove('on');
     audio.play('spin');
     buzz(12);
-    slot.spin(res.reels, auto);
+    cabinet.classList.remove('won');
+    cabinet.classList.add('spinning');
+    slot.spin(res.reels, auto, res.kind !== 'mixed');
     refresh();
   }
 
@@ -327,6 +370,11 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     const mask = res.kind === 'mixed' ? res.reels.map((sym) => sym === 'coin' || sym === 'sack') : [true, true, true];
     const big = res.kind === 'jackpot' || res.kind === 'sacks3';
     if (mask.some(Boolean) && (res.kind !== 'mixed' || res.coins > 0)) slot.flash(mask, big ? 2.2 : 1.2);
+    cabinet.classList.remove('spinning');
+    if (res.kind !== 'mixed') {
+      cabinet.classList.add('won');
+      setTimeout(() => cabinet.classList.remove('won'), big ? 2400 : 1300);
+    }
     switch (res.kind) {
       case 'mixed':
         if (res.coins > 0) {
@@ -339,23 +387,30 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
         say(`+${money(res.coins)}`, 'coins big');
         audio.play('win');
         fly(COIN, reelCanvas, coinCard, 9);
+        fx.rain(18);
         break;
       case 'sacks3':
-        say(`BIG WIN  +${money(res.coins)}`, 'coins big', 2200);
+        say(`+${money(res.coins)}`, 'coins big', 2200);
         audio.play('bigwin');
         fly(COIN, reelCanvas, coinCard, 16);
+        fx.rain(80);
+        bigWin('Big win!', `+${money(res.coins)}`);
+        shake();
         buzz([30, 40, 30]);
         break;
       case 'jackpot':
-        say(`JACKPOT!  +${money(res.coins)}`, 'jackpot', 2600);
+        say(`+${money(res.coins)}`, 'jackpot', 2600);
         audio.play('jackpot');
         fly(COIN, reelCanvas, coinCard, 22);
+        fx.rain(190);
+        bigWin('Jackpot!', `+${money(res.coins)}`);
+        shake();
         renderer.fireworks(4);
         buzz([40, 40, 40, 40, 80]);
         toast(`Jackpot! A ${PACKS.silver.name.toLowerCase()} is waiting in your album.`, 'gold');
         break;
       case 'shield':
-        say(res.overflow ? `Padlocks full: +${money(res.coins)}` : 'Padlock! Your fair is safer', 'shield');
+        say(res.overflow ? `Padlocks full: +${money(res.coins)}` : 'Padlock! Your park is safer', 'shield');
         audio.play('lock');
         if (res.overflow) fly(COIN, reelCanvas, coinCard, 4);
         break;
@@ -371,11 +426,13 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
         break;
       case 'attack':
         say('PIE TIME!', 'attack', 1200);
+        shake();
         audio.play('fanfare');
         buzz([30, 30, 60]);
         break;
       case 'raid':
         say('LUCKY DIP!', 'raid', 1200);
+        shake();
         audio.play('fanfare');
         buzz([30, 30, 60]);
         break;
@@ -561,7 +618,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     const s = st();
     audio.play('tour');
     modal([
-      h('div', { class: 'kicker' }, 'Fair complete'),
+      h('div', { class: 'kicker' }, 'Park complete'),
       h('h2', null, townInfo(s.town).name),
       h('p', { html: `Every attraction at five stars and the whole town talking. Next stop: <b>${townInfo(s.town + 1).name}</b>.` }),
       h('div', { class: 'prize', html: describe(TOWN_REWARD, true) }),
@@ -571,11 +628,13 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     ]);
   }
 
-  function travelNow() {
+  async function travelNow() {
     if (!E.townComplete(st())) return nope();
     const next = townInfo(st().town + 1);
     closeSheet();
-    curtain(next.name, next.tag, () => {
+    await interstitial('travel');
+    if (!E.townComplete(st())) return undefined;
+    return curtain(next.name, next.tag, () => {
       const moved = R.travel(st());
       S.resetWorld(world);
       renderer.resetView();
@@ -732,7 +791,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
         h('div', { class: 'flip-inner' },
           h('div', { class: 'flip-back' }),
           h('img', { class: 'flip-front', src: cardImage(def, true), alt: def.name })),
-        tag);
+        h('div', { class: 'shine' }), tag);
       return { el, def, c };
     });
     (async () => {
@@ -837,7 +896,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     const list = h('div');
     const empty = h('div', { class: 'note' }, 'All quiet. Rivals throw pies while you are away; padlocks from the machine stop them.');
     let built = '';
-    setSheet('news', 'Fair news', [empty, list], () => {
+    setSheet('news', 'Park news', [empty, list], () => {
       const s = st();
       const now = clock();
       const key = s.news.map((n) => `${n.t}${n.revenge}`).join('|') + (s.pending ? 'p' : '');
@@ -870,7 +929,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     if (overlayEl) overlayEl.remove();
     setAuto(false);
     const box = h('div', { class: 'ov-box' }, children);
-    overlayEl = h('div', { class: 'overlay ' + cls }, box);
+    overlayEl = h('div', { class: 'overlay ' + cls }, h('div', { class: 'rays' }), box);
     if (dismiss) overlayEl.addEventListener('click', (e) => { if (e.target === overlayEl) closeOverlay(); });
     root.append(overlayEl);
     return box;
@@ -893,7 +952,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     const result = h('div', { class: 'result' });
     const done = h('div', { class: 'actions' });
     let thrown = false;
-    // show the rival's fair the way it stands: back row first
+    // show the rival's park the way it stands: back row first
     const order = [4, 5, 2, 3, 0, 1];
     const tiles = order.map((k) => {
       const d = S.designAt({ town: p.rival.town }, k);
@@ -905,7 +964,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     const pie = h('img', { class: 'pie', src: pieURL(), alt: '' });
     const box = overlay('attack', [
       h('div', { class: 'kicker' }, p.revenge ? 'Getting even' : 'Pie time!'),
-      h('div', { class: 'versus' }, h('img', { class: 'face', src: faceURL(p.rival.id), alt: '' }), h('div', null, h('h2', null, R.rivalFair(p.rival.id)), h('p', null, `Pick something of ${R.rivalName(p.rival.id)}'s to splat.`))),
+      h('div', { class: 'versus' }, h('img', { class: 'face', src: faceURL(p.rival.id), alt: '' }), h('div', null, h('h2', null, R.rivalPark(p.rival.id)), h('p', null, `Pick something of ${R.rivalName(p.rival.id)}'s to splat.`))),
       h('div', { class: 'targets' }, tiles.map((t) => t.el)), result, done, pie,
     ]);
 
@@ -940,7 +999,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
       fly(COIN, el, coinCard, res.blocked ? 5 : 14);
       onSave();
       refresh();
-      done.append(h('button', { class: 'btn big wide', onclick: () => { click(); closeOverlay(); refresh(); } }, 'Back to the fair'));
+      done.append(h('button', { class: 'btn big wide', onclick: () => { click(); closeOverlay(); refresh(); } }, 'Back to the park'));
     }
   }
 
@@ -967,7 +1026,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     const bonus = Math.round((E.raidBonus(st()) - 1) * 100);
     overlay('raid', [
       h('div', { class: 'kicker' }, 'Lucky dip!'),
-      h('div', { class: 'versus' }, h('img', { class: 'face', src: faceURL(p.rival.id), alt: '' }), h('div', null, h('h2', null, R.rivalFair(p.rival.id)),
+      h('div', { class: 'versus' }, h('img', { class: 'face', src: faceURL(p.rival.id), alt: '' }), h('div', null, h('h2', null, R.rivalPark(p.rival.id)),
         h('p', null, `${R.rivalName(p.rival.id)} hid the takings in three of these tubs. The fourth is just sawdust.`))),
       h('div', { class: 'tubs' }, tubs.map((t) => t.el)), goes, total,
       bonus > 0 ? h('p', { class: 'fineprint' }, `${PET.name} is helping: +${bonus}% in every tub.`) : null, done,
@@ -1011,7 +1070,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
           audio.play('bigwin');
           buzz([30, 30, 60]);
         }
-        done.append(h('button', { class: 'btn big wide', onclick: () => { click(); closeOverlay(); refresh(); } }, 'Back to the fair'));
+        done.append(h('button', { class: 'btn big wide', onclick: () => { click(); closeOverlay(); refresh(); } }, 'Back to the park'));
         onSave();
       } else {
         update();
@@ -1050,7 +1109,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
 
   const curtainEl = h('div', { class: 'curtain' });
   function curtain(title, sub, midway) {
-    curtainEl.replaceChildren(h('div', null, h('h2', null, title), h('p', null, sub)));
+    curtainEl.replaceChildren(h('div', { class: 'rays' }), h('div', null, h('h2', null, title), h('p', null, sub)));
     curtainEl.classList.add('on');
     audio.play('tour');
     setTimeout(() => {
@@ -1066,12 +1125,11 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
 
   function showWelcome() {
     popup(() => modal([
-      h('img', { class: 'art', alt: '', src: thumbnail(S.designAt({ town: 1 }, 5), 190, 150).toDataURL() }),
-      h('div', { class: 'logo', html: 'Starlight <span>Funfair</span>' }),
+      wordmark(),
       h('p', null, 'An empty field, a pocketful of tokens and a lucky machine.'),
       h('ul', null,
         h('li', null, h('i', null, '1'), 'Spin the machine to win coins.'),
-        h('li', null, h('i', null, '2'), 'Spend coins building attractions. Five stars on all six and the fair moves to a new town.'),
+        h('li', null, h('i', null, '2'), 'Spend coins building attractions. Five stars on all six and the park moves to a new town.'),
         h('li', null, h('i', null, '3'), 'Throw pies at rivals, raid their lucky dips, collect cards and look after Chips.')),
       h('div', { class: 'actions' },
         h('button', { class: 'btn big wide', onclick: () => { audio.unlock(); click(); closeModal(); } }, 'Open the gates')),
@@ -1080,7 +1138,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
 
   function showAway(seconds, till, tokens, incidents) {
     const lines = [];
-    if (till.amount > 0) lines.push(h('li', null, h('i', { html: COIN }), h('span', { html: `The fair took <b>${money(till.amount)}</b> at the gate.` })));
+    if (till.amount > 0) lines.push(h('li', null, h('i', { html: COIN }), h('span', { html: `The park took <b>${money(till.amount)}</b> at the gate.` })));
     if (tokens > 0) lines.push(h('li', null, h('i', { html: TOKEN }), h('span', { html: `<b>${tokens}</b> tokens are back in the meter.` })));
     for (const item of incidents) {
       const who = R.rivalName(item.rival);
@@ -1094,7 +1152,22 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
       h('p', null, `You were away for ${fmtTime(seconds)}.`),
       h('ul', { class: 'away' }, lines),
       till.capped ? h('p', { class: 'fineprint' }, `The gate only keeps ${TUNING.offlineCapHours} hours of takings while you are away.`) : null,
-      h('div', { class: 'actions' }, h('button', { class: 'btn big wide', onclick: () => { audio.unlock(); audio.play('claim'); closeModal(); } }, 'Lovely')),
+      h('div', { class: 'actions stack' },
+        till.amount > 0 && adsReady() ? h('button', { class: 'btn gold big', onclick: async (e) => {
+          const btn = e.currentTarget;
+          btn.disabled = true;
+          if (await watchAd('away')) {
+            st().coins += till.amount;
+            audio.play('win');
+            toast(`Doubled: another ${COIN}${fmt(till.amount)}`, 'gold');
+            closeModal();
+            onSave();
+            refresh();
+          } else {
+            btn.disabled = false;
+          }
+        } }, h('span', { class: 'ad' }, 'AD'), 'Double the takings') : null,
+        h('button', { class: 'btn big', onclick: () => { audio.unlock(); audio.play('claim'); closeModal(); } }, 'Lovely')),
     ]));
   }
 
@@ -1157,7 +1230,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     modal([
       h('h2', null, 'Settings'),
       sw('sfx', 'Sound effects'), sw('music', 'Fairground organ'), sw('haptics', 'Vibration'),
-      h('h4', null, 'Your fair so far'),
+      h('h4', null, 'Your park so far'),
       h('div', { class: 'stat-list' }, stats.map(([k, v]) => [h('span', null, k), h('b', null, v)])),
       h('h4', null, 'Move your save'),
       code,
@@ -1187,18 +1260,214 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
       h('div', { class: 'actions' },
         h('button', { class: 'btn red', onclick: () => { click(); confirmReset(); } }, 'Start over'),
         h('button', { class: 'btn big', onclick: () => { click(); closeModal(); } }, 'Done')),
-      h('p', { class: 'fineprint' }, `${GAME_TITLE} v${VERSION} · no adverts, no purchases`),
+      h('p', { class: 'fineprint' }, `${GAME_TITLE} v${VERSION}`),
     ]);
   }
 
   function confirmReset() {
     modal([
       h('h2', null, 'Start over?'),
-      h('p', null, 'This wipes everything: your fairs, cards, tokens and Chips. It cannot be undone.'),
+      h('p', null, 'This wipes everything: your parks, cards, tokens and Chips. It cannot be undone.'),
       h('div', { class: 'actions' },
-        h('button', { class: 'btn plain big', onclick: () => { click(); openSettings(); } }, 'Keep my fair'),
+        h('button', { class: 'btn plain big', onclick: () => { click(); openSettings(); } }, 'Keep my park'),
         h('button', { class: 'btn red big', onclick: () => onReset() }, 'Wipe it')),
     ]);
+  }
+
+  // ---- shop and adverts --------------------------------------------------------
+  // A native wrapper (or any payment / advert integration) plugs in by setting
+  // window.ParkBridge = { showRewarded, showInterstitial, purchase, prices }.
+  // Without one, STORE_PREVIEW decides between a stand-in and "coming soon".
+
+  const bridge = () => (typeof window.ParkBridge === 'object' && window.ParkBridge) || null;
+  const adsReady = () => !!(bridge() && bridge().showRewarded) || STORE_PREVIEW;
+  const priceOf = (product) => (bridge() && bridge().prices && bridge().prices[product.id]) || product.price;
+
+  async function watchAd(placement) {
+    const b = bridge();
+    if (b && b.showRewarded) {
+      try {
+        return !!(await b.showRewarded(placement));
+      } catch {
+        return false;
+      }
+    }
+    return STORE_PREVIEW ? previewAd() : false;
+  }
+
+  async function interstitial(placement) {
+    const b = bridge();
+    if (st().shop.noAds || !b || !b.showInterstitial) return;
+    try {
+      await b.showInterstitial(placement);
+    } catch {
+      /* an advert that fails to show must never block the game */
+    }
+  }
+
+  // The stand-in advert: a few seconds of nothing, then the reward.
+  function previewAd() {
+    return new Promise((resolve) => {
+      const bar = h('i');
+      const el = h('div', { class: 'overlay ad' }, h('div', { class: 'ad-box' },
+        h('div', { class: 'kicker' }, 'Advert'),
+        h('h2', null, 'Your advert plays here'),
+        h('p', null, 'This is a stand-in. Connect an advert provider and a real one runs in its place.'),
+        h('div', { class: 'bar' }, bar)));
+      root.append(el);
+      const started = performance.now();
+      const timer = setInterval(() => {
+        const u = Math.min(1, (performance.now() - started) / 2500);
+        bar.style.width = u * 100 + '%';
+        if (u >= 1) {
+          clearInterval(timer);
+          el.remove();
+          resolve(true);
+        }
+      }, 80);
+    });
+  }
+
+  function previewPurchase(product) {
+    return new Promise((resolve) => {
+      const done = (ok) => {
+        closeModal();
+        resolve(ok);
+      };
+      modal([
+        h('div', { class: 'kicker' }, 'Preview purchase'),
+        h('h2', null, product.name),
+        h('div', { class: 'prize', html: describe(product.grant, true) || 'No more adverts between towns' }),
+        h('p', null, `In the finished game this costs ${priceOf(product)}. No payment provider is connected in this build, so nothing is charged.`),
+        h('div', { class: 'actions' },
+          h('button', { class: 'btn plain big', onclick: () => { click(); done(false); } }, 'Cancel'),
+          h('button', { class: 'btn gold big', onclick: () => done(true) }, 'Get it')),
+      ], { dismiss: false });
+    });
+  }
+
+  async function buy(product) {
+    if (R.productOwned(st(), product.id)) return;
+    const b = bridge();
+    let ok = false;
+    if (b && b.purchase) {
+      try {
+        ok = !!(await b.purchase(product.id));
+      } catch {
+        ok = false;
+      }
+    } else if (STORE_PREVIEW) {
+      ok = await previewPurchase(product);
+    } else {
+      toast('The shop opens soon.');
+      return;
+    }
+    if (!ok) return;
+    const reward = R.applyPurchase(st(), product.id);
+    if (!reward) return;
+    audio.play('jackpot');
+    fx.rain(50);
+    toast(`Thank you! ${describe(reward) || product.name}`, 'gold');
+    onSave();
+    refresh();
+  }
+
+  async function adTokens(from) {
+    if (R.adTokensLeft(st(), clock()) <= 0) return nope();
+    if (!(await watchAd('tokens'))) return undefined;
+    const reward = R.claimAdTokens(st(), clock());
+    if (!reward) return undefined;
+    audio.play('token');
+    fly(TOKEN, from || dock, tokenCard, 8);
+    toast(`Thanks for watching: ${describe(reward)}`, 'gold');
+    onSave();
+    refresh();
+    return reward;
+  }
+
+  function openShop() {
+    const preview = !(bridge() && bridge().purchase);
+    const adSub = h('div', { class: 'sub' });
+    const adBtn = h('button', { class: 'btn gold', onclick: (e) => adTokens(e.currentTarget) }, h('span', { class: 'ad' }, 'AD'), 'Watch');
+    const tiles = PRODUCTS.map((p) => {
+      const btn = h('button', { class: 'btn', onclick: () => buy(p) });
+      const what = h('div', { class: 'what' });
+      const stack = p.grant && p.grant.tokens ? Math.min(4, 1 + Math.floor(Math.log10(p.grant.tokens / 30))) : 0;
+      const art = h('div', { class: 'art', html: p.grant && p.grant.tokens && p.group === 'tokens' ? TOKEN.repeat(stack)
+        : p.id === 'coins' ? COIN.repeat(3)
+          : p.grant && p.grant.packs ? `<img src="${packURL('gold')}" alt="">`.repeat(Math.min(3, p.grant.packs.gold || 1))
+            : `<img src="${LOCK}" alt="">` });
+      const wide = p.group !== 'tokens';
+      const el = wide
+        ? h('div', { class: 'product wide' }, art, h('div', { class: 'meta' }, h('div', { class: 'name', style: 'color:var(--ink);font-size:14px' }, p.name), what), btn, p.tag ? h('div', { class: 'ribbon', style: 'left:auto;right:10px;transform:none' }, p.tag) : null)
+        : h('div', { class: 'product' }, p.tag ? h('div', { class: 'ribbon' }, p.tag) : null, art, what, h('div', { class: 'name' }, p.name), btn);
+      return { p, el, btn, what, wide };
+    });
+    const group = (name) => tiles.filter((t) => t.p.group === name).map((t) => t.el);
+    setSheet('shop', 'Shop', [
+      preview ? h('div', { class: 'shop-note' }, STORE_PREVIEW
+        ? 'Preview shop: no payment or advert provider is connected yet, so purchases are free and adverts are stand-ins.'
+        : 'The shop opens soon.') : null,
+      h('h5', null, 'Free'),
+      h('div', { class: 'product wide' }, h('div', { class: 'art', html: TOKEN }), h('div', { class: 'meta' }, h('div', { class: 'name', style: 'color:var(--ink);font-size:14px' }, `${ADS.tokens} free tokens`), adSub), adBtn),
+      h('h5', null, 'Tokens'),
+      h('div', { class: 'shop-grid' }, group('tokens')),
+      h('h5', null, 'Bundles'),
+      h('div', { class: 'shop-grid' }, group('bundle')),
+      h('h5', null, 'Extras'),
+      h('div', { class: 'shop-grid' }, group('extra')),
+    ], () => {
+      const s = st();
+      const left = R.adTokensLeft(s, clock());
+      setText(adSub, !adsReady() ? 'Adverts are not available yet' : left > 0 ? `Watch a short advert · ${left} left today` : 'Come back tomorrow for more');
+      adBtn.disabled = left <= 0 || !adsReady();
+      for (const t of tiles) {
+        const owned = R.productOwned(s, t.p.id);
+        toggle(t.el, 'owned', owned);
+        setHTML(t.what, t.wide ? `<span class="sub">${t.p.desc || describe(t.p.grant, true)}</span>` : `${TOKEN}${fmt(t.p.grant.tokens)}`);
+        setText(t.btn, owned ? 'Owned' : priceOf(t.p));
+        t.btn.disabled = owned || (preview && !STORE_PREVIEW);
+      }
+    });
+  }
+
+  function outOfTokens() {
+    if (busy()) return;
+    const s = st();
+    const left = R.adTokensLeft(s, clock());
+    const secs = R.nextTokenIn(s, clock());
+    modal([
+      h('div', { class: 'kicker' }, 'Out of tokens'),
+      h('h2', null, 'The machine needs feeding'),
+      h('p', { html: `A token comes back every ${TUNING.tokenEvery / 60} minutes${secs > 0 ? `; the next is <b>${fmtClock(secs)}</b> away` : ''}.` }),
+      h('div', { class: 'actions stack' },
+        left > 0 && adsReady() ? h('button', { class: 'btn gold big', onclick: async (e) => {
+          const from = e.currentTarget;
+          closeModal();
+          await adTokens(from);
+        } }, h('span', { class: 'ad' }, 'AD'), `Watch for ${ADS.tokens} tokens`) : null,
+        h('button', { class: 'btn big', onclick: () => { click(); closeModal(); openShop(); } }, 'Visit the shop'),
+        h('button', { class: 'btn plain big', onclick: () => { click(); closeModal(); } }, 'Wait')),
+    ]);
+  }
+
+  // ---- splash -----------------------------------------------------------------
+
+  function showSplash(done) {
+    const el = h('div', { class: 'splash', role: 'button', tabindex: '0', 'aria-label': 'Tap to play' },
+      h('div', { class: 'rays' }),
+      h('div', { class: 'splash-inner' }, wordmark(), h('p', null, 'Spin. Build. Pie your rivals.'), h('div', { class: 'tap' }, 'Tap to play'), h('small', null, 'Fraser Studios')));
+    const go = () => {
+      if (el.classList.contains('gone')) return;
+      audio.unlock();
+      audio.play('fanfare');
+      el.classList.add('gone');
+      setTimeout(() => el.remove(), 480);
+      done();
+    };
+    el.addEventListener('click', go);
+    el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') go(); });
+    root.append(el);
   }
 
   // ---- toasts -----------------------------------------------------------------
@@ -1217,6 +1486,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
   // Every frame: reels and the coin counter.
   function frame(dt) {
     slot.draw(dt);
+    fx.draw(dt);
     const s = st();
     // while the reels turn, do not give the result away in the totals
     const target = s.coins - (held ? held.coins : 0);
@@ -1235,9 +1505,9 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     const cap = E.tokenCap(s);
     const heldTokens = held ? held.tokens + held.milestones.reduce((n, m) => n + m.tokens, 0) : 0;
     const tokens = s.tokens - heldTokens;
-    setText(tokensEl, `${fmt(tokens)}/${cap}`);
+    setHTML(tokensEl, `${fmt(tokens)}<span>/${cap}</span>`);
     const secs = R.nextTokenIn(s, now);
-    setText(tokenTimer, tokens >= cap ? 'Full' : `+1 · ${fmtClock(secs)}`);
+    setText(tokenTimer, tokens >= cap ? 'Full' : `next ${fmtClock(secs)}`);
     setText(tillEl, `+${money(E.idleRate(s) * 60)}/min`);
     const shields = s.shields - (held ? held.shield : 0);
     shieldEls.forEach((el, i) => toggle(el, 'on', i < shields));
@@ -1262,6 +1532,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     setText(spinLabel, auto ? 'AUTO' : s.pending && !spinning ? (s.pending.type === 'attack' ? 'PIE!' : 'DIP!') : 'SPIN');
     setHTML(spinCost, auto ? 'tap to stop' : tokens < 1 && !spinning ? (secs > 0 ? fmtClock(secs) : '') : `${s.bet} ${s.bet === 1 ? 'token' : 'tokens'}`);
     toggle(spinBtn, 'empty', tokens < 1 && !spinning && !s.pending);
+    toggle(spinBtn, 'ready', tokens >= 1 && !spinning && !auto && !held);
     if (auto && tokens < s.bet && !spinning && !held) setAuto(false);
 
     let canBuild = 0;
@@ -1285,7 +1556,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     }
     renderer.setPointer(point);
 
-    // a finished fair: offer to move on, once, as soon as nothing else is showing
+    // a finished park: offer to move on, once, as soon as nothing else is showing
     if (E.townComplete(s) && prompted !== s.town && !busy() && !slot.spinning && !held) {
       prompted = s.town;
       setTimeout(() => popup(townDone), 900);
@@ -1294,7 +1565,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     if (current) current.refresh();
   }
 
-  root.append(hud, side, dock, sheet, toasts, curtainEl);
+  root.append(hud, side, dock, sheet, toasts, fxCanvas, curtainEl);
 
   const wide = () => root.classList.contains('wide');
   function measure() {
@@ -1308,6 +1579,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     root.style.setProperty('--top', top + 'px');
     root.style.setProperty('--dock-h', dock.offsetHeight + 'px');
     slot.resize();
+    fx.resize();
   }
   refresh();
   measure();
@@ -1322,7 +1594,9 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     openBuild,
     openPending,
     closeSheet,
+    showSplash,
     showWelcome,
+    openShop,
     showAway,
     showLeague,
     showDaily,

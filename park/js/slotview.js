@@ -21,6 +21,7 @@ export function createSlotView(canvas, hooks = {}) {
   let flashUntil = 0;
   let flashMask = [false, false, false];
   let running = false;
+  let teasing = false;
 
   const pickSym = () => SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
   const reels = [0, 1, 2].map((i) => ({
@@ -45,8 +46,10 @@ export function createSlotView(canvas, hooks = {}) {
   }
 
   // Send the reels round to land on `symbols` (one per reel).
-  function spin(symbols, quick = false) {
+  // `tease` holds the last reel back when the first two already match.
+  function spin(symbols, quick = false, tease = false) {
     running = true;
+    teasing = false;
     flashUntil = 0;
     reels.forEach((r, i) => {
       const start = Math.round(r.pos);
@@ -62,6 +65,17 @@ export function createSlotView(canvas, hooks = {}) {
       r.to = land;
       r.t0 = time;
       r.dur = (quick ? 0.45 : 0.95) + i * (quick ? 0.16 : 0.34);
+      if (tease && i === 2 && !quick) {
+        r.to += RING;
+        r.ring[((r.to % RING) + RING) % RING] = symbols[i];
+        for (const off of [-1, 1]) {
+          let s = pickSym();
+          while (s === symbols[i]) s = pickSym();
+          r.ring[(((r.to + off) % RING) + RING) % RING] = s;
+        }
+        r.dur += 1.05;
+      }
+      r.tease = tease && i === 2 && !quick;
       r.spinning = true;
     });
   }
@@ -99,6 +113,12 @@ export function createSlotView(canvas, hooks = {}) {
         r.pos = r.to;
         r.spinning = false;
         if (hooks.onReelStop) hooks.onReelStop(i);
+        // two matching reels down and one still turning: build the suspense
+        if (i === 1 && reels[2].spinning && reels[2].tease) {
+          teasing = true;
+          if (hooks.onTease) hooks.onTease();
+        }
+        if (i === 2) teasing = false;
       } else {
         any = true;
       }
@@ -131,6 +151,7 @@ export function createSlotView(canvas, hooks = {}) {
       ctx.fillRect(x, 0, rw, h);
       const base = Math.floor(r.pos);
       const speed = r.spinning ? Math.abs(r.to - r.pos) : 0;
+      const blur = Math.min(1, Math.max(0, (speed - 5) / 14)); // 0 at rest, 1 flat out
       for (let o = -2; o <= 2; o++) {
         const idx = base + o;
         const sym = r.ring[((idx % RING) + RING) % RING];
@@ -139,10 +160,31 @@ export function createSlotView(canvas, hooks = {}) {
         let size = cell * 0.9;
         const centre = Math.abs(idx - r.pos) < 0.02;
         if (flashing && centre && flashMask[i]) size *= 1 + Math.sin((flashUntil - time) * 14) * 0.08 + 0.08;
-        ctx.globalAlpha = !r.spinning && !centre ? 0.42 : speed > 6 ? 0.75 : 1;
-        drawSymbol(ctx, sym, x + rw / 2, y, size);
+        ctx.globalAlpha = !r.spinning && !centre ? 0.42 : 1 - blur * 0.45;
+        if (blur > 0.05) {
+          // smear the symbol along its direction of travel
+          ctx.save();
+          ctx.translate(x + rw / 2, y);
+          ctx.scale(1, 1 + blur * 1.3);
+          drawSymbol(ctx, sym, 0, 0, size);
+          ctx.restore();
+        } else {
+          drawSymbol(ctx, sym, x + rw / 2, y, size);
+        }
       }
       ctx.globalAlpha = 1;
+      if (blur > 0.05) {
+        ctx.fillStyle = `rgba(255,250,240,${blur * 0.3})`;
+        ctx.fillRect(x, 0, rw, h);
+      }
+      if (teasing && i < 2) {
+        const glow = 0.5 + Math.sin(time * 16) * 0.5;
+        ctx.strokeStyle = `rgba(255,197,61,${0.45 + glow * 0.5})`;
+        ctx.lineWidth = 4 + glow * 3;
+        ctx.beginPath();
+        ctx.roundRect(x + 3, cy - cell / 2 + 2, rw - 6, cell - 4, 12);
+        ctx.stroke();
+      }
       // shade the top and bottom so the reel looks curved
       const shade = ctx.createLinearGradient(0, 0, 0, h);
       shade.addColorStop(0, 'rgba(60,40,20,0.45)');
@@ -173,5 +215,5 @@ export function createSlotView(canvas, hooks = {}) {
   }
 
   resize();
-  return { spin, skip, flash, draw, resize, get spinning() { return running; } };
+  return { spin, skip, flash, draw, resize, get spinning() { return running; }, get teasing() { return teasing; } };
 }

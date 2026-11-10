@@ -567,3 +567,34 @@ test('same seed, same game', () => {
   };
   assert.equal(play(), play());
 });
+
+// ---- shop and adverts ------------------------------------------------------
+
+test('a completed purchase hands over its contents; one-time items only once', async () => {
+  const { PRODUCTS, ADS } = await import('../js/config.js');
+  const { state } = fresh();
+  state.town = 2;
+  const tokens = state.tokens;
+  const big = PRODUCTS.find((p) => p.id === 'tokens_m');
+  assert.equal(R.applyPurchase(state, 'tokens_m').tokens, big.grant.tokens);
+  assert.equal(state.tokens, tokens + big.grant.tokens);
+  assert.ok(R.applyPurchase(state, 'tokens_m'), 'token bundles can be bought again');
+  const starter = R.applyPurchase(state, 'starter');
+  assert.equal(starter.coins, 150 * E.unit(2), 'coins scale with the town');
+  assert.equal(state.cards.packs.gold, 1);
+  assert.equal(R.applyPurchase(state, 'starter'), null);
+  assert.equal(R.productOwned(state, 'starter'), true);
+  assert.equal(state.shop.noAds, false);
+  assert.ok(R.applyPurchase(state, 'noads'));
+  assert.equal(state.shop.noAds, true);
+  assert.equal(R.applyPurchase(state, 'no-such-thing'), null);
+  assert.equal(parseSave(serialize(state)).shop.noAds, true);
+  assert.deepEqual(hydrate({ plots: [], shop: { owned: { tokens_m: true, starter: true, junk: 1 } } }).shop.owned, { starter: true });
+
+  // advert tokens: a few a day, then tomorrow
+  const noon = new Date(2030, 5, 10, 12).getTime();
+  for (let i = 0; i < ADS.perDay; i++) assert.equal(R.claimAdTokens(state, noon).tokens, ADS.tokens);
+  assert.equal(R.adTokensLeft(state, noon), 0);
+  assert.equal(R.claimAdTokens(state, noon + HOUR), null);
+  assert.equal(R.adTokensLeft(state, noon + 24 * HOUR), ADS.perDay);
+});

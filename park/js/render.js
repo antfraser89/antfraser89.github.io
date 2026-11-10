@@ -1,4 +1,4 @@
-// Canvas renderer for the fair: camera, cached ground, depth-sorted sprites,
+// Canvas renderer for the park: camera, cached ground, depth-sorted sprites,
 // the day/night lighting pass, particles and the on-map labels.
 import { GAME_TITLE, PLOTS, STAGES, WORLD as W, townInfo } from './config.js';
 import * as A from './art.js';
@@ -12,7 +12,7 @@ const GROUND_SCALE = 1.25;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const lerp = (a, b, t) => a + (b - a) * t;
 
-const FONT = '"Trebuchet MS", "Segoe UI", system-ui, sans-serif';
+
 
 // How dark it is, 0 (day) to 1 (night), from the state clock.
 export function darkness(clock) {
@@ -247,6 +247,9 @@ export function createRenderer(canvas, world, hooks = {}) {
   let sheetCover = 0;
   let cover = 0; // sheetCover, eased, so the view glides when a sheet opens or closes
   const glows = [makeGlow(255, 214, 130), makeGlow(255, 150, 205), makeGlow(140, 220, 255)];
+  const cloud = makeGlow(20, 24, 60);
+  // slow cloud shadows crossing the ground: [phase, row, width, speed]
+  const clouds = [[0.05, 0.12, 520, 9], [0.4, 0.55, 680, 7], [0.72, 0.3, 440, 11], [0.9, 0.85, 600, 8]];
   const particles = [];
   const popups = [];
   const rockets = [];
@@ -587,7 +590,7 @@ export function createRenderer(canvas, world, hooks = {}) {
   }
 
   function pill(x, y, text, bg, fg, size, progress = -1) {
-    ctx.font = `800 ${size}px ${FONT}`;
+    ctx.font = A.displayFont(size);
     const w = ctx.measureText(text).width + size * 1.3;
     const h = size * 1.75;
     ctx.beginPath();
@@ -796,6 +799,19 @@ export function createRenderer(canvas, world, hooks = {}) {
     }
     ctx.globalAlpha = 1;
 
+    // cloud shadows drift over the park by day
+    if (dark < 0.6) {
+      const span = W.w + 2 * M + 800;
+      for (const [phase, row, width, pace] of clouds) {
+        const cx = ((phase * span + time * pace) % span) - M - 400;
+        const cy = -80 + row * (W.h + 160) + Math.sin(time * 0.05 + phase * 9) * 40;
+        if (cx + width < view.x0 || cx - width > view.x1) continue;
+        ctx.globalAlpha = 0.2 * (1 - dark / 0.6);
+        ctx.drawImage(cloud, cx - width, cy - width * 0.42, width * 2, width * 0.84);
+      }
+      ctx.globalAlpha = 1;
+    }
+
     // night: darken everything, then add the lights back
     if (dark > 0.01) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -851,13 +867,19 @@ export function createRenderer(canvas, world, hooks = {}) {
 
     // screen space from here on
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // a soft vignette pulls the eye to the middle of the park
+    const vg = ctx.createRadialGradient(usableW() / 2, vh * 0.46, Math.min(vw, vh) * 0.38, usableW() / 2, vh * 0.46, Math.max(vw, vh) * 0.78);
+    vg.addColorStop(0, 'rgba(20,22,60,0)');
+    vg.addColorStop(1, 'rgba(20,22,60,0.26)');
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, vw, vh);
     drawOverlays();
     for (const p of popups) {
       const u = p.t / 1.3;
       const x = toScreenX(p.x);
       const y = toScreenY(p.y) - u * 46;
       ctx.globalAlpha = clamp((1 - u) * 2.2, 0, 1);
-      ctx.font = `900 ${Math.round(p.size * clamp(0.6 + cam.zoom * 0.8, 0.75, 1.2))}px ${FONT}`;
+      ctx.font = A.displayFont(Math.round(p.size * clamp(0.6 + cam.zoom * 0.8, 0.75, 1.2) * 1.1));
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.lineWidth = 4;

@@ -1,4 +1,4 @@
-// The living fair: guests walk in, queue, ride and pay a little into the till.
+// The living park: guests walk in, queue, ride and pay a little into the till.
 // It is scenery with a small income attached; the real money comes from spins.
 // No DOM in here, so the same code runs headless in tests.
 import { ATTRACTIONS, GUEST_LOOKS, PLOTS, TUNING as T, WORLD as W, townInfo } from './config.js';

@@ -68,8 +68,17 @@ function poly(c, pts, col) {
 function shadow(c, x, y, rx, ry) {
   ell(c, x, y, rx, ry, 'rgba(20,20,45,0.2)');
 }
+// Canvas lettering uses the display face once it has loaded (main.js says when).
+let displayReady = false;
+export function setDisplayFont(ready) {
+  displayReady = ready;
+}
+export const displayFont = (size) => (displayReady
+  ? `400 ${size}px "Lilita One", "Trebuchet MS", system-ui, sans-serif`
+  : `900 ${size}px "Trebuchet MS", "Segoe UI", system-ui, sans-serif`);
+
 function label(c, text, x, y, size, col) {
-  c.font = `900 ${size}px "Trebuchet MS", "Segoe UI", system-ui, sans-serif`;
+  c.font = displayFont(size);
   c.textAlign = 'center';
   c.textBaseline = 'middle';
   c.fillStyle = col;
@@ -1199,12 +1208,16 @@ export function drawGate(c, x, y, title, t) {
   c.stroke();
   // lettering follows the arch, spaced by each letter's real width
   c.save();
-  c.font = '900 15.5px "Trebuchet MS", "Segoe UI", system-ui, sans-serif';
+  // a short name is set large; a long one shrinks to fit the arch
+  const text = title.toUpperCase();
+  c.font = displayFont(20);
+  const natural = [...text].reduce((n, ch) => n + c.measureText(ch).width + 2, 0);
+  const px = Math.max(13, Math.min(30, (20 * 150) / natural));
+  c.font = displayFont(px);
   c.textAlign = 'center';
   c.textBaseline = 'middle';
   c.fillStyle = P.cream;
-  const text = title.toUpperCase();
-  const widths = [...text].map((ch) => c.measureText(ch).width + 1.6);
+  const widths = [...text].map((ch) => c.measureText(ch).width + px * 0.12);
   const total = widths.reduce((a, b) => a + b, 0);
   const fit = Math.min(1, 176 / total);
   let cursor = x - (total * fit) / 2;
@@ -1217,6 +1230,10 @@ export function drawGate(c, x, y, title, t) {
     c.translate(lx, ly);
     c.rotate(dx * 0.6);
     c.scale(fit, 1);
+    c.lineWidth = px * 0.22;
+    c.lineJoin = 'round';
+    c.strokeStyle = 'rgba(15,17,45,0.55)';
+    c.strokeText(text[k], 0, 0);
     c.fillText(text[k], 0, 0);
     c.restore();
   }

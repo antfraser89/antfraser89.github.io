@@ -1,6 +1,7 @@
 // Boot, the frame loop, saving, and turning what happens into feedback.
+import { setDisplayFont } from './art.js';
 import { createAudio } from './audio.js';
-import { GAME_TITLE, OPENING_SPINS, PLOTS, SAVE_KEY, TUNING } from './config.js';
+import { GAME_TITLE, LEGACY_SAVE_KEYS, OPENING_SPINS, PLOTS, SAVE_KEY, TUNING } from './config.js';
 import * as E from './economy.js';
 import { money } from './format.js';
 import { createRenderer } from './render.js';
@@ -18,11 +19,26 @@ const clock = () => Date.now() + skew;
 
 function readSave() {
   try {
-    const text = localStorage.getItem(SAVE_KEY);
-    return text ? parseSave(text) : null;
+    for (const key of [SAVE_KEY, ...LEGACY_SAVE_KEYS]) {
+      const text = localStorage.getItem(key);
+      const save = text ? parseSave(text) : null;
+      if (save) return save;
+    }
+    return null;
   } catch {
     return null; // private mode or storage disabled: play without saving
   }
+}
+
+// Give the display typeface a moment to arrive so signs and cards are drawn
+// with it; if it does not come, carry on with the system font.
+const fontReady = await Promise.race([
+  document.fonts && document.fonts.load ? document.fonts.load('400 20px "Lilita One"').then((faces) => faces.length > 0, () => false) : false,
+  new Promise((resolve) => setTimeout(() => resolve(false), 1800)),
+]);
+if (fontReady) {
+  document.documentElement.classList.add('fonts-ready');
+  setDisplayFont(true);
 }
 
 const loaded = readSave();
@@ -205,12 +221,15 @@ ui.refresh();
 ui.measure();
 renderer.resetView();
 
-if (!loaded) {
-  ui.showWelcome();
-} else if (state.lastSaved > 0) {
-  comeBack((clock() - state.lastSaved) / 1000, true);
-  ui.showDaily();
-}
+// The splash doubles as the first tap, which browsers need before sound can play.
+ui.showSplash(() => {
+  if (!loaded) {
+    ui.showWelcome();
+  } else if (state.lastSaved > 0) {
+    comeBack((clock() - state.lastSaved) / 1000, true);
+    ui.showDaily();
+  }
+});
 
 requestAnimationFrame((t) => {
   last = t;
@@ -218,4 +237,4 @@ requestAnimationFrame((t) => {
 });
 
 // Handy for poking at the game from the console and for automated checks.
-window.funfair = { world, state, rules: R, sim: S, economy: E, renderer, ui, save, clock };
+window.park = { world, state, rules: R, sim: S, economy: E, renderer, ui, save, clock };
