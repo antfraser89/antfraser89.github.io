@@ -104,7 +104,7 @@ function spawnGuest(world) {
     bob: r() * 6.283,
     face: 1,
     moving: false,
-    alpha: 1,
+    alpha: 0,
     emote: null,
     emoteT: 0,
     shirt: pick(r, GUEST_LOOKS.shirts.length),
@@ -267,8 +267,16 @@ function finishRide(world, i) {
       g.emoteT = 1.4;
     }
     const next = g.visits > 0 ? chooseTarget(world, g, -1) : -1;
+    // Customers at a counter step back to the exit lane first, so they walk
+    // round the queue rather than through it.
+    const counterY = g.y;
+    if (def.kind !== 'ride') g.y = def.y + 34;
     if (next >= 0) sendTo(world, g, next);
     else sendHome(g);
+    if (def.kind !== 'ride') {
+      g.path.unshift({ x: g.x, y: g.y });
+      g.y = counterY;
+    }
   }
   rt.riders.length = 0;
   rt.phase = 'idle';

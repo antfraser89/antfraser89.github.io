@@ -27,7 +27,7 @@ const operators = (n, stars) => ({
   text: `Have ${n} operators on the payroll`, target: n, stars,
   cur: (s) => s.attractions.filter((a) => a.operator).length,
 });
-const stat = (key, n, stars, text) => ({ text, target: n, stars, cur: (s) => s.stats[key] });
+const stat = (key, n, stars, text, point) => ({ text, target: n, stars, point, cur: (s) => s.stats[key] });
 const park = (key, n, stars) => ({
   text: `Get ${PARK[key].name} to level ${n}`, target: n, stars,
   cur: (s) => s.park[key],
@@ -39,7 +39,7 @@ const tours = (n, stars) => ({
 
 export const GOALS = [
   build('toffee', 1),
-  stat('manualRuns', 3, 1, 'Tap GO! to serve customers 3 times'),
+  stat('manualRuns', 3, 1, 'Tap GO! to serve customers 3 times', 0),
   level('toffee', 5, 1),
   operator('toffee', 1),
   build('ducks', 1),
