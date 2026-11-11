@@ -27,7 +27,7 @@ export default function install(kit) {
       refresh();
     }
     setSheet('missions', 'Missions', [
-      h('div', { class: 'm-head' }, h('div', { class: 'm-pts' }, pts, h('small', null, 'mission points this week')), h('div', { class: 'm-track' }, h('div', { class: 'bar' }, chestBar), chestEls)),
+      h('div', { class: 'm-head' }, h('img', { class: 'm-host', src: ART('host-dog'), alt: '' }), h('div', { class: 'm-pts' }, pts, h('small', null, 'mission points this week')), h('div', { class: 'm-track' }, h('div', { class: 'bar' }, chestBar), chestEls)),
       h('div', { class: 'segs' }, tabs),
       list, foot,
     ], () => {

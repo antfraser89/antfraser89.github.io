@@ -63,7 +63,7 @@ export default function install(kit) {
     setSheet('pet', 'Pets', [
       h('div', { class: 'pet-top' }, pic, h('div', { class: 'meta' }, name, h('div', { class: 'bar' }, bar), h('div', { class: 'ms-line' }, xp))),
       perk, feedBtn,
-      h('h5', null, 'Your pals'),
+      h('img', { class: 'shop-hdr-img', src: ART('hdr-pets'), alt: 'Pet shop' }),
       h('div', { class: 'pals' }, tiles.map((t) => t.el)),
       h('p', { class: 'note' }, 'There is one pet level, and it belongs to all of them. Only the pal walking with you uses its talent. Every level also adds two spins to the meter.'),
     ], () => {

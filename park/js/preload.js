@@ -4,10 +4,17 @@ const FIRST = [
   'splash', 'logo', 'slots', 'spin-dome', 'park-coral', 'sym-coin', 'sym-chest', 'sym-shell', 'ico-ticket', 'sym-bell', 'sym-cherry', 'sym-ball', 'sym-star',
   'tab-shop', 'tab-park', 'tab-slots', 'tab-album', 'tab-club', 'panda-welcome', 'panda-party', 'panda-thumbs', 'panda-sad',
 ];
-// Worth having soon after: fetched quietly once the game is on screen.
+// Every other picture: fetched quietly once the game is on screen, so the
+// whole game is there when the connection is not. (tests/assets.test.js
+// checks this list against the img folder.)
 const SOON = [
-  'park-pirate', 'park-jungle', 'park-winter', 'avatars', 'pets', 'cards-pond', 'ico-energy', 'ico-gem', 'ico-pearl', 'ico-key', 'ico-sword', 'ico-food',
-  'ico-chest-open', 'ico-coins', 'ico-tickets', 'hdr-daily', 'bg-draw', 'bg-chests', 'bg-trail', 'bg-plant', 'bg-cannon', 'bg-team',
+  'avatars', 'bg-cannon', 'bg-chests', 'bg-draw', 'bg-load', 'bg-plant', 'bg-team', 'bg-trail', 'cards-desert', 'cards-ember', 'cards-garden',
+  'cards-grotto', 'cards-hatch', 'cards-lava', 'cards-leafy', 'cards-pond', 'cards-tropic', 'decor-chest', 'decor-globe', 'decor-harp',
+  'decor-helmet', 'hdr-bundle', 'hdr-coinshop', 'hdr-daily', 'hdr-pets', 'host-dog', 'host-gull', 'ico-boost', 'ico-chest-gold', 'ico-chest-open',
+  'ico-coins', 'ico-coins-big', 'ico-compass', 'ico-crown', 'ico-energy', 'ico-food', 'ico-gem', 'ico-gift', 'ico-key', 'ico-pearl', 'ico-spinpack',
+  'ico-spins', 'ico-stamp', 'ico-sword', 'ico-tickets', 'ico-trophy', 'merge-01', 'merge-02', 'merge-03', 'merge-04', 'merge-05', 'merge-06',
+  'merge-07', 'merge-08', 'merge-09', 'merge-12', 'merge-gen', 'pack-art', 'park-jungle', 'park-pirate', 'park-winter', 'pets', 'prize-04',
+  'prize-05', 'prize-06',
 ];
 
 const src = (name) => (window.PARK_ART && window.PARK_ART[name]) || `img/${name}.webp`;

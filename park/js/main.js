@@ -223,7 +223,18 @@ ui.showSplash(() => {
 // Offline play, where the browser allows it. A single-file build has no
 // separate worker file, so this quietly does nothing there.
 if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && !window.PARK_ART) {
-  window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
+  const register = () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+    // Whatever was fetched before the worker took over (the scripts, mostly)
+    // is handed to it by name, so the very first visit is enough to play offline.
+    navigator.serviceWorker.ready.then((reg) => {
+      const urls = performance.getEntriesByType('resource').map((e) => e.name).filter((u) => u.startsWith(location.origin));
+      if (reg.active) reg.active.postMessage({ type: 'keep', urls });
+    }).catch(() => {});
+  };
+  // this file waits for the fonts, so the page may well have finished loading already
+  if (document.readyState === 'complete') register();
+  else window.addEventListener('load', register);
 }
 
 // If something throws, say so once and offer a reload; the save is untouched.

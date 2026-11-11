@@ -391,3 +391,9 @@ table.odds td:first-child { text-align: left; }
 .mg-next b { font: 800 15px var(--display); }
 .mg-next b img { width: auto; height: 17px; vertical-align: -3px; }
 .hero-pic::after { content: ''; position: absolute; right: 0; top: 0; bottom: 0; width: 34px; background: linear-gradient(90deg, rgba(251, 241, 214, 0), #fbf1d6 80%); }
+
+.shop-hdr-img { display: block; width: 100%; margin: 12px 0 8px; border-radius: 18px; border: 3px solid #fff; box-shadow: var(--lift); }
+.banner.with-host { position: relative; padding-right: 92px; }
+.banner-host { position: absolute; right: 8px; top: 50%; width: 78px; transform: translateY(-50%); filter: drop-shadow(0 4px 4px rgba(60, 20, 0, 0.35)); }
+.m-head { position: relative; padding-left: 74px; }
+.m-host { position: absolute; left: 4px; bottom: 0; width: 70px; }

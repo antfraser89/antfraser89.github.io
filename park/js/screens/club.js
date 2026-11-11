@@ -7,7 +7,7 @@ import * as Club from '../meta/club.js';
 import * as R from '../rules.js';
 
 export default function install(kit) {
-  const { h, setText, setHTML, toggle, st, TOKEN, click, nope, audio, describe, toast, celebrate, modal, closeModal, refresh, onSave, clock, setSheet, sheetBody, faceStyle, cardFace, openScene, closeScene, at, hot, sceneClose, sceneInfo, lockedToast } = kit;
+  const { h, setText, setHTML, toggle, st, ART, TOKEN, click, nope, audio, describe, toast, celebrate, modal, closeModal, refresh, onSave, clock, setSheet, sheetBody, faceStyle, cardFace, openScene, closeScene, at, hot, sceneClose, sceneInfo, lockedToast } = kit;
   const C = Club.CLUB;
   const face = (i) => h('span', { class: 'face', style: faceStyle(i) });
 
@@ -19,7 +19,7 @@ export default function install(kit) {
     const evTime = h('div', { class: 'kicker' });
     const track = EVENT_MILESTONES.map((m) => ({ m, el: h('div', { class: 'ms' }, h('b', null, fmt(m.at)), h('span', { html: describe(m.reward, true) })) }));
     setSheet('bonus', 'Park Bonus', [
-      h('div', { class: 'banner' }, evTime, evName, evTag),
+      h('div', { class: 'banner with-host' }, h('img', { class: 'banner-host', src: ART('host-gull'), alt: '' }), evTime, evName, evTag),
       h('div', { class: 'ms-track' }, track.map((t) => t.el)),
       h('div', { class: 'rules' },
         h('div', null, h('b', null, 'Spin to earn'), h('span', null, 'Every spin: 1 point. Three of a kind: 4. A pearl dive: 13. The jackpot: 26. Bigger bets multiply the points.')),
@@ -60,7 +60,7 @@ export default function install(kit) {
       h('div', { class: 'ask' }, spinsBtn, cardBtn),
       h('h5', null, 'Pals asking for help'),
       feed,
-      h('div', { class: 'banner league-banner' }, lgTime, h('h3', null, 'Daily league'), h('div', { class: 'tag-line' }, 'Pearl dives and turns on the wheel score points. Top of the table at midnight wins.')),
+      h('div', { class: 'banner league-banner with-host' }, h('img', { class: 'banner-host', src: ART('ico-trophy'), alt: '' }), lgTime, h('h3', null, 'Daily league'), h('div', { class: 'tag-line' }, 'Pearl dives and turns on the wheel score points. Top of the table at midnight wins.')),
       table, prizes,
     ], () => {
       const s = st();

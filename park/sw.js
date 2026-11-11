@@ -36,3 +36,20 @@ self.addEventListener('fetch', (event) => {
     }),
   );
 });
+
+// The page hands over the names of files it fetched before this worker was in charge.
+self.addEventListener('message', (event) => {
+  const data = event.data;
+  if (!data || data.type !== 'keep' || !Array.isArray(data.urls)) return;
+  event.waitUntil(caches.open(CACHE).then(async (cache) => {
+    for (const url of data.urls.slice(0, 400)) {
+      if (!url.startsWith(self.location.origin) || (await cache.match(url))) continue;
+      try {
+        const response = await fetch(url);
+        if (response.ok) await cache.put(url, response);
+      } catch {
+        // offline already, or gone: nothing to keep
+      }
+    }
+  }));
+});
