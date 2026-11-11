@@ -285,5 +285,5 @@ export default function install(kit) {
     }, { page: true });
   }
 
-  return { openBuild, openSite, openChest, openMap, openStats, visit, hot, at };
+  return { openBuild, openSite, openChest, openMap, openStats, visit };
 }

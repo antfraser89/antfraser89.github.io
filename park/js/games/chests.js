@@ -7,10 +7,10 @@ export const CHESTS = {
   // the six prizes, in the order they sit round the ring on the painting
   prizes: (level) => [
     { coins: 60 + Math.min(level, 10) * 15 }, { pack: level >= 6 ? 'gold' : level >= 3 ? 'silver' : 'bronze' }, { coins: 20 + Math.min(level, 10) * 5 },
-    { wheel: 1 }, { energy: 12 + Math.min(level, 10) * 2 }, { tokens: 8 + Math.min(level, 10) * 2 },
+    { wheel: 1 }, { energy: 12 + Math.min(level, 10) * 2 }, { tokens: 6 + Math.min(level, 10) },
   ],
   boards: 3, // boards to a level
-  levelReward: (level) => ({ tokens: 20 + Math.min(level, 10) * 4, gems: 30 + Math.min(level, 10) * 5 }),
+  levelReward: (level) => ({ tokens: 15 + Math.min(level, 10) * 2, gems: 30 + Math.min(level, 10) * 5 }),
 };
 
 function shuffle(rand) {

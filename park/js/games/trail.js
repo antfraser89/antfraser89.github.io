@@ -16,8 +16,8 @@ export const TRAIL = {
   nodes: 6,
   nodeCost: (stage, node) => Math.round((60 + stage * 40) * [1, 1.2, 1.5, 1.8, 2.2, 3][node]),
   nodeReward: (stage, node) => [
-    { coins: 15 + Math.min(stage, 20) * 3 }, { tokens: 3 + Math.min(Math.floor(stage / 2), 7) }, { gems: 6 + Math.min(stage, 20) }, { coins: 30 + Math.min(stage, 20) * 5 }, { tokens: 5 + Math.min(stage, 10), energy: 6 },
-    { tokens: 15 + Math.min(stage * 2, 30), gems: 25 + Math.min(stage, 20) * 3, pack: stage % 3 === 2 ? 'gold' : 'silver' },
+    { coins: 15 + Math.min(stage, 20) * 3 }, { tokens: 3 + Math.min(Math.floor(stage / 2), 3) }, { gems: 6 + Math.min(stage, 20) }, { coins: 30 + Math.min(stage, 20) * 5 }, { tokens: 5 + Math.min(stage, 5), energy: 6 },
+    { tokens: 15 + Math.min(stage * 2, 10), gems: 25 + Math.min(stage, 20) * 3, pack: stage % 3 === 2 ? 'gold' : 'silver' },
   ][node],
   // the cannon: twenty jars a level
   jars: 20,

@@ -159,7 +159,7 @@ node tools/balance.mjs 14 3     # days, sessions per day
 node tools/balance.mjs 7 3 7 ads  # the same, watching every advert on offer
 ```
 
-The bot plays everything (it builds, does its missions, plays every side game and helps its club), buys nothing, and at the end prints where its spins came from. With the current numbers, at three sessions a day, it finishes the first park in about 30 spins, is in its eighth park by the end of day one, and its nineteenth after a week; after that each park is the full 1,800 spins. A test checks that 60,000 simulated spins pay within 6% of what `spinEV()` predicts.
+The bot plays everything (it builds, does its missions, plays every side game and helps its club), always bets as high as it is allowed, buys nothing, and at the end prints where its spins came from. With the current numbers, at three sessions a day, it finishes the first park in about 15 spins, is in its eighth park by the end of day one, its eighteenth after a week and its thirty-first after two; from park 11 on, every park is the full 1,800 spins. About a sixth of the spins it uses come from the timer; the rest are prizes. A real player, who does not play every system perfectly three times a day, is a good deal slower. A test checks that 60,000 simulated spins pay within 6% of what `spinEV()` predicts.
 
 Useful while developing: `?speed=60` runs the clock sixty times faster, and `window.park` exposes the live state, rules and screens in the console.
 

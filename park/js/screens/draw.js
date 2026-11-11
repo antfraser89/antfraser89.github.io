@@ -1,5 +1,4 @@
 // The Prize Draw, on its painting. A pearl token bursts one bubble.
-import { ADS } from '../config.js';
 import { addRewards } from '../core.js';
 import * as E from '../economy.js';
 import { fmt, money } from '../format.js';

@@ -3,21 +3,19 @@
 // Sheets are built once when opened and refreshed in place, so buttons never
 // get replaced under the player's finger.
 import {
-  ADS, CARDS, CARD_SETS, CURRENCY, EVENT_MILESTONES, GAME_TITLE, ITEMS, PACKS, PARKS_TOTAL, PAY, PLOTS, STAGES, SYMBOL_ART, WHEEL,
-  PRODUCTS, STORE_PREVIEW, TOWN_REWARD, TUNING, UNLOCKS, VAULT, VERSION, setUnlockTown, townInfo, unlockLevel,
+  ADS, CARDS, CARD_SETS, CURRENCY, GAME_TITLE, ITEMS, PACKS, PARKS_TOTAL, PAY, PLOTS, SYMBOL_ART, WHEEL, STORE_PREVIEW, TOWN_REWARD, UNLOCKS, VAULT, setUnlockTown, townInfo, unlockLevel,
 } from './config.js';
 import * as E from './economy.js';
 import { createFx } from './fx.js';
 import { fmt, fmtClock, fmtTime, money } from './format.js';
 import { currentMission } from './goals.js';
-import { SITES, STAGE_H, STAGE_W, siteThumbStyle } from './parkview.js';
+import { STAGE_H, STAGE_W } from './parkview.js';
 import * as G from './game.js';
 import { activePet } from './pets.js';
 import * as R from './rules.js';
 import { installScreens } from './screens/index.js';
 import * as S from './sim.js';
 import { createSlotView } from './slotview.js';
-import { exportCode, importCode } from './state.js';
 
 function h(tag, attrs, ...kids) {
   const el = document.createElement(tag);

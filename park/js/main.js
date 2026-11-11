@@ -1,6 +1,6 @@
 // Boot, the frame loop, saving, and turning what happens into feedback.
 import { createAudio } from './audio.js';
-import { GAME_TITLE, LEGACY_SAVE_KEYS, OPENING_SPINS, PLOTS, SAVE_KEY, TUNING } from './config.js';
+import { GAME_TITLE, LEGACY_SAVE_KEYS, OPENING_SPINS, SAVE_KEY, TUNING } from './config.js';
 import * as E from './economy.js';
 import * as G from './game.js';
 import { money } from './format.js';
@@ -222,7 +222,7 @@ ui.showSplash(() => {
 
 // Offline play, where the browser allows it. A single-file build has no
 // separate worker file, so this quietly does nothing there.
-if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && !window.PARK_ART) {
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && !window.PARK_ART && !window.PARK_NO_SW) {
   const register = () => {
     navigator.serviceWorker.register('sw.js').catch(() => {});
     // Whatever was fetched before the worker took over (the scripts, mostly)

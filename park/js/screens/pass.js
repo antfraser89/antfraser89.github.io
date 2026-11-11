@@ -4,7 +4,7 @@ import { fmtTime } from '../format.js';
 import * as P from '../meta/pass.js';
 
 export default function install(kit) {
-  const { h, setText, setHTML, toggle, st, click, nope, describe, celebrate, setSheet, refresh, onSave, clock, buy, priceOf, lootItems } = kit;
+  const { h, setText, setHTML, toggle, st, nope, describe, celebrate, setSheet, refresh, onSave, clock, buy, priceOf } = kit;
   const product = PRODUCTS.find((p) => p.pass);
 
   function open() {
@@ -75,7 +75,6 @@ export default function install(kit) {
     }
     return out;
   }
-  void lootItems;
 
   return { open };
 }

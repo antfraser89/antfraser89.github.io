@@ -15,7 +15,7 @@ const NAMES = ['Pearl', 'Pink scallop', 'Striped scallop', 'Fan clam', 'Cookie c
 const SIZE = [26, 30, 33, 38, 39, 40, 42, 41, 43, 46];
 
 export default function install(kit) {
-  const { h, setText, setHTML, toggle, st, ART, rand, click, nope, buzz, audio, describe, toast, celebrate, refresh, onSave, clock, openScene, closeScene, at, sceneClose, sceneInfo, itemIcon, adFor, root, fx } = kit;
+  const { h, setText, setHTML, toggle, st, ART, rand, click, nope, buzz, audio, describe, toast, celebrate, refresh, onSave, clock, openScene, at, sceneClose, sceneInfo, itemIcon, adFor, root, fx } = kit;
   const art = (level) => ART('merge-' + String(SHELLS[level - 1]).padStart(2, '0'));
   const cellXY = (i) => [LEFT + (i % M.MERGE.cols) * CELL, TOP + Math.floor(i / M.MERGE.cols) * CELL];
 

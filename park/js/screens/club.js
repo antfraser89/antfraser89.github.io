@@ -251,5 +251,5 @@ export default function install(kit) {
     redraw();
   }
 
-  return { open, openBonus, openTeam, sheetBody };
+  return { open, openBonus, openTeam };
 }

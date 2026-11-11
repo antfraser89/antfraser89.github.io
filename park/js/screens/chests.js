@@ -10,7 +10,7 @@ const RING = [[195, 188], [300, 251], [300, 372], [195, 432], [88, 372], [88, 25
 const CHEST = [[75, 570], [195, 570], [318, 570], [72, 668], [195, 668], [318, 668]];
 
 export default function install(kit) {
-  const { h, setText, setHTML, toggle, st, ART, rand, click, nope, buzz, audio, describe, toast, celebrate, refresh, onSave, clock, openScene, at, hot, sceneClose, sceneInfo, adFor, symURL, packURL, fx } = kit;
+  const { h, setText, toggle, st, ART, rand, nope, buzz, audio, describe, toast, celebrate, refresh, onSave, clock, openScene, at, hot, sceneClose, sceneInfo, adFor, symURL, packURL, fx } = kit;
 
   const label = (state, reward) => (reward.pack ? '×1' : reward.coins ? money(reward.coins * E.unit(state.town)) : reward.wheel ? '×' + reward.wheel : fmt(reward.energy || reward.tokens || 0));
   const icon = (reward) => (reward.pack ? packURL(reward.pack) : reward.coins ? symURL('coin') : reward.wheel ? symURL('ball') : reward.energy ? ART('ico-energy') : symURL('token'));
@@ -98,8 +98,6 @@ export default function install(kit) {
         }
       });
     });
-    void click;
-    void setHTML;
   }
 
   return { open };

@@ -1,6 +1,5 @@
 // The Park Expedition, on its three paintings: the trail itself, the sword
 // garden that feeds it, and the cannon that feeds the garden.
-import { ADS } from '../config.js';
 import { fmt, fmtClock } from '../format.js';
 import * as T from '../games/trail.js';
 import * as R from '../rules.js';
@@ -12,7 +11,7 @@ const JAR_X = [45, 120, 195, 270, 345];
 const JAR_Y = [290, 365, 440, 520];
 
 export default function install(kit) {
-  const { h, setText, setHTML, toggle, st, ART, click, nope, buzz, audio, describe, toast, celebrate, refresh, onSave, clock, openScene, closeScene, at, hot, sceneClose, sceneInfo, itemIcon, adFor, wait, fx } = kit;
+  const { h, setText, setHTML, toggle, st, ART, click, nope, buzz, audio, describe, toast, celebrate, refresh, onSave, clock, openScene, at, hot, sceneClose, sceneInfo, itemIcon, adFor, fx } = kit;
 
   // ---- the trail ---------------------------------------------------------------
 
@@ -209,7 +208,6 @@ export default function install(kit) {
         }
       }
     });
-    void ADS;
   }
 
   return { open, openGarden, openCannon };
