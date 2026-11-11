@@ -1,6 +1,7 @@
 // You: the menu behind the top-right button, your level and what it opens,
 // the daily bonus, and settings.
 import { DAILY, GAME_TITLE, UNLOCKS, VERSION, levelReward, levelStars } from '../config.js';
+import { addRewards } from '../core.js';
 import * as E from '../economy.js';
 import { fmt, fmtTime, money } from '../format.js';
 import * as R from '../rules.js';
@@ -91,19 +92,25 @@ export default function install(kit) {
     }, { page: true });
   }
 
-  // Prizes for any levels reached since the last look. One pop-up each.
+  // Prizes for any levels reached since the last look. Several at once (a big
+  // spend, or a save from an older version) are shown as one haul.
   function levelUp() {
     const ups = R.levelUps(st());
     if (!ups.length) return;
     onSave();
-    for (const up of ups) {
-      popup(() => celebrate({
-        kicker: 'Level up!', title: `Level ${up.level}`,
-        sub: up.unlocks.length ? up.unlocks.map((u) => `<b>${u.name}</b> is open: ${u.blurb}`).join('<br>') : 'Keep building to open more.',
-        reward: up.reward,
-        actions: up.unlocks.length ? [['Later', null, 'btn plain big'], ['Show me', () => kit.goTo({ cards: 'cards', missions: 'missions', draw: 'draw', pets: 'pet', merge: 'merge', club: 'club', trail: 'trail', chests: 'chests', pass: 'pass', festival: 'festival' }[up.unlocks[0].id]), 'btn gold big']] : null,
-      }));
-    }
+    const where = { cards: 'cards', missions: 'missions', draw: 'draw', pets: 'pet', merge: 'merge', club: 'club', trail: 'trail', chests: 'chests', pass: 'pass', festival: 'festival' };
+    const unlocks = ups.flatMap((u) => u.unlocks);
+    const reward = ups.reduce((sum, u) => addRewards(sum, u.reward), {});
+    const last = ups[ups.length - 1].level;
+    popup(() => celebrate({
+      kicker: 'Level up!', title: `Level ${last}`,
+      sub: unlocks.length === 1 ? `<b>${unlocks[0].name}</b> is open: ${unlocks[0].blurb}`
+        : unlocks.length ? `Now open: ${unlocks.map((u) => `<b>${u.name}</b>`).join(', ')}.`
+          : 'Keep building to open more.',
+      reward,
+      actions: unlocks.length === 1 ? [['Later', null, 'btn plain big'], ['Show me', () => kit.goTo(where[unlocks[0].id]), 'btn gold big']]
+        : unlocks.length ? [['Later', null, 'btn plain big'], ['See what is new', () => openLevel(), 'btn gold big']] : null,
+    }));
   }
 
   // ---- the daily bonus -----------------------------------------------------------

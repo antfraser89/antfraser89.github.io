@@ -397,3 +397,7 @@ table.odds td:first-child { text-align: left; }
 .banner-host { position: absolute; right: 8px; top: 50%; width: 78px; transform: translateY(-50%); filter: drop-shadow(0 4px 4px rgba(60, 20, 0, 0.35)); }
 .m-head { position: relative; padding-left: 74px; }
 .m-host { position: absolute; left: 4px; bottom: 0; width: 70px; }
+
+/* long presses should hold the SPIN button, not offer to save a picture */
+img { -webkit-user-drag: none; -webkit-touch-callout: none; }
+#ui { -webkit-touch-callout: none; }
