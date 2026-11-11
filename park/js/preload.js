@@ -1,7 +1,7 @@
 // Fetch the pictures the first screens need before the game is shown, and
 // report how far along that is. The rest load when they are first used.
 const FIRST = [
-  'splash', 'logo', 'slots', 'spin-dome', 'park-coral', 'sym-coin', 'sym-chest', 'sym-shell', 'ico-ticket', 'sym-bell', 'sym-cherry', 'sym-ball', 'sym-star',
+  'splash', 'logo', 'slots', 'spin-dome', 'park-coral', 'sym-coin', 'sym-chest', 'ico-ticket', 'sym-bell', 'sym-cherry', 'sym-ball', 'sym-star',
   'tab-shop', 'tab-park', 'tab-slots', 'tab-album', 'tab-club', 'panda-welcome', 'panda-party', 'panda-thumbs', 'panda-sad',
 ];
 // Every other picture: fetched quietly once the game is on screen, so the

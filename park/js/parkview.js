@@ -2,7 +2,7 @@
 // whole on a 390 x 847 stage. Each of the eight sites has a tap area and a
 // small tag; sites not yet built are shown drained of colour, and colour
 // spreads out from each one as its stars go up, until the whole park is lit.
-import { PLOTS, STAGES, townInfo } from './config.js';
+import { CARD_SETS, PLOTS, STAGES, homeSite, townInfo } from './config.js';
 import * as E from './economy.js';
 import { money } from './format.js';
 
@@ -11,16 +11,17 @@ export const STAGE_H = 847;
 const TAU = Math.PI * 2;
 
 // Where each site sits in the painting (stage pixels): its middle, the area
-// that takes a tap, and where its tag goes. Every theme uses the same layout.
+// that takes a tap, where its tag goes, and the round crop (middle and radius)
+// that makes its symbol on the reels. Every theme uses the same layout.
 export const SITES = [
-  { x: 99, y: 229, hit: [52, 182, 96, 92], tag: [99, 282] }, // swing ride
-  { x: 245, y: 293, hit: [184, 232, 122, 120], tag: [245, 358] }, // centrepiece spinner
-  { x: 124, y: 24, hit: [0, 0, 232, 46], tag: [124, 30] }, // coaster, along the top
-  { x: 322, y: 24, hit: [232, 0, 158, 46], tag: [316, 30] }, // big wheel, top right
-  { x: 188, y: 446, hit: [118, 398, 146, 118], tag: [188, 512] }, // entrance
-  { x: 116, y: 590, hit: [0, 524, 232, 172], tag: [86, 668] }, // parking
-  { x: 348, y: 414, hit: [306, 380, 84, 74], tag: [346, 452] }, // restrooms
-  { x: 342, y: 248, hit: [298, 214, 92, 72], tag: [342, 290] }, // food stalls
+  { x: 99, y: 229, hit: [52, 182, 96, 92], tag: [99, 282], icon: [84, 228, 38] }, // swing ride
+  { x: 245, y: 293, hit: [184, 232, 122, 120], tag: [245, 358], icon: [245, 290, 56] }, // centrepiece spinner
+  { x: 124, y: 24, hit: [0, 0, 232, 46], tag: [124, 30], icon: [96, 36, 36] }, // coaster, along the top
+  { x: 322, y: 24, hit: [232, 0, 158, 46], tag: [316, 30], icon: [344, 62, 44] }, // big wheel, top right
+  { x: 188, y: 446, hit: [118, 398, 146, 118], tag: [188, 512], icon: [176, 442, 58] }, // entrance
+  { x: 116, y: 590, hit: [0, 524, 232, 172], tag: [86, 668], icon: [70, 598, 52] }, // parking
+  { x: 348, y: 414, hit: [306, 380, 84, 74], tag: [346, 452], icon: [346, 412, 38] }, // restrooms
+  { x: 342, y: 248, hit: [298, 214, 92, 72], tag: [342, 290], icon: [348, 244, 36] }, // food stalls
 ];
 
 const ART = (name) => (window.PARK_ART && window.PARK_ART[name]) || `img/${name}.webp`;
@@ -115,19 +116,24 @@ export function createParkView(world, hooks = {}) {
       const done = E.siteDone(plot);
       const cost = done ? 0 : E.cheapest(s, k);
       const can = !done && cost != null && s.coins >= cost;
-      const key = `${plot.stage}|${plot.cap}|${can}|${cost}`;
+      const rush = E.rushing(s, k);
+      // a creature from a finished card set that has moved in here
+      const pal = CARD_SETS.find((set) => homeSite(set.index) === k && s.cards.homes[set.index] > 0);
+      const key = `${plot.stage}|${plot.cap}|${can}|${cost}|${rush}|${pal ? pal.id : ''}`;
       if (sites[k].key === key) return;
       sites[k].key = key;
       const tag = sites[k].tag;
+      const card = pal && pal.cards[8];
+      const palIcon = card ? `<u style="background-image:url(${ART(card.sheet)});background-position:${(card.cell % 3) * 50}% ${Math.floor(card.cell / 3) * 50}%"></u>` : '';
       if (plot.stage === 0) {
         tag.className = 'pv-tag build' + (can ? ' can' : '');
         tag.innerHTML = `<b>Build</b> ${money(E.stageCost(s.town, k, 1))}`;
       } else if (done) {
-        tag.className = 'pv-tag done';
-        tag.innerHTML = '<b>MAX</b>';
+        tag.className = 'pv-tag done' + (rush ? ' rush' : '');
+        tag.innerHTML = `${palIcon}<b>${rush ? 'Rush ×2' : 'MAX'}</b>`;
       } else {
-        tag.className = 'pv-tag' + (can ? ' can' : '');
-        tag.innerHTML = `${can ? '<i>▲</i>' : ''}<b>Lv.${plot.stage * 10}</b>`;
+        tag.className = 'pv-tag' + (can ? ' can' : '') + (rush ? ' rush' : '');
+        tag.innerHTML = `${palIcon}${can ? '<i>▲</i>' : ''}<b>${rush ? 'Rush ×2' : 'Lv.' + plot.stage * 10}</b>`;
       }
     });
   }

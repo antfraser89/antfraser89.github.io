@@ -1,5 +1,5 @@
 // The persistent game state, plus save / load / validation.
-import { CAP_STEPS, CARD_BY_ID, CARD_SETS, ITEMS, PACKS, PLOTS, PRODUCTS, STAGES, START_ITEMS, TUNING, VERSION } from './config.js';
+import { BELL, CAP_STEPS, CARD_BY_ID, CARD_SETS, HOMES, ITEMS, PACKS, PLOTS, PRODUCTS, RUSH, STAGES, START_ITEMS, TUNING, VERSION } from './config.js';
 import { hash, int, num } from './core.js';
 import { cleanChests, freshChests } from './games/chests.js';
 import { cleanDraw, freshDraw } from './games/draw.js';
@@ -13,7 +13,7 @@ import { cleanPet, freshPet } from './pets.js';
 
 const newPlot = () => ({ stage: 0, cap: 0 });
 const STATS = [
-  'spins', 'tokensSpent', 'coinsWon', 'raids', 'sweeps', 'jackpots', 'upgrades', 'towns', 'packs', 'cards', 'sets', 'fed', 'served', 'playTime',
+  'spins', 'tokensSpent', 'coinsWon', 'bells', 'peals', 'rushes', 'jackpots', 'upgrades', 'towns', 'packs', 'cards', 'sets', 'fed', 'served', 'playTime',
   'wheels', 'merges', 'mergeRounds', 'draws', 'shots', 'steps', 'chests', 'ads', 'helps', 'missions', 'decor',
 ];
 
@@ -33,7 +33,8 @@ export function newState(now = 0, seed = 1 + Math.floor(Math.random() * 1e9)) {
     parkChests: 0, // chests opened along this park's progress bar
     level: 1, // the last level whose prize has been collected
     boost: 0, // seconds of doubled takings left
-    pending: null, // a pearl dive won on the machine and not yet played
+    pending: null, // a go at the bell tower won on the machine and not yet played
+    hot: null, // a rush hour in progress: { site, left } spins of double pay there
     inv: { ...START_ITEMS },
     cards: {
       owned: {},
@@ -42,6 +43,7 @@ export function newState(now = 0, seed = 1 + Math.floor(Math.random() * 1e9)) {
       sets: CARD_SETS.map(() => false), // set reward claimed
       packs: { bronze: 0, silver: 0, gold: 0 },
       dry: 0, // packs in a row with nothing new
+      homes: CARD_SETS.map(() => 0), // times each set's creatures have moved into the park
     },
     pet: freshPet(),
     event: { start: 0, points: 0, claimed: 0 },
@@ -69,13 +71,13 @@ export function newState(now = 0, seed = 1 + Math.floor(Math.random() * 1e9)) {
 }
 
 function cleanPending(p) {
-  if (!p || typeof p !== 'object' || p.type !== 'raid') return null;
-  if (!Array.isArray(p.tubs) || p.tubs.length !== 4) return null;
+  if (!p || typeof p !== 'object' || p.type !== 'bell' || !(p.stash > 0)) return null;
+  const swings = Array.isArray(p.swings) ? p.swings.slice(0, BELL.shares.length - 1) : [];
   return {
-    type: 'raid',
+    type: 'bell',
     bet: Math.max(1, int(p.bet, 1)),
-    tubs: p.tubs.map((v) => num(v)),
-    picks: Array.isArray(p.picks) ? p.picks.map((v) => int(v)).filter((v, i, a) => v < 4 && a.indexOf(v) === i).slice(0, 3) : [],
+    stash: num(p.stash),
+    swings: swings.filter((w) => w && typeof w === 'object').map((w) => ({ power: Math.min(1, num(w.power)), amount: num(w.amount) })),
   };
 }
 
@@ -103,6 +105,9 @@ export function hydrate(raw) {
   s.level = Math.max(1, int(raw.level, 1));
   s.boost = Math.min(num(raw.boost), 6 * 3600);
   s.pending = cleanPending(raw.pending);
+  if (raw.hot && typeof raw.hot === 'object' && int(raw.hot.left) > 0 && int(raw.hot.site, -1) >= 0 && int(raw.hot.site) < PLOTS.length) {
+    s.hot = { site: int(raw.hot.site), left: Math.min(int(raw.hot.left), RUSH.hotSpins) };
+  }
   if (raw.inv && typeof raw.inv === 'object') for (const id of Object.keys(ITEMS)) s.inv[id] = Math.min(int(raw.inv[id], s.inv[id]), 1e7);
   const c = raw.cards;
   if (c && typeof c === 'object') {
@@ -117,6 +122,8 @@ export function hydrate(raw) {
     if (Array.isArray(c.sets)) s.cards.sets = s.cards.sets.map((_, k) => !!c.sets[k]);
     for (const type of Object.keys(PACKS)) s.cards.packs[type] = Math.min(int(c.packs && c.packs[type]), 9999);
     s.cards.dry = Math.min(int(c.dry), 10);
+    // a save from before creatures moved in: every set finished so far has done so
+    s.cards.homes = s.cards.homes.map((_, k) => Math.min(HOMES.max, Array.isArray(c.homes) ? int(c.homes[k]) : s.cards.season - 1 + (s.cards.sets[k] ? 1 : 0)));
   }
   s.pet = cleanPet(raw.pet);
   if (raw.event) {
@@ -166,7 +173,12 @@ export function hydrate(raw) {
     s.profile.face = Math.min(int(raw.profile.face), 15);
   }
   if (raw.seen && typeof raw.seen === 'object') for (const k of Object.keys(raw.seen).slice(0, 60)) if (/^[a-z0-9_-]{1,24}$/i.test(k)) s.seen[k] = true;
-  if (raw.stats) for (const k of STATS) s.stats[k] = num(raw.stats[k]);
+  if (raw.stats) {
+    for (const k of STATS) s.stats[k] = num(raw.stats[k]);
+    // the pearl dive became Ring the Bell: goes at one count as goes at the other
+    if (!s.stats.bells && raw.stats.raids > 0) s.stats.bells = num(raw.stats.raids);
+    if (!s.stats.peals && raw.stats.sweeps > 0) s.stats.peals = num(raw.stats.sweeps);
+  }
   if (!s.stats.wheels && s.wheel.spun) s.stats.wheels = s.wheel.spun;
   if (raw.settings) {
     for (const k of ['sfx', 'music', 'haptics']) s.settings[k] = raw.settings[k] !== false;

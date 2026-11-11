@@ -1,22 +1,29 @@
 // The park's own screens: the list of sites, one site's upgrades, the chests
 // along the progress bar, the map of parks, and what everything earns.
-import { ADS, CAP_STEPS, PARKS_TOTAL, PARK_CHESTS, PLOTS, STAGES, TOWN_REWARD, TUNING, capCount, townInfo } from '../config.js';
+import { ADS, CAP_STEPS, CARD_SETS, PARKS_TOTAL, PARK_CHESTS, PLOTS, RUSH, STAGES, TOWN_REWARD, TUNING, capCount, homeSite, townInfo } from '../config.js';
 import * as E from '../economy.js';
 import { fmt, fmtTime, money } from '../format.js';
-import { siteThumbStyle } from '../parkview.js';
 import * as R from '../rules.js';
 import * as S from '../sim.js';
 
 export default function install(kit) {
   const { h, setText, setHTML, toggle, show, st, ART, COIN, click, nope, buzz, audio, renderer, describe, toast, celebrate, setSheet, closeSheet, sheetTitle, modal, closeModal, refresh, onSave, openScene, closeScene, hot, at, adFor, clock } = kit;
 
-  const starRow = (plot) => '★'.repeat(plot.stage) + '☆'.repeat(STAGES - plot.stage);
-  const thumbFor = (el, town, k, w, ht) => {
-    if (el.__t !== town) {
-      el.__t = town;
-      el.style.cssText = siteThumbStyle(town, k, w, ht);
+  const starRow = (plot) => '★'.repeat(plot.stage) + `<s>${'★'.repeat(STAGES - plot.stage)}</s>`;
+  // A site's picture is its badge from the reels, so the two are plainly the same thing.
+  const thumbFor = (el, k) => {
+    const url = kit.siteURL(k);
+    if (url && el.__src !== url) {
+      el.__src = url;
+      el.src = url;
     }
   };
+  // What a site's symbol pays on the line, in coins at the bet now set.
+  const perSymbol = (s, units) => money(units * E.unit(s.town) * s.bet);
+  const betNote = (s) => (s.bet > 1 ? ` at ×${s.bet}` : '');
+  const plain = (s) => ({ ...s, hot: null }); // the same park with no rush hour on
+  // Card creatures living at a site, by the name of their set.
+  const livingAt = (s, k) => CARD_SETS.filter((set) => homeSite(set.index) === k && s.cards.homes[set.index] > 0).map((set) => set.name);
 
   // Everything in the park, as a list. Tap a row to open that site.
   function openBuild(focusPlot = -1) {
@@ -30,7 +37,7 @@ export default function install(kit) {
     const chestRow = h('button', { class: 'row chest-row', onclick: () => { click(); openChest(); } });
     const rows = PLOTS.map((p) => {
       const k = p.index;
-      const thumb = h('div', { class: 'thumb' });
+      const thumb = h('img', { class: 'thumb site-badge', src: kit.BLANK, alt: '' });
       const name = h('div', { class: 'name' });
       const stars = h('div', { class: 'stars' });
       const sub = h('div', { class: 'sub' });
@@ -59,16 +66,17 @@ export default function install(kit) {
       for (const r of rows) {
         const plot = s.plots[r.k];
         const d = S.designAt(s, r.k);
-        thumbFor(r.thumb, s.town, r.k);
+        thumbFor(r.thumb, r.k);
         setText(r.name, d.name);
-        setText(r.stars, starRow(plot));
+        setHTML(r.stars, starRow(plot));
         const done1 = E.siteDone(plot);
         toggle(r.row, 'done', done1);
         const cost = E.cheapest(s, r.k);
         const can = !done1 && cost != null && s.coins >= cost;
         r.go.className = 'btn small ' + (can ? '' : 'blue');
         setText(r.go, done1 ? 'Done' : can ? 'Upgrade' : 'Open');
-        setText(r.sub, done1 ? 'Top level, fully fitted out.' : plot.stage === 0 ? `Not built yet · ${money(cost)}` : `Level ${plot.stage * 10} · ${d.cap.toLowerCase()} ${capCount(d, plot.cap)} · next ${money(cost)}`);
+        const pays = perSymbol(s, E.sitePay(s, r.k));
+        setText(r.sub, done1 ? `Top level · pays ${pays}` : plot.stage === 0 ? `Closed on the reels · build for ${money(cost)}` : `Lv ${plot.stage * 10} · pays ${pays} · next ${money(cost)}`);
       }
     });
     return undefined;
@@ -103,7 +111,8 @@ export default function install(kit) {
   // One ride or facility: its level on one row, its capacity on the other.
   function openSite(k) {
     if (kit.base !== 'park') kit.setBase('park');
-    const thumb = h('div', { class: 'thumb big' });
+    const thumb = h('img', { class: 'thumb big site-badge', src: kit.BLANK, alt: '' });
+    const reel = h('div', { class: 'site-reel' });
     const name = h('div', { class: 'site-name' });
     const stars = h('div', { class: 'stars' });
     const lvFill = h('i');
@@ -127,7 +136,7 @@ export default function install(kit) {
     const capBuy = holdable(h('button', { class: 'btn site-buy' }), purchase(R.upgradeCap));
     const step = (dir) => () => { click(); openSite((k + dir + PLOTS.length) % PLOTS.length); };
     const body = [
-      h('div', { class: 'site-card head' }, thumb, h('div', { class: 'meta' }, name, stars, h('div', { class: 'lv-bar' }, lvFill, lvFrom, lvTo))),
+      h('div', { class: 'site-card head' }, thumb, h('div', { class: 'meta' }, name, stars, h('div', { class: 'lv-bar' }, lvFill, lvFrom, lvTo), reel)),
       h('div', { class: 'site-card' }, h('span', { class: 'site-ico up' }, '▲'), h('div', { class: 'meta' }, priceWhat, priceSub), buy),
       h('div', { class: 'site-card' }, h('span', { class: 'site-ico cap' }, '＋'), h('div', { class: 'meta' }, capWhat, capSub), capBuy),
       h('div', { class: 'site-nav' },
@@ -141,23 +150,31 @@ export default function install(kit) {
       const d = S.designAt(s, k);
       setText(sheetTitle, d.name);
       setText(name, d.name);
-      thumbFor(thumb, s.town, k, 86, 74);
-      setText(stars, starRow(plot));
+      thumbFor(thumb, k);
+      const rate = E.sitePay(s, k);
+      const pals = livingAt(s, k);
+      setHTML(reel, (plot.stage === 0
+        ? 'On the reels: <b>closed</b>. Build it and it pays every time it comes up.'
+        : E.rushing(s, k)
+          ? `<b class="rush">Rush hour!</b> Paying double: <b>${perSymbol(s, rate)}</b> a symbol${betNote(s)}, for ${s.hot.left} more ${s.hot.left === 1 ? 'spin' : 'spins'}.`
+          : `On the reels: <b>${perSymbol(s, rate)}</b> a symbol${betNote(s)} · rush hour <b>${perSymbol(s, rate * RUSH.mult)}</b>`)
+        + (pals.length ? `<br><span class="pals">${pals.join(' and ')} ${pals.length > 1 ? 'live' : 'lives'} here: +${Math.round(E.homeBonus(s, k) * 100)}%</span>` : ''));
+      setHTML(stars, starRow(plot));
       const lv = plot.stage * 10;
       lvFill.style.width = lv + '%';
       setText(lvFrom, `Lv.${lv}`);
       setText(lvTo, 'Lv.100');
       const star = E.nextStar(s, k);
       if (star) {
-        const after = E.ticket(s.town, star.stage) * (1 + TUNING.capBoost * plot.cap) * 60;
+        const after = E.sitePayAfter(s, k, 'star');
         setHTML(priceWhat, plot.stage === 0 ? `Build the ${d.name}` : `Level ${lv} <b>→ ${lv + 10}</b>`);
-        setText(priceSub, plot.stage === 0 ? d.blurb : `Raises the takings to ${money(after)} a minute.`);
+        setHTML(priceSub, plot.stage === 0 ? `${d.blurb} Opens it on the reels at <b>${perSymbol(s, after)}</b> a symbol.` : `On the reels: ${perSymbol(s, E.sitePay(plain(s), k))} <b>→ ${perSymbol(s, after)}</b> a symbol.`);
         buy.className = 'btn site-buy';
         setHTML(buy, `${plot.stage === 0 ? 'Build' : 'Upgrade'}<small>${COIN}${money(star.cost)}</small>`);
         buy.disabled = s.coins < star.cost;
       } else {
         setHTML(priceWhat, 'Level 100');
-        setText(priceSub, `Takes ${money(E.plotRate(s, k) * 60)} a minute at the gate.`);
+        setText(priceSub, `Top level. Takes ${money(E.plotRate(s, k) * 60)} a minute at the gate as well.`);
         buy.className = 'btn site-buy tick';
         setHTML(buy, '✓');
         buy.disabled = true;
@@ -166,13 +183,13 @@ export default function install(kit) {
       const count = capCount(d, plot.cap);
       if (cap) {
         setHTML(capWhat, `${d.cap}: ${count} <b>→ ${capCount(d, cap.step)}</b>`);
-        setHTML(capSub, cap.open ? `More room: +${Math.round(TUNING.capBoost * 100)}% takings. Step ${cap.step} of ${CAP_STEPS}.` : `<span class="need">Opens at level ${cap.needs * 10} of ${d.name}.</span>`);
+        setHTML(capSub, cap.open ? `More room: ${perSymbol(s, E.sitePay(plain(s), k))} <b>→ ${perSymbol(s, E.sitePayAfter(s, k, 'cap'))}</b> a symbol. Step ${cap.step} of ${CAP_STEPS}.` : `<span class="need">Opens at level ${cap.needs * 10} of ${d.name}.</span>`);
         capBuy.className = 'btn site-buy' + (cap.open ? '' : ' locked');
         setHTML(capBuy, `Upgrade<small>${COIN}${money(cap.cost)}</small>`);
         capBuy.disabled = !cap.open || s.coins < cap.cost;
       } else {
         setHTML(capWhat, `${d.cap}: ${count}`);
-        setText(capSub, `Fully fitted out: +${Math.round(TUNING.capBoost * CAP_STEPS * 100)}% takings.`);
+        setText(capSub, `Fully fitted out: +${Math.round(TUNING.capBoost * CAP_STEPS * 100)}% on the reels and at the gate.`);
         capBuy.className = 'btn site-buy tick';
         setHTML(capBuy, '✓');
         capBuy.disabled = true;
@@ -260,7 +277,7 @@ export default function install(kit) {
       const rate = h('b');
       const sub = h('div', { class: 'sub' });
       const name = h('div', { class: 'name' });
-      const thumb = h('div', { class: 'thumb' });
+      const thumb = h('img', { class: 'thumb site-badge', src: kit.BLANK, alt: '' });
       return { k: p.index, rate, sub, name, thumb, row: h('div', { class: 'row', onclick: () => { click(); openSite(p.index); } }, thumb, h('div', { class: 'meta' }, name, sub), h('div', { class: 'side-col rate' }, rate)) };
     });
     const total = h('div', { class: 'prize' });
@@ -277,7 +294,7 @@ export default function install(kit) {
       for (const r of rows) {
         const plot = s.plots[r.k];
         const d = S.designAt(s, r.k);
-        thumbFor(r.thumb, s.town, r.k);
+        thumbFor(r.thumb, r.k);
         setText(r.name, d.name);
         setText(r.sub, plot.stage ? `Level ${plot.stage * 10} · ${d.cap.toLowerCase()} ${fmt(capCount(d, plot.cap))}` : 'Not built yet');
         setText(r.rate, plot.stage ? `${money(E.plotRate(s, r.k) * 60)}/min` : '–');

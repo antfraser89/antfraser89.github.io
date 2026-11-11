@@ -12,7 +12,7 @@ export const PET_TUNING = {
 
 // perk: what the talent changes; per: how much each pal level adds.
 export const PETS = [
-  { id: 'puddle', name: 'Puddle', kind: 'duck', art: ['cards-pond', 7], perk: 'dive', per: 0.05, how: 'start', blurb: 'Sniffs out the best shells: pearl dives pay more.' },
+  { id: 'puddle', name: 'Puddle', kind: 'duck', art: ['cards-pond', 7], perk: 'rush', per: 0.05, how: 'start', blurb: 'Quacks up a crowd: rush hours pay more.' },
   { id: 'biscuit', name: 'Biscuit', kind: 'puppy', art: ['pets', 0], perk: 'gate', per: 0.04, how: 'buy', price: 250, blurb: 'Greets everyone at the gate: the park takes more.' },
   { id: 'mittens', name: 'Mittens', kind: 'kitten', art: ['pets', 1], perk: 'reels', per: 0.02, how: 'buy', price: 400, blurb: 'Bats at the reels: coin wins pay more.' },
   { id: 'clover', name: 'Clover', kind: 'bunny', art: ['pets', 2], perk: 'away', per: 0.1, how: 'buy', price: 400, blurb: 'Minds the park while you are out: it earns for longer.' },

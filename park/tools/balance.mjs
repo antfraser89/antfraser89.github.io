@@ -39,8 +39,8 @@ const track = (name, fn) => { const before = state.tokens; const out = fn(); src
   const probe = newState(0, 1);
   probe.plots.forEach((p) => { p.stage = 10; p.cap = 5; });
   const perHour = (E.idleRate(probe) * 3600) / E.unit(0);
-  console.log(`A finished park takes ${perHour.toFixed(1)} units an hour at the gate; a spin is worth ${E.spinEV().toFixed(2)} units.`);
-  console.log(`So the gate is worth about ${(perHour / E.spinEV()).toFixed(1)} spins an hour, and each finished park adds ${((perHour * 0.06) / E.spinEV()).toFixed(1)} more.\n`);
+  console.log(`A spin is worth ${E.EV_EMPTY.toFixed(2)} units in an empty park and ${E.EV_FULL.toFixed(2)} in a full one; ${E.BUILD_EV.toFixed(2)} on average over a build.`);
+  console.log(`A finished park takes ${perHour.toFixed(1)} units an hour at the gate: about ${(perHour / E.BUILD_EV).toFixed(1)} spins an hour, and each finished park adds ${((perHour * 0.06) / E.BUILD_EV).toFixed(1)} more.\n`);
 }
 
 function spendCoins() {
@@ -164,10 +164,8 @@ function session() {
     R.setBet(state, bets[Math.max(0, bets.length - 2)]);
     const r = R.spin(state, rand, now);
     if (!r.ok) break;
-    if (state.pending) {
-      const order = [0, 1, 2, 3].sort(() => rand() - 0.5);
-      for (const tub of order.slice(0, 3)) R.raidPick(state, tub);
-    }
+    // an ordinary player at the bell tower: decent timing, the odd ring
+    while (state.pending) R.bellSwing(state, 0.52 + 0.48 * rand());
     src.reels = (src.reels || 0) + (r.tokens || 0);
     src.bonus = (src.bonus || 0) + r.milestones.reduce((n, m) => n + (m.tokens || 0), 0);
     track('park', spendCoins);
@@ -200,4 +198,4 @@ for (let d = 0; d < days; d++) {
 
 console.log('\nWhere the spins came from: ' + Object.entries(src).map(([k, v]) => `${k} ${v}`).join(', '));
 console.log(`\nSpin tickets from the timer: ${tally.fromRegen} of ${state.stats.tokensSpent} spent (${Math.round((tally.fromRegen / state.stats.tokensSpent) * 100)}%).`);
-console.log(`Pearl dives ${state.stats.raids}, wheel turns ${state.stats.wheels}, jackpots ${state.stats.jackpots}, merges ${state.stats.merges}, draws ${state.stats.draws}, cannon shots ${state.stats.shots}, flags ${state.stats.steps}, chests ${state.stats.chests}, missions ${state.stats.missions}, helps ${state.stats.helps}.`);
+console.log(`Rush hours ${state.stats.rushes}, goes at the bell ${state.stats.bells} (${state.stats.peals} with three rings), sets moved in ${state.cards.homes.reduce((a, b) => a + b, 0)}, wheel turns ${state.stats.wheels}, jackpots ${state.stats.jackpots}, merges ${state.stats.merges}, draws ${state.stats.draws}, cannon shots ${state.stats.shots}, flags ${state.stats.steps}, chests ${state.stats.chests}, missions ${state.stats.missions}, helps ${state.stats.helps}.`);

@@ -124,6 +124,18 @@ export function createAudio(getSettings) {
       tone(140, { to: 50, dur: 0.3, vol: 0.14 });
     },
     whoosh: () => noise({ dur: 0.4, vol: 0.08, freq: 2400, q: 1.5 }),
+    // the bell tower: the mallet lands, the puck runs up the rail, the bell rings
+    thud: () => {
+      noise({ dur: 0.1, vol: 0.3, freq: 420, q: 0.5 });
+      tone(150, { to: 60, dur: 0.16, vol: 0.2 });
+    },
+    rise: () => tone(260, { to: 1250, type: 'triangle', dur: 0.42, vol: 0.07 }),
+    bell: () => {
+      tone(1568, { dur: 1.1, vol: 0.2, attack: 0.002 });
+      tone(2349, { dur: 0.8, vol: 0.09, attack: 0.002 });
+      tone(3951, { dur: 0.45, vol: 0.04, attack: 0.002 });
+      tone(1568, { dur: 0.9, vol: 0.12, at: 0.16, attack: 0.002 });
+    },
     swish: () => noise({ dur: 0.16, vol: 0.045, freq: 3400, q: 0.9 }),
     tour: () => arp([60, 64, 67, 72, 76, 79, 84], 0.09, { dur: 0.3, vol: 0.14 }),
     error: () => tone(170, { type: 'square', dur: 0.09, vol: 0.06 }),

@@ -3,18 +3,20 @@
 // Sheets are built once when opened and refreshed in place, so buttons never
 // get replaced under the player's finger.
 import {
-  ADS, CARDS, CARD_SETS, CURRENCY, GAME_TITLE, ITEMS, PACKS, PARKS_TOTAL, PAY, PLOTS, SYMBOL_ART, WHEEL, STORE_PREVIEW, TOWN_REWARD, UNLOCKS, VAULT, setUnlockTown, townInfo, unlockLevel,
+  ADS, BELL, CARDS, CARD_SETS, CURRENCY, GAME_TITLE, HOMES, ITEMS, PACKS, PARKS_TOTAL, PAY, PLOTS, RUSH, SITE_SYMBOLS, SYMBOL_ART, WHEEL, STORE_PREVIEW, TOWN_REWARD, UNLOCKS, VAULT,
+  buildingAt, homeSite, setUnlockTown, siteOf, townInfo, unlockLevel,
 } from './config.js';
 import * as E from './economy.js';
 import { createFx } from './fx.js';
 import { fmt, fmtClock, fmtTime, money } from './format.js';
 import { currentMission } from './goals.js';
-import { STAGE_H, STAGE_W } from './parkview.js';
+import { STAGE_H, STAGE_W, parkArt } from './parkview.js';
 import * as G from './game.js';
 import { activePet } from './pets.js';
 import * as R from './rules.js';
 import { installScreens } from './screens/index.js';
 import * as S from './sim.js';
+import { drawBadge } from './sitebadge.js';
 import { createSlotView } from './slotview.js';
 
 function h(tag, attrs, ...kids) {
@@ -72,7 +74,9 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
   const root = document.getElementById('ui');
   const st = () => world.state;
   const rand = () => Math.random();
-  const symURL = (id) => ((window.PARK_ART && window.PARK_ART[SYMBOL_ART[id]]) || `img/${SYMBOL_ART[id]}.webp`);
+  // A reel symbol's picture. The eight site symbols are badges drawn from the
+  // park's painting (see syncBadges); the rest are files in img/.
+  const symURL = (id) => (siteOf(id) >= 0 ? siteURL(siteOf(id)) : ((window.PARK_ART && window.PARK_ART[SYMBOL_ART[id]]) || `img/${SYMBOL_ART[id]}.webp`));
   const TOKEN = img(symURL('token'));
   const COIN = img(symURL('coin'));
   const CHIPS = img(symURL('chips'));
@@ -105,8 +109,6 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
 </svg>`;
     return 'data:image/svg+xml,' + encodeURIComponent(svg);
   });
-  // the pearl dive's shells: closed, opened on treasure, or opened on nothing
-  const tubURL = (open, found) => (open && found ? symURL('sack') : symURL('barrel'));
   // One cell of a set's painted sheet, as a background.
   const cellStyle = (card) => `background-image:url(${ART(card.sheet)});background-position:${(card.cell % 3) * 50}% ${Math.floor(card.cell / 3) * 50}%`;
   // A card: its painting, its name, a gem for each star, and a corner tag.
@@ -309,7 +311,14 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
   const adLine = h('b');
   const adBtn = h('button', { class: 'ad-btn', 'aria-label': 'Watch an advert for free spins', onclick: () => { click(); adTokens(adBtn); } },
     h('span', { class: 'ad-play' }, '▶'), h('span', null, 'Watch ad'), adLine);
-  const windowEl = h('div', { class: 'window' }, reelCanvas);
+  // what each reel paid, shown over it for a moment
+  const payTags = [0, 1, 2].map((i) => h('b', { class: 'reel-pay', style: `left:${((i + 0.5) / 3) * 100}%` }));
+  const windowEl = h('div', { class: 'window' }, reelCanvas, payTags);
+  // a rush hour in progress: which site, and how many spins of double pay are left
+  const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='; // a clear pixel, until a badge has been drawn
+  const hotIcon = h('img', { src: BLANK, alt: '' });
+  const hotText = h('span');
+  const hotChip = h('button', { class: 'hot-chip', 'aria-label': 'Rush hour', onclick: () => { click(); paytable(); } }, hotIcon, hotText);
   const cabinet = h('div', { class: 'cabinet' }, windowEl);
   const mCab = cabinet;
 
@@ -354,7 +363,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
   ];
   const perch = rails.pet;
   const machine = h('section', { class: 'machine', 'aria-label': 'The slot machine' },
-    railEls, bonus, banner, cabinet, betBox, gauge, spinBtn, autoBtn, adBtn);
+    railEls, bonus, banner, cabinet, hotChip, betBox, gauge, spinBtn, autoBtn, adBtn);
   // spins are counted on the machine itself while it is on show, and in the top bar elsewhere
   const tokenTarget = () => (root.classList.contains('on-machine') ? gauge : tokenCard);
   const fxCanvas = h('canvas', { id: 'fx', 'aria-hidden': 'true' });
@@ -395,26 +404,82 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     return refresh();
   }
 
-  // What three of each symbol does, with real amounts for this town and bet.
+  // ---- the park on the reels -----------------------------------------------------
+  // The eight site symbols are cut from the park's painting and redrawn
+  // whenever something is built, the park changes or a rush hour starts or ends.
+  const badge = { key: '', art: null, artFor: '', canvases: [], urls: [] };
+  function syncBadges() {
+    const s = st();
+    const src = parkArt(s.town);
+    if (badge.artFor !== src) {
+      badge.artFor = src;
+      badge.art = null;
+      const image = new Image();
+      image.onload = () => {
+        if (badge.artFor !== src) return;
+        badge.art = image;
+        syncBadges();
+        if (current) current.refresh();
+      };
+      image.src = src;
+    }
+    const key = `${s.town}|${s.plots.map((p) => p.stage + '.' + p.cap).join(',')}|${s.hot ? s.hot.site : ''}|${badge.art ? 1 : 0}`;
+    if (key === badge.key) return;
+    badge.key = key;
+    s.plots.forEach((p, k) => {
+      badge.canvases[k] = drawBadge(badge.art, k, { level: p.stage * 10, max: E.siteDone(p), hot: E.rushing(s, k) });
+      badge.urls[k] = null;
+      slot.setSprite(SITE_SYMBOLS[k], badge.canvases[k]);
+    });
+  }
+  function siteURL(k) {
+    if (!badge.canvases[k]) return '';
+    if (!badge.urls[k]) {
+      try {
+        badge.urls[k] = badge.canvases[k].toDataURL();
+      } catch {
+        badge.urls[k] = ''; // a painting served from elsewhere cannot be read back; the reels still draw it
+      }
+    }
+    return badge.urls[k];
+  }
+  const siteName = (k) => buildingAt(st().town, k).name;
+
+  // What the reels pay, with real amounts for this park, as built, at this bet.
   function paytable() {
     const s = st();
+    syncBadges();
     const u = E.unit(s.town) * s.bet;
     const row = (syms, text, value) => h('div', { class: 'pay-row' },
       h('div', { class: 'syms', html: syms.map((x) => `<img src="${symURL(x)}" alt="">`).join('') }), h('span', { html: text }), h('b', { html: value }));
+    const best = PLOTS.map((p) => p.index).reduce((a, k) => (E.sitePay(s, k) > E.sitePay(s, a) ? k : a), 0);
+    const open = s.plots.filter((p) => p.stage > 0).length;
     modal([
       h('div', { class: 'kicker' }, `At a bet of ×${s.bet}`),
       h('h2', null, 'What the reels pay'),
-      row(['star', 'star', 'star'], '<b>Jackpot</b> and a silver pack', money(PAY.jackpot * u)),
-      row(['sack', 'sack', 'sack'], 'Three chests', money(PAY.sacks3 * u)),
+      h('p', { class: 'pay-lead', html: 'Your park is on the reels. Everything you have built <b>pays each time it stops on the line</b>, and pays more with every level.' }),
+      h('div', { class: 'pay-sites' }, PLOTS.map((p) => {
+        const k = p.index;
+        const plot = s.plots[k];
+        const rate = E.sitePay(s, k);
+        return h('button', { class: 'pay-site' + (plot.stage > 0 ? '' : ' closed') + (E.rushing(s, k) ? ' hot' : ''), onclick: () => { click(); closeModal(); setBase('park'); openSite(k); } },
+          h('img', { src: siteURL(k), alt: '' }),
+          h('span', null, siteName(k)),
+          h('b', { html: plot.stage > 0 ? money(rate * u) : 'Build it' }));
+      })),
+      open > 0
+        ? row([SITE_SYMBOLS[best], SITE_SYMBOLS[best], SITE_SYMBOLS[best]], `<b>Rush hour!</b> Three of the same: ${RUSH.mult} at once, then double there for ${RUSH.hotSpins} spins`, `${money(E.sitePay({ ...s, hot: null }, best) * u * RUSH.mult * E.rushBonus(s))}`)
+        : row([SITE_SYMBOLS[0], SITE_SYMBOLS[0], SITE_SYMBOLS[0]], '<b>Rush hour!</b> Three of the same, once it is built', `×${RUSH.mult}`),
+      row(['star', 'star', 'star'], '<b>Ring the Bell!</b> Three swings at the tower', `up to ${money(E.nice(E.bellPrize(s) * u) * (1 + BELL.peal))}`),
+      row(['sack', 'sack', 'sack'], '<b>Jackpot</b> and a silver pack', money(PAY.jackpot * u)),
       row(['coin', 'coin', 'coin'], 'Three coins', money(PAY.coins3 * u)),
       row(['sack'], 'Each chest on the line', money(PAY.sack * u)),
       row(['coin'], 'Each coin on the line', money(PAY.coin * u)),
-      row(['barrel', 'barrel', 'barrel'], '<b>Pearl dive!</b> Three goes at four shells', `up to ${money(PAY.raidStash[1] * u * E.raidBonus(s))}`),
       row(['ball', 'ball', 'ball'], '<b>Prize wheel!</b> A turn on the wheel', `+${s.bet}`),
       row(['token', 'token', 'token'], 'Free spins', `+${PAY.tokens * s.bet}`),
       row(['chips', 'chips', 'chips'], 'Cherries for your pet', `+${PAY.treats * s.bet}`),
       row(['fish'], 'Starfish pay nothing', '–'),
-      h('p', { class: 'fineprint' }, 'Prizes grow with your bet and with every park you reach.'),
+      h('p', { class: 'fineprint' }, 'Prizes grow with your bet and with every park you reach. Tap a site to build there.'),
       h('div', { class: 'actions' }, h('button', { class: 'btn big wide', onclick: () => { click(); closeModal(); } }, 'Got it')),
     ]);
   }
@@ -552,14 +617,26 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     refresh();
   }
 
+  // What each reel paid, floating up off the pay line.
+  function showPays(pays) {
+    payTags.forEach((tag, i) => {
+      tag.classList.remove('on');
+      if (!(pays[i] > 0)) return;
+      setText(tag, '+' + money(pays[i]));
+      void tag.offsetWidth; // restart the animation
+      tag.classList.add('on');
+    });
+  }
+
   // The reels have stopped: show what the spin won.
   function reveal() {
     const res = held;
     held = null;
     if (!res) return;
-    const mask = res.kind === 'mixed' ? res.reels.map((sym) => sym === 'coin' || sym === 'sack') : [true, true, true];
-    const big = res.kind === 'jackpot' || res.kind === 'sacks3';
-    if (mask.some(Boolean) && (res.kind !== 'mixed' || res.coins > 0)) slot.flash(mask, big ? 2.2 : 1.2);
+    syncBadges();
+    const mask = res.kind === 'mixed' ? res.pays.map((v) => v > 0) : [true, true, true];
+    const big = res.kind === 'jackpot' || res.kind === 'rush';
+    if (mask.some(Boolean)) slot.flash(mask, big ? 2.2 : 1.2);
     cabinet.classList.remove('spinning');
     if (res.kind !== 'mixed') {
       cabinet.classList.add('won');
@@ -568,9 +645,10 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     switch (res.kind) {
       case 'mixed':
         if (res.coins > 0) {
+          showPays(res.pays);
           say(`+${money(res.coins)}`, 'coins');
           audio.play('coin');
-          fly(COIN, reelCanvas, coinCard, 4);
+          fly(COIN, reelCanvas, coinCard, 2 + mask.filter(Boolean).length * 2);
         }
         break;
       case 'coins3':
@@ -580,15 +658,16 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
         fly(COIN, reelCanvas, coinCard, 9);
         fx.rain(18);
         break;
-      case 'sacks3':
+      case 'rush':
         sayCount(res.coins, 'coins big', 2600);
         lightUp(2400);
         audio.play('bigwin');
         fly(COIN, reelCanvas, coinCard, 16);
         fx.rain(80);
-        bigWin('Big win!', `+${money(res.coins)}`);
+        bigWin('Rush hour!', `+${money(res.coins)}`);
         shake();
         buzz([30, 40, 30]);
+        toast(`${img(siteURL(res.site))} Everyone wants the <b>${siteName(res.site)}</b>: it pays double for the next ${RUSH.hotSpins} spins.`, 'gold');
         break;
       case 'jackpot':
         sayCount(res.coins, 'jackpot', 3200);
@@ -618,8 +697,8 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
         audio.play('token');
         fly(CHIPS, reelCanvas, perch, 5);
         break;
-      case 'raid':
-        say('PEARL DIVE!', 'raid', 1200);
+      case 'bell':
+        say('RING THE BELL!', 'raid', 1200);
         shake();
         audio.play('fanfare');
         buzz([30, 30, 60]);
@@ -784,13 +863,14 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     ]);
   }
 
-  function openDive() {
+  function openBellInfo() {
     const s = st();
     modal([
-      h('img', { class: 'big-sym', src: symURL('barrel'), alt: '' }),
-      h('h2', null, 'Pearl dive'),
-      h('p', { html: 'Line up <b>three shells</b> on the reels to go diving. Three of four shells hold treasure, and you get three goes. A bigger bet means a bigger haul.' }),
-      h('p', { html: `Dives so far: <b>${fmt(s.stats.raids)}</b> · clean sweeps: <b>${fmt(s.stats.sweeps)}</b>` }),
+      h('img', { class: 'big-sym', src: symURL('star'), alt: '' }),
+      h('h2', null, 'Ring the Bell'),
+      h('p', { html: 'Line up <b>three bells</b> on the reels for a go at the bell tower. You get <b>three swings</b> of the mallet: hit SWING when the power is at the top.' }),
+      h('p', { html: `Each swing pays by how high the puck goes, and in full if the bell rings. Ring it three times out of three for a bonus. The prize grows as you build your park.` }),
+      h('p', { html: `Goes so far: <b>${fmt(s.stats.bells)}</b> · three rings out of three: <b>${fmt(s.stats.peals)}</b>` }),
       h('div', { class: 'actions' }, h('button', { class: 'btn big wide', onclick: () => { click(); closeModal(); } }, 'Got it')),
     ]);
   }
@@ -921,7 +1001,11 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
         e.stopPropagation();
         const reward = R.claimSet(st(), s);
         if (!reward) return nope();
-        celebrate({ kicker: 'Set complete!', title: set.name, sub: 'All nine cards, safe in the album.', reward });
+        const home = reward.home;
+        celebrate({
+          kicker: 'Set complete!', title: set.name, reward,
+          sub: home ? `They have moved into the park! ${set.name} now ${home.level > 1 ? 'fills' : 'lives at'} the ${siteName(home.site)}, which pays ${Math.round(home.level * HOMES.boost * 100)}% more in every park.` : 'All nine cards, safe in the album.',
+        });
         onSave();
         refresh();
       } }, 'Claim');
@@ -977,7 +1061,10 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     const note = h('div', { class: 'note' });
     setSheet('set:' + s, set.name, [note, h('div', { class: 'card-grid' }, cells.map((c) => c.el))], () => {
       const state = st();
-      setHTML(note, `Collect all nine for <b>${TOKEN}${set.reward}</b>. The five-star card is gold: it only comes from gold packs and the star vault.`);
+      const lives = state.cards.homes[s];
+      const where = siteName(homeSite(s));
+      setHTML(note, `Collect all nine for <b>${TOKEN}${set.reward}</b>${lives < HOMES.max ? `, and they move into the park: the <b>${where}</b> pays ${Math.round(HOMES.boost * 100)}% more, for good` : ''}.`
+        + (lives > 0 ? ` <b>Living at the ${where}: +${Math.round(lives * HOMES.boost * 100)}%.</b>` : '') + ' The five-star card is gold: it only comes from gold packs and the star vault.');
       for (const cell of cells) {
         const n = state.cards.owned[cell.c.id] || 0;
         cell.face.setCount(n);
@@ -1153,84 +1240,145 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     const p = st().pending;
     if (!p || busy()) return;
     closeSheet();
-    openRaid(p);
+    openBell(p);
   }
 
-  function openRaid(p) {
+  // Ring the Bell: the fairground strength tester. A power gauge sweeps up
+  // and down; SWING stops it, the mallet comes down and the puck runs up the
+  // rail that far. Three swings, each quicker than the last.
+  const BELL_PERIOD = [1.7, 1.35, 1.05]; // seconds for the gauge to rise and fall
+  const BELL_MARKS = [[0.12, 'Feather'], [0.36, 'Not bad'], [0.6, 'Strong'], [0.82, 'So close']];
+  function openBell(p) {
+    const RAIL = 250; // how far the puck can travel, in stage pixels
+    const fill = h('i', { class: 'bt-fill' });
+    const gauge = h('div', { class: 'bt-gauge' }, h('i', { class: 'bt-zone' }), fill, h('b', null, 'POWER'));
+    const puck = h('i', { class: 'bt-puck' });
+    const flash = h('i', { class: 'bt-flash' });
+    const bellImg = h('img', { class: 'bt-bell', src: symURL('star'), alt: '' });
+    const mallet = h('i', { class: 'bt-mallet' });
+    const rail = h('div', { class: 'bt-rail' }, BELL_MARKS.map(([at, label]) => h('span', { style: `bottom:${at * 100}%` }, label)), puck);
+    const chips = BELL.shares.map((share, i) => {
+      const amount = h('b', null, '–');
+      const el = h('div', { class: 'bt-chip' }, h('small', null, `Swing ${i + 1} · ${Math.round(share * 100)}%`), amount);
+      return { el, amount };
+    });
+    const prize = h('div', { class: 'bt-prize' }, h('small', null, 'On the tower'), h('b', { html: money(p.stash) }));
+    const swingBtn = h('button', { class: 'btn big wide bt-swing' }, 'SWING!');
     const total = h('div', { class: 'result' });
     const done = h('div', { class: 'actions' });
-    const goes = h('div', { class: 'kicker' }, 'Three goes');
     let sum = 0;
-    const tubs = [0, 1, 2, 3].map((i) => {
-      const image = h('img', { src: tubURL(false, false), alt: '' });
-      const tag = h('div', { class: 'tub-tag' });
-      const el = h('button', { class: 'tub', 'aria-label': 'Tub ' + (i + 1), onclick: () => dip(i) }, image, tag);
-      return { i, el, image, tag, open: false };
+    const showSwing = (i, w) => {
+      toggle(chips[i].el, 'rung', w.power >= BELL.ringAt);
+      chips[i].el.classList.add('done');
+      setHTML(chips[i].amount, (w.power >= BELL.ringAt ? '🔔 ' : '') + money(w.amount));
+    };
+    // a go that was closed half way through picks up where it left off
+    p.swings.forEach((w, i) => {
+      showSwing(i, w);
+      sum += w.amount;
     });
-    // if the game was closed mid-dip, show the tubs already searched
-    for (const i of p.picks) {
-      const t = tubs[i];
-      t.open = true;
-      t.image.src = tubURL(true, p.tubs[i] > 0);
-      toggle(t.el, 'empty', !(p.tubs[i] > 0));
-      setHTML(t.tag, p.tubs[i] > 0 ? money(p.tubs[i]) : 'Empty');
-      t.el.disabled = true;
-      sum += p.tubs[i];
-    }
-    const bonus = Math.round((E.raidBonus(st()) - 1) * 100);
-    overlay('raid', [
-      h('div', { class: 'kicker' }, 'Pearl dive!'),
-      h('p', { class: 'dive-how' }, 'Three of these four shells hold treasure. You have three goes.'),
-      h('div', { class: 'tubs' }, tubs.map((t) => t.el)), goes, total,
-      bonus > 0 ? h('p', { class: 'fineprint' }, `${activePet(st()).name} is helping: +${bonus}% in every shell.`) : null, done,
+    const box = overlay('bell', [
+      h('div', { class: 'kicker' }, 'Ring the Bell!'),
+      h('p', { class: 'dive-how' }, 'Hit SWING when the power is at the top. Three swings: the last is worth the most.'),
+      h('div', { class: 'bt-rig' },
+        gauge,
+        h('div', { class: 'bt-tower' }, bellImg, flash, rail, h('div', { class: 'bt-base' }, h('i', { class: 'bt-pad' })), mallet),
+        h('div', { class: 'bt-side' }, prize, chips.map((c) => c.el))),
+      swingBtn, total, done,
     ]);
-    const update = () => {
-      const left = 3 - st().pending?.picks.length;
-      setText(goes, st().pending ? `${left} ${left === 1 ? 'go' : 'goes'} left` : 'All done');
+    let power = 0;
+    let t0 = performance.now();
+    let swinging = false;
+    let alive = true;
+    const index = () => (st().pending ? st().pending.swings.length : BELL.shares.length);
+    const mark = () => {
+      chips.forEach((c, i) => toggle(c.el, 'now', i === index() && !!st().pending));
       setHTML(total, sum > 0 ? `So far: ${COIN}${fmt(sum)}` : '');
     };
-    update();
+    mark();
+    // the gauge rises and falls like a breath, lingering a moment at the top
+    const tick = (t) => {
+      if (!alive || !box.isConnected) return;
+      if (!swinging && st().pending) {
+        const period = BELL_PERIOD[Math.min(index(), BELL_PERIOD.length - 1)] * 1000;
+        power = 0.5 - 0.5 * Math.cos(((t - t0) / period) * Math.PI * 2);
+        fill.style.height = power * 100 + '%';
+        toggle(gauge, 'top', power >= BELL.ringAt);
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
 
-    function dip(i) {
-      const t = tubs[i];
-      const res = R.raidPick(st(), i);
-      if (!res) return nope();
-      t.open = true;
-      t.el.disabled = true;
-      t.image.src = tubURL(true, res.amount > 0);
-      toggle(t.el, 'empty', !(res.amount > 0));
-      setHTML(t.tag, res.amount > 0 ? money(res.amount) : 'Empty');
-      t.el.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.12)' }, { transform: 'scale(1)' }], { duration: 260 });
-      sum += res.amount;
-      if (res.amount > 0) {
-        audio.play('dig');
-        fly(COIN, t.el, coinCard, 8);
-        buzz(18);
-      } else {
-        audio.play('error');
-      }
-      if (res.done) {
-        tubs.forEach((tub, k) => {
-          tub.el.disabled = true;
-          if (!tub.open) {
-            tub.image.src = tubURL(true, res.tubs[k] > 0);
-            setHTML(tub.tag, res.tubs[k] > 0 ? money(res.tubs[k]) : 'Empty');
-            tub.el.classList.add('missed');
-          }
-        });
-        setText(goes, res.sweep ? 'Clean sweep!' : 'All done');
-        setHTML(total, `<b>${res.sweep ? 'You found the lot!' : 'Not bad!'}</b> ${COIN}${fmt(res.total)}`);
-        if (res.sweep) {
-          audio.play('bigwin');
-          buzz([30, 30, 60]);
+    function swing() {
+      if (swinging || !st().pending) return;
+      swinging = true;
+      const i = index();
+      const res = R.bellSwing(st(), power);
+      if (!res) return;
+      swingBtn.disabled = true;
+      audio.play('thud');
+      buzz(20);
+      mallet.classList.remove('hit');
+      void mallet.offsetWidth; // restart the animation
+      mallet.classList.add('hit');
+      // the rail is marked out up to the bell: anything short of a ring stops below it
+      const height = res.rung ? 1 : Math.min(0.97, res.power / BELL.ringAt);
+      setTimeout(() => {
+        audio.play('rise');
+        puck.style.transition = 'transform 0.42s cubic-bezier(0.15, 0.7, 0.3, 1)';
+        puck.style.transform = `translateY(${-height * RAIL}px)`;
+      }, 110);
+      setTimeout(() => {
+        sum += res.amount;
+        showSwing(i, res);
+        if (res.rung) {
+          audio.play('bell');
+          buzz([20, 30, 60]);
+          bellImg.classList.remove('ring');
+          flash.classList.remove('on');
+          void bellImg.offsetWidth; // restart the animation
+          bellImg.classList.add('ring');
+          flash.classList.add('on');
+          fx.rain(14);
+        } else {
+          audio.play(res.power > 0.6 ? 'coin' : 'click');
         }
-        done.append(h('button', { class: 'btn big wide', onclick: () => { click(); closeOverlay(); refresh(); } }, 'Carry on'));
-        onSave();
-      } else {
-        update();
-      }
-      refresh();
+        fly(COIN, puck, coinCard, res.rung ? 10 : 5);
+        mark();
+        refresh();
+      }, 560);
+      setTimeout(() => {
+        puck.style.transition = 'transform 0.5s cubic-bezier(0.5, 0, 0.9, 0.5)';
+        puck.style.transform = 'translateY(0)';
+      }, 1050);
+      setTimeout(() => {
+        if (!box.isConnected) return;
+        if (res.done) {
+          alive = false;
+          swingBtn.hidden = true;
+          fill.style.height = '0%';
+          if (res.peal) {
+            setHTML(total, `<b>Three out of three!</b> ${COIN}${fmt(res.total)}<small>bonus ${money(res.bonus)}</small>`);
+            audio.play('bigwin');
+            fx.rain(60);
+            buzz([30, 30, 60]);
+          } else {
+            setHTML(total, `<b>${res.total >= p.stash * 0.8 ? 'Strong arm!' : 'Not bad!'}</b> ${COIN}${fmt(res.total)}`);
+          }
+          done.append(h('button', { class: 'btn big wide', onclick: () => { click(); closeOverlay(); refresh(); } }, 'Carry on'));
+          onSave();
+          refresh();
+        } else {
+          swinging = false;
+          swingBtn.disabled = false;
+          t0 = performance.now();
+          mark();
+        }
+      }, 1600);
     }
+    // on the press, not the release: this is a game of timing
+    swingBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); swing(); });
+    swingBtn.addEventListener('click', swing);
   }
 
   // ---- modals -----------------------------------------------------------------
@@ -1285,11 +1433,11 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     popup(() => modal([
       host('modal-host', 'welcome'),
       wordmark(),
-      h('p', null, 'A sleepy park, a pocketful of spins and a lucky machine.'),
+      h('p', null, 'A sleepy park, a pocketful of spins, and a machine with your park on its reels.'),
       h('ul', null,
-        h('li', null, h('i', null, '1'), 'Spin the machine to win coins.'),
-        h('li', null, h('i', null, '2'), 'Spend coins on four rides, the entrance, parking, restrooms and food stalls. Finish them all to open the next park.'),
-        h('li', null, h('i', null, '3'), 'Level up to open more: cards, missions, pets, a prize draw, a merge game and an expedition.')),
+        h('li', null, h('i', null, '1'), 'Spin to win coins, and spend them building rides.'),
+        h('li', null, h('i', null, '2'), 'Everything you build goes on the reels and pays each time it comes up. Three of the same ride is its rush hour.'),
+        h('li', null, h('i', null, '3'), 'Finish the park to open the next one. Level up for cards, pets, missions and more games.')),
       h('div', { class: 'actions' },
         h('button', { class: 'btn big wide', onclick: () => { audio.unlock(); click(); closeModal(); } }, 'Open the gates')),
     ], { dismiss: false }));
@@ -1580,7 +1728,19 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     toggle(missionBtn, 'done', mission.done);
     setHTML(missionReward, mission.done ? `Claim ${describe(mission.reward, true)}` : `${fmt(mission.cur)}/${fmt(mission.target)} · ${describe(mission.reward, true)}`);
 
-    // the slots page
+    // the slots page (the reels keep their old faces until a spin in flight has landed)
+    if (!held && !slot.spinning) {
+      syncBadges();
+      const hot = s.hot && s.hot.left > 0 ? s.hot : null;
+      toggle(hotChip, 'on', !!hot);
+      if (hot) {
+        if (hotIcon.__k !== badge.key) {
+          hotIcon.__k = badge.key;
+          hotIcon.src = siteURL(hot.site);
+        }
+        setHTML(hotText, `<b>Rush hour</b> ${siteName(hot.site)} ×${RUSH.hotMult} · ${hot.left} ${hot.left === 1 ? 'spin' : 'spins'}`);
+      }
+    }
     const info = townInfo(s.town);
     const built = E.stagesBuilt(s);
     const ev = R.eventInfo(s, now);
@@ -1594,7 +1754,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     betMinus.disabled = bi <= 0;
     betPlus.disabled = bi >= bets.length - 1;
     const spinning = slot.spinning;
-    setText(spinLabel, s.pending && !spinning ? 'DIVE!' : tokens < 1 && !spinning ? 'EMPTY' : '');
+    setText(spinLabel, s.pending && !spinning ? 'BELL!' : tokens < 1 && !spinning ? 'EMPTY' : '');
     setHTML(spinCost, '');
     toggle(spinBtn, 'empty', tokens < 1 && !spinning && !s.pending);
     toggle(spinBtn, 'ready', tokens >= 1 && !spinning && !auto && !held);
@@ -1679,7 +1839,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     setSheet, closeSheet, sheetBody, sheetTitle, openScene, closeScene, at, hot, sceneClose, sceneInfo, overlay, closeOverlay, modal, closeModal, popup, nextPopup, busy: () => busy(),
     refresh, onSave, onReplaceSave, onReset, setBase, goTo, lockedToast, setAuto,
     watchAd, adFor, adsReady, buy, priceOf, bridge, interstitial, travelNow,
-    openAlbum, openVault, openWheel, openPack, showCards, openTask: openMissions, openDive, paytable,
+    openAlbum, openVault, openWheel, openPack, showCards, openTask: openMissions, openBellInfo, paytable, siteURL, siteName, syncBadges, BLANK,
     coinCard, tokenTarget, spinBtn, tabs, rails,
     get base() { return base; },
     get current() { return current; },

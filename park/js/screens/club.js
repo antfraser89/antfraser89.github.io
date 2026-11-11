@@ -22,7 +22,7 @@ export default function install(kit) {
       h('div', { class: 'banner with-host' }, h('img', { class: 'banner-host', src: ART('host-gull'), alt: '' }), evTime, evName, evTag),
       h('div', { class: 'ms-track' }, track.map((t) => t.el)),
       h('div', { class: 'rules' },
-        h('div', null, h('b', null, 'Spin to earn'), h('span', null, 'Every spin: 1 point. Three of a kind: 4. A pearl dive: 13. The jackpot: 26. Bigger bets multiply the points.')),
+        h('div', null, h('b', null, 'Spin to earn'), h('span', null, 'Every spin: 1 point. Three of a kind: 4. A rush hour: 7. Ring the Bell: 13. The jackpot: 26. Bigger bets multiply the points.')),
         h('div', null, h('b', null, 'Reach the goals'), h('span', null, 'Each goal pays its prize the moment you reach it. The track starts again when the timer runs out.'))),
       h('button', { class: 'btn blue wide', onclick: () => { click(); kit.paytable(); } }, 'Pay table'),
     ], () => {
@@ -60,7 +60,7 @@ export default function install(kit) {
       h('div', { class: 'ask' }, spinsBtn, cardBtn),
       h('h5', null, 'Pals asking for help'),
       feed,
-      h('div', { class: 'banner league-banner with-host' }, h('img', { class: 'banner-host', src: ART('ico-trophy'), alt: '' }), lgTime, h('h3', null, 'Daily league'), h('div', { class: 'tag-line' }, 'Pearl dives and turns on the wheel score points. Top of the table at midnight wins.')),
+      h('div', { class: 'banner league-banner with-host' }, h('img', { class: 'banner-host', src: ART('ico-trophy'), alt: '' }), lgTime, h('h3', null, 'Daily league'), h('div', { class: 'tag-line' }, 'Swings at the bell tower and turns on the wheel score points. Top of the table at midnight wins.')),
       table, prizes,
     ], () => {
       const s = st();

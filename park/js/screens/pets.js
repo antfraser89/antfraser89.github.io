@@ -10,7 +10,7 @@ export default function install(kit) {
   const talentText = (pet, level) => {
     const v = pet.per * level;
     return {
-      dive: `Pearl dives pay +${Math.round(v * 100)}%`, gate: `The gate takes +${Math.round(v * 100)}%`, reels: `Coin wins pay +${Math.round(v * 100)}%`,
+      rush: `Rush hours pay +${Math.round(v * 100)}%`, gate: `The gate takes +${Math.round(v * 100)}%`, reels: `Coin wins pay +${Math.round(v * 100)}%`,
       away: `Earns for +${Math.round(v * 100)}% longer while you are away`, energy: `+${Math.round(v)} merge energy`, treats: `+${Math.round(v * 100)}% cherries`,
       stars: `Spare cards are worth +${Math.round(v * 100)}% stars`, draw: `Prize Draw prizes +${Math.round(v * 100)}%`, swords: `The sword plant grows +${Math.round(v * 100)}% faster`,
       wheel: `Wheel coin prizes +${Math.round(v * 100)}%`,

@@ -30,7 +30,7 @@ export const CLUB = {
     { stat: 'spins', n: 60, pts: 100, text: (n) => `Spin ${n} times` },
     { stat: 'cards', n: 8, pts: 80, text: (n) => `Collect ${n} cards` },
     { stat: 'wheels', n: 5, pts: 60, text: (n) => `Take ${n} turns on the wheel` },
-    { stat: 'raids', n: 4, pts: 100, text: (n) => `Go on ${n} pearl dives` },
+    { stat: 'bells', n: 4, pts: 100, text: (n) => `Have ${n} goes at Ring the Bell` },
     { stat: 'helps', n: 3, pts: 70, text: (n) => `Help ${n} pals` },
   ],
   teamReward: { tokens: 120, coins: 250, packs: { gold: 1 }, gems: 60 },

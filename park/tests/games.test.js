@@ -369,7 +369,7 @@ test('pets: one level, several pals, only the one walking with you uses its tale
   const fed = Pets.feedPet(state);
   assert.ok(fed.levels >= 10);
   assert.deepEqual(fed.arrived.map((p) => p.id), Pets.PETS.filter((p) => p.how === 'level' && p.level <= state.pet.level).map((p) => p.id));
-  assert.ok(E.raidBonus(state) > 1);
+  assert.ok(E.rushBonus(state) > 1);
   assert.equal(E.tokenCap(state), 60 + Pets.PET_TUNING.capPerLevel * state.pet.level);
   const shop = Pets.PETS.find((p) => p.perk === 'gate');
   assert.equal(Pets.buyPet(state, shop.id, E.unit(0)), null);
@@ -380,7 +380,7 @@ test('pets: one level, several pals, only the one walking with you uses its tale
   const plain = E.plotRate(state, 0);
   assert.equal(Pets.setPet(state, shop.id), true);
   assert.ok(E.plotRate(state, 0) > plain);
-  assert.equal(E.raidBonus(state), 1, 'the duck stays at home');
+  assert.equal(E.rushBonus(state), 1, 'the duck stays at home');
   assert.equal(Pets.setPet(state, 'nobody'), false);
   assert.equal(hydrate(JSON.parse(serialize(state))).pet.active, shop.id);
 });
@@ -405,7 +405,7 @@ test('the clock moves everything on, and the badges count what is waiting', () =
   const before = { ...state.inv };
   for (let i = 0; i < 2000; i++) {
     R.spin(state, rand, T0);
-    if (state.pending) for (const tub of [0, 1, 2]) R.raidPick(state, tub);
+    while (state.pending) R.bellSwing(state, 0.7);
   }
   assert.ok(state.inv.energy > before.energy && state.inv.pearls > before.pearls && state.inv.shots > before.shots && state.inv.keys > before.keys);
   for (const p of PLOTS) assert.ok(state.plots[p.index].stage === 10);

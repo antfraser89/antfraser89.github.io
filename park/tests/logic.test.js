@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
-  CAP_STEPS, CARDS, CARD_SETS, DAILY, EVENT_MILESTONES, OPENING_SPINS, OUTCOMES, PACKS, PLOTS, RIVALS, STAGES, TUNING, VAULT, WHEEL, townInfo,
+  BELL, CAP_STEPS, CARDS, CARD_SETS, DAILY, EVENT_MILESTONES, HOMES, MIXED_WEIGHTS, OPENING_SPINS, OUTCOMES, PACKS, PLOTS, RIVALS, RUSH, STAGES, TUNING, VAULT,
+  WHEEL, homeSite, siteOf, townInfo,
 } from '../js/config.js';
 import * as E from '../js/economy.js';
 import { fmt, fmtClock, fmtTime, money } from '../js/format.js';
@@ -25,11 +26,14 @@ const seasoned = (seed = 1) => {
   g.state.stats.spins = OPENING_SPINS.length;
   return g;
 };
-const playOut = (state, rand) => {
+// Play out a go at the bell tower with an ordinary player's swings: good, but
+// not perfect, landing on what the economy assumes on average.
+const playOut = (state, rand, power = () => 0.52 + 0.48 * rand()) => {
   let last = null;
-  if (state.pending?.type === 'raid') for (const tub of [0, 1, 2]) last = R.raidPick(state, tub);
+  while (state.pending?.type === 'bell') last = R.bellSwing(state, power());
   return last;
 };
+const build = (state, stage, cap = 0) => state.plots.forEach((p) => { p.stage = stage; p.cap = cap; });
 
 // ---- formatting ----------------------------------------------------------
 
@@ -47,26 +51,54 @@ test('fmt keeps three significant figures and rounds down', () => {
 
 // ---- economy -------------------------------------------------------------
 
-test('outcome weights add up and the average spin is worth what the costs assume', () => {
+test('outcome weights add up, and a spin is worth what the sums say in an empty, half-built and full park', () => {
   const total = OUTCOMES.reduce((n, o) => n + o.w, 0);
   assert.ok(Math.abs(total - 100) < 1e-9);
-  const { state, rand } = seasoned(5);
-  state.tokens = 1e9;
-  const spins = 60000;
-  let coins = 0;
-  for (let i = 0; i < spins; i++) {
-    const before = state.coins;
-    assert.equal(R.spin(state, rand, T0).ok, true);
-    playOut(state, rand);
-    coins += state.coins - before;
+  assert.ok(Math.abs(Object.values(MIXED_WEIGHTS).reduce((a, b) => a + b, 0) - 100) < 1e-9);
+  const worth = [];
+  for (const [stage, cap] of [[0, 0], [5, 2], [STAGES, CAP_STEPS]]) {
+    const { state, rand } = seasoned(5 + stage);
+    build(state, stage, cap);
+    state.tokens = 1e9;
+    const spins = 60000;
+    let coins = 0;
+    for (let i = 0; i < spins; i++) {
+      const before = state.coins;
+      assert.equal(R.spin(state, rand, T0).ok, true);
+      playOut(state, rand);
+      coins += state.coins - before;
+    }
+    const measured = coins / spins / E.unit(0);
+    const expected = E.spinEV(state);
+    worth.push(expected);
+    assert.ok(Math.abs(measured - expected) / expected < 0.06, `stage ${stage}: measured ${measured.toFixed(2)} vs ${expected.toFixed(2)}`);
   }
-  const measured = coins / spins / E.unit(0);
-  assert.ok(Math.abs(measured - E.spinEV()) / E.spinEV() < 0.06, `measured ${measured.toFixed(2)} vs ${E.spinEV().toFixed(2)}`);
+  assert.ok(worth[0] < worth[1] && worth[1] < worth[2], 'the more you build, the more the reels pay');
+  assert.ok(worth[2] > worth[0] * 3, 'a full park pays several times what an empty one does');
+  assert.ok(E.BUILD_EV > E.EV_EMPTY && E.BUILD_EV < E.EV_FULL);
 });
 
 test('a park costs about its target number of spins, and early parks each cost more', () => {
+  // play each park through, buying the cheapest thing every time, and count the spins
+  const spinsToBuild = (t) => {
+    const { state } = fresh();
+    state.town = t;
+    let spins = 0;
+    for (;;) {
+      let best = null;
+      for (const p of PLOTS) {
+        const star = E.nextStar(state, p.index);
+        const cap = E.nextCap(state, p.index);
+        if (star && (!best || star.cost < best.cost)) best = { k: p.index, cap: false, cost: star.cost };
+        if (cap && cap.open && (!best || cap.cost < best.cost)) best = { k: p.index, cap: true, cost: cap.cost };
+      }
+      if (!best) return spins;
+      spins += best.cost / (E.spinEV(state) * E.unit(t));
+      state.plots[best.k][best.cap ? 'cap' : 'stage']++;
+    }
+  };
   for (let t = 0; t < 30; t++) {
-    const spins = E.townCost(t) / (E.spinEV() * E.unit(t));
+    const spins = spinsToBuild(t);
     assert.ok(Math.abs(spins - E.townSpins(t)) / E.townSpins(t) < 0.05, `park ${t}: ${spins}`);
     if (t < 8) assert.ok(E.townCost(t + 1) > E.townCost(t) * 1.3);
   }
@@ -115,8 +147,10 @@ test('the opening spins follow the script and teach every mechanic', () => {
     assert.equal(r.bet, 1);
     seen.push(r.kind);
     prizeTokens += r.tokens + r.milestones.reduce((n, m) => n + m.tokens, 0);
-    if (r.kind === 'raid') {
-      assert.equal(R.spin(state, rand, T0).why, 'pending', 'cannot spin in the middle of a dive');
+    if (i === 0) assert.ok(R.upgradePlot(state, 3), 'the first win pays for the first ride');
+    if (r.kind === 'rush') assert.equal(r.site, 3, 'the scripted rush hour goes to the ride just built');
+    if (r.kind === 'bell') {
+      assert.equal(R.spin(state, rand, T0).why, 'pending', 'cannot spin in the middle of a go at the bell');
       const end = playOut(state, rand);
       assert.equal(end.done, true);
       assert.ok(end.total >= 0);
@@ -157,6 +191,7 @@ test('a spin costs the bet, pays in proportion to it, and stops at zero tokens',
 test('reels show three of a kind exactly when the spin is a triple', () => {
   const { state, rand } = seasoned(4);
   state.tokens = 1e6;
+  state.plots[2].stage = 3; // one site open, so rush hours can happen
   const kinds = new Set();
   for (let i = 0; i < 4000; i++) {
     const r = R.spin(state, rand, T0);
@@ -256,7 +291,7 @@ test('feeding the pet levels it up, pays spins and raises the spin meter', () =>
   assert.ok(fed.levels >= 5);
   assert.equal(state.tokens, tokens + fed.tokens);
   assert.ok(E.tokenCap(state) > cap);
-  assert.ok(E.raidBonus(state) > 1);
+  assert.ok(E.rushBonus(state) > 1);
 });
 
 test('spinning earns event points and milestone prizes; the event rolls over', () => {
@@ -353,6 +388,7 @@ test('hydrate survives junk and clamps bad values', () => {
     plots: [{ stage: 99, cap: 99 }, { stage: 0, cap: 3 }, { stage: 10, cap: true }],
     cards: { owned: { 'pond-0': 2, nonsense: 5 }, packs: { gold: 1e9 } },
     pending: { type: 'raid', rival: {}, tubs: [1, 2, 3] },
+    hot: { site: 99, left: 4 },
   });
   assert.equal(s.plots[0].stage, STAGES);
   assert.equal(s.plots[0].cap, CAP_STEPS);
@@ -360,7 +396,8 @@ test('hydrate survives junk and clamps bad values', () => {
   assert.equal(s.plots[2].cap, CAP_STEPS, 'an older save kept capacity as yes or no');
   assert.deepEqual(s.cards.owned, { 'pond-0': 2 });
   assert.equal(s.cards.packs.gold, 9999);
-  assert.equal(s.pending, null, 'a broken pending raid is dropped rather than trusted');
+  assert.equal(s.pending, null, 'a pending game from an older version is dropped rather than trusted');
+  assert.equal(s.hot, null);
   assert.equal(parseSave('{broken'), null);
   assert.equal(importCode('not a save'), null);
 });
@@ -496,18 +533,172 @@ test('prices are capped: late parks cost what the one before did', () => {
   assert.equal(E.townCost(99), E.townCost(98));
 });
 
-test('three shells open a pearl dive: three goes at four shells', () => {
-  const { state, rand } = fresh();
-  state.stats.spins = 99;
+test('the reels are the park: built sites pay by what is built, closed ones pay nothing', () => {
+  const { state, rand } = seasoned(11);
+  state.tokens = 1e6;
+  const u = E.unit(0);
+  assert.equal(E.sitePay(state, 0), 0, 'nothing built, nothing paid');
+  state.plots[0].stage = 1;
+  const opened = E.sitePay(state, 0);
+  assert.ok(opened > 0);
+  assert.ok(E.sitePayAfter(state, 0, 'star') > opened);
+  state.plots[0].stage = STAGES;
+  const starred = E.sitePay(state, 0);
+  state.plots[0].cap = CAP_STEPS;
+  const full = E.sitePay(state, 0);
+  assert.ok(opened < starred && starred < full);
+  assert.ok(Math.abs(full - starred * (1 + TUNING.capBoost * CAP_STEPS)) < 1e-9);
+  state.plots[3].stage = STAGES;
+  assert.ok(E.sitePay(state, 3) > starred, 'the big wheel pays more than the swing');
+  // on the line, each reel pays its own symbol
+  let seenSite = false;
+  let seenClosed = false;
+  for (let i = 0; i < 3000; i++) {
+    const res = R.spin(state, rand, T0);
+    playOut(state, rand);
+    if (res.kind !== 'mixed') continue;
+    res.reels.forEach((sym, r) => {
+      const k = siteOf(sym);
+      if (k < 0) return;
+      // (a rush hour in progress doubles the site it is at)
+      const rate = Math.round(E.sitePay({ ...state, hot: null }, k) * u);
+      if (state.plots[k].stage > 0) {
+        assert.ok(Math.abs(res.pays[r] - rate) <= 1 || Math.abs(res.pays[r] - rate * RUSH.hotMult) <= 1, `${sym} paid ${res.pays[r]}, not ${rate}`);
+        seenSite = true;
+      } else {
+        assert.equal(res.pays[r], 0);
+        seenClosed = true;
+      }
+    });
+    assert.equal(res.coins, res.pays[0] + res.pays[1] + res.pays[2]);
+  }
+  assert.ok(seenSite && seenClosed);
+});
+
+test('three of the same site is its rush hour: ten symbols at once, then double there for five spins', () => {
+  const { state, rand } = seasoned(2);
   state.tokens = 1e6;
   let res;
-  do res = R.spin(state, rand, 0); while (res.kind !== 'raid');
-  assert.equal(state.pending.type, 'raid');
-  assert.equal(R.spin(state, rand, 0).ok, false, 'no spinning until the dive is done');
-  let won = 0;
-  for (const tub of [0, 1, 2]) won += R.raidPick(state, tub).amount;
+  for (let i = 0; i < 500; i++) assert.notEqual(R.spin(state, rand, T0).kind === 'rush', true, 'no rush hour in a park with nothing open');
+  playOut(state, rand);
+  state.pending = null;
+  build(state, 4, 1);
+  do {
+    res = R.spin(state, rand, T0);
+    playOut(state, rand);
+  } while (res.kind !== 'rush');
+  const k = res.site;
+  assert.deepEqual(res.reels, [`s${k}`, `s${k}`, `s${k}`]);
+  assert.deepEqual(state.hot, { site: k, left: RUSH.hotSpins });
+  assert.ok(E.rushing(state, k));
+  const plain = E.sitePay({ ...state, hot: null }, k);
+  assert.ok(Math.abs(E.sitePay(state, k) - plain * RUSH.hotMult) < 1e-9);
+  assert.ok(Math.abs(res.coins - plain * RUSH.mult * E.unit(0)) <= 1, 'the rush itself pays at the plain rate');
+  assert.equal(hydrate(JSON.parse(serialize(state))).hot.left, RUSH.hotSpins);
+  let left = RUSH.hotSpins;
+  while (left > 0 && state.hot && state.hot.site === k) {
+    res = R.spin(state, rand, T0);
+    playOut(state, rand);
+    if (res.kind === 'rush') break;
+    left--;
+    assert.equal(state.hot ? state.hot.left : 0, left);
+  }
+  // a new park starts quiet
+  state.hot = { site: 1, left: 3 };
+  build(state, STAGES, CAP_STEPS);
+  R.travel(state);
+  assert.equal(state.hot, null);
+});
+
+test('three bells start Ring the Bell: three swings, paid by how high the puck goes', () => {
+  const find = (seed) => {
+    const { state, rand } = seasoned(seed);
+    build(state, 6, 2);
+    state.tokens = 1e6;
+    let res;
+    do res = R.spin(state, rand, 0); while (res.kind !== 'bell');
+    return { state, rand };
+  };
+  const { state, rand } = find(1);
+  assert.equal(state.pending.type, 'bell');
+  const stash = state.pending.stash;
+  assert.equal(stash, E.nice(E.bellPrize(state) * E.unit(0)));
+  assert.equal(R.spin(state, rand, 0).ok, false, 'no spinning until the swings are taken');
+  // a save in the middle of a go comes back where it was
+  const first = R.bellSwing(state, 0.5);
+  assert.equal(first.rung, false);
+  assert.equal(first.amount, E.nice(stash * BELL.shares[0] * (BELL.low + BELL.slope * 0.5)));
+  const back = hydrate(JSON.parse(serialize(state)));
+  assert.deepEqual(back.pending, state.pending);
+  const coins = state.coins;
+  const second = R.bellSwing(state, 0.9);
+  assert.equal(second.rung, true);
+  assert.equal(second.amount, E.nice(stash * BELL.shares[1]));
+  const third = R.bellSwing(state, 7); // out-of-range power is clamped, not trusted
+  assert.equal(third.power, 1);
+  assert.equal(third.done, true);
+  assert.equal(third.peal, false, 'one weak swing: no bonus');
+  assert.equal(third.total, first.amount + second.amount + third.amount);
+  assert.equal(state.coins, coins + second.amount + third.amount);
   assert.equal(state.pending, null);
-  assert.ok(won > 0);
+  assert.equal(R.bellSwing(state, 1), null);
+  assert.equal(state.stats.bells, 1);
+  // three rings out of three: the full prize and a bonus on top
+  const best = find(2);
+  let won = 0;
+  let end;
+  for (let i = 0; i < 3; i++) {
+    end = R.bellSwing(best.state, 0.95);
+    won += end.amount;
+  }
+  assert.equal(end.peal, true);
+  assert.equal(end.bonus, E.nice(best.state.stats.peals && E.bellPrize(best.state) * E.unit(0) * BELL.peal));
+  assert.ok(end.total > won);
+  // the worst anybody can do still pays something
+  const worst = find(3);
+  const prize = worst.state.pending.stash;
+  let low = 0;
+  for (let i = 0; i < 3; i++) low += R.bellSwing(worst.state, 0).amount;
+  assert.ok(low >= prize * BELL.low * 0.95 && low < prize * 0.4);
+  // and a bigger park hangs a bigger prize on the tower
+  const small = fresh().state;
+  assert.ok(E.bellPrize(best.state) > E.bellPrize(small));
+});
+
+test('finish a card set and its creatures move into the park for good', () => {
+  const { state } = fresh();
+  build(state, 5, 1);
+  const k = homeSite(0);
+  const plainPay = E.sitePay(state, k);
+  const plainGate = E.plotRate(state, k);
+  for (const c of CARD_SETS[0].cards) state.cards.owned[c.id] = 1;
+  const reward = R.claimSet(state, 0);
+  assert.deepEqual(reward.home, { site: k, level: 1 });
+  assert.equal(state.cards.homes[0], 1);
+  assert.ok(Math.abs(E.sitePay(state, k) - plainPay * (1 + HOMES.boost)) < 1e-9);
+  assert.ok(Math.abs(E.plotRate(state, k) - plainGate * (1 + HOMES.boost)) < 1e-9);
+  assert.equal(E.homeBonus(state, (k + 1) % PLOTS.length), 0);
+  // they stay through a move to the next park and a new season of the album
+  build(state, STAGES, CAP_STEPS);
+  R.travel(state);
+  assert.equal(E.homeBonus(state, k), HOMES.boost);
+  for (const c of CARDS) state.cards.owned[c.id] = 1;
+  CARD_SETS.forEach((set) => R.claimSet(state, set.index));
+  R.claimAlbum(state);
+  assert.equal(state.cards.homes[0], 1, 'already home: the first finish this season was counted');
+  for (const c of CARD_SETS[0].cards) state.cards.owned[c.id] = 1;
+  assert.equal(R.claimSet(state, 0).home.level, 2);
+  assert.equal(hydrate(JSON.parse(serialize(state))).cards.homes[0], 2);
+  // an older save had no homes: every set finished so far has moved in
+  const old = JSON.parse(serialize(state));
+  delete old.cards.homes;
+  old.cards.season = 2;
+  old.cards.sets = old.cards.sets.map((_, i) => i === 4);
+  const carried = hydrate(old);
+  assert.equal(carried.cards.homes[4], 2);
+  assert.equal(carried.cards.homes[5], 1);
+  for (let i = 0; i < 9; i++) state.cards.homes[0] = Math.min(HOMES.max, state.cards.homes[0] + 1);
+  assert.equal(state.cards.homes[0], HOMES.max);
 });
 
 test('three balls win a turn on the prize wheel, and the wheel always pays', () => {
@@ -543,7 +734,7 @@ test('nothing ever attacks the park: no shields, no closures, no incoming', () =
   for (let i = 0; i < 3000; i++) {
     const res = R.spin(state, rand, i * 1000);
     kinds.add(res.kind);
-    if (state.pending) for (const tub of [0, 1, 2]) R.raidPick(state, tub);
+    playOut(state, rand);
     R.tick(state, i * 3600e3);
   }
   assert.ok(!kinds.has('attack') && !kinds.has('shield'));

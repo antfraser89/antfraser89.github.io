@@ -1,8 +1,8 @@
 # Park!
 
-A spin-and-build theme park game for phones, played in the browser. Spin a lucky machine for coins, spend them on the rides and facilities of a painted park, and finish it to open the next of a hundred. Round that sit a prize wheel, a pearl dive, a merge game, a prize draw, an expedition, lucky chests, pets, cards, missions, a season pass, a weekly festival and a club.
+A spin-and-build theme park game for phones, played in the browser. The machine has your park on its reels: every ride and building you build becomes a symbol that pays each time it comes up, and pays more as you level it. Spend the coins on the park, finish it, and open the next of a hundred. Round that sit a bell tower to ring, a prize wheel, a merge game, a prize draw, an expedition, lucky chests, pets, cards whose creatures move into the park, missions, a season pass, a weekly festival and a club.
 
-It is built in the "spin and build" genre of mobile games such as Carnival Tycoon, and its structure follows the research notes and mock-up pack kept in the `park-game` repository. The name, mascot, parks, cards, events and artwork are Park!'s own.
+It sits in the "spin and build" genre of mobile games, and its screens follow the mock-up pack kept in the `park-game` repository. The name, mascot, parks, cards, events and artwork are Park!'s own, and so is the core of the game (see "What is Park!'s own" below).
 
 Play it at `https://antfraser89.github.io/park/` once this folder is on the default branch. It installs to a phone's home screen from there and then plays without a connection.
 
@@ -43,18 +43,19 @@ A tab bar runs along the bottom: **Offers**, **Park**, **Slots**, **Cards** and 
 | System | What it does |
 | --- | --- |
 | Spins | The spin currency. One comes back every two minutes up to a meter of 60 (pets raise it). Prizes can push you over. |
-| The machine | Three reels of three rows; the middle row pays. Coins and chests pay on every spin. Three of a kind gives a coin win, a chest win, the jackpot (bells), a pearl dive (shells), a turn on the prize wheel (beach balls), free spins (tickets) or cherries for your pet. Starfish pay nothing. The bet (×1 to ×50) multiplies both the cost and the prize. Hold SPIN to spin automatically. Once the side games are open, symbols on the pay line sometimes drop energy, pearl tokens, cannonballs and keys. |
-| Building | Each park has eight sites: four rides, and the Entrance, Parking, Restrooms and Food Stalls. Every site has two things to buy: its level (ten stars, levels 10 to 100) and its capacity (five steps of seats, gates, spaces, toilets or stalls; step *n* opens at level 20 × *n*). Both add to the gate takings. 120 purchases finish a park. |
+| The machine | Three reels of three rows; the middle row pays. Eight of the symbols are the park's own eight sites, cut from its painting. A site you have built pays every time it stops on the line, by its level and capacity; one you have not built shows as CLOSED and pays nothing. So a spin is worth about 2.6 units in an empty park and 8.8 in a finished one, and the pay table in the game shows the real amounts for your park as it stands. Coins and chests pay as well. Three of a kind gives a rush hour (a site), a coin win, the jackpot (chests), Ring the Bell (bells), a turn on the prize wheel (beach balls), free spins (tickets) or cherries for your pet. Starfish pay nothing. The bet (×1 to ×50) multiplies both the cost and the prize. Hold SPIN to spin automatically. Once the side games are open, symbols on the pay line sometimes drop energy, pearl tokens, cannonballs and keys. |
+| Rush hour | Three of the same site: it pays ten symbols at once, and then that site pays double for the next five spins. The machine and the park both show which site is busy. A rush hour can only happen at a site that is built. |
+| Building | Each park has eight sites: four rides, and the Entrance, Parking, Restrooms and Food Stalls. Every site has two things to buy: its level (ten stars, levels 10 to 100) and its capacity (five steps of seats, gates, spaces, toilets or stalls; step *n* opens at level 20 × *n*). Both raise what the site pays on the reels and what it takes at the gate. 120 purchases finish a park. |
 | Parks | A hundred parks across four painted themes that come round in turn: Coral Cove, Pirate Harbour, Jungle Falls and Snowlight Village. Prices stop climbing after park 15. A finished park stays on the map, can be visited, and goes on earning a share of its takings for good. Each park has four chests along its progress bar. |
 | Your level | Every star bought in any park counts. Each level pays a prize, and levels 2 to 10 each open something: cards, missions, the Prize Draw, the pet shop, Rockpool Merge, Park Pals, the Expedition, Lucky Chests, then the Park Pass and the festival. |
 | Prize wheel | Three beach balls, or the free daily ticket, give a turn on an eight-wedge wheel. |
-| Pearl dive | Three shells on the reels: four shells, treasure in three of them, three picks. |
+| Ring the Bell | Three bells on the reels: a fairground strength tester. A power gauge rises and falls; SWING stops it and the puck runs up the tower that far. Three swings, each quicker than the last, worth 30%, 30% and 40% of a prize that grows with the park. A swing pays by its height, in full if the bell rings, and three rings out of three adds a bonus. It is a game of timing, not a pick. |
 | Rockpool Merge | A seven by seven board. The basket drops a shell for a point of energy; two the same make the next along a chain. Some shells start buried and can only be merged into. The first of each new shell pays a prize; the last shell in the chain finishes the round. |
 | Prize Draw | A pearl token bursts one bubble. Three of the bubbles are big prizes with a limited stock, and one is guaranteed at least every sixteen draws. Eighty draws in a round wins the pearl. |
 | Expedition | Three screens that feed each other. The Sword Garden grows swords over time (plant food makes it grow faster). The trail spends swords to clear six flags a stage, the last a chest. The cannon fires at twenty jars holding swords and plant food; one hides the target that finishes the level. |
 | Lucky Chests | Six prizes on show, six chests, one key each: every chest holds one of the prizes. Three boards make a level, and each level's prizes are better. |
-| Pets | One pet level, raised with cherries, shared by ten pals. Only the pal walking with you uses its talent (bigger pearl dives, more at the gate, longer away time and so on). Some pals are bought with coins; two arrive when the pet level reaches them. |
-| Cards | 81 cards in nine sets of nine, rated one to five gems, the five-gem card in each set being gold. Finished sets pay out; the finished album pays more and starts a new season. Spare cards become stars for the vault, which sells cards you are guaranteed not to own. The odds of every pack are shown in the game. |
+| Pets | One pet level, raised with cherries, shared by ten pals. Only the pal walking with you uses its talent (bigger rush hours, more at the gate, longer away time and so on). Some pals are bought with coins; two arrive when the pet level reaches them. |
+| Cards | 81 cards in nine sets of nine, rated one to five gems, the five-gem card in each set being gold. Finished sets pay out, and the set's creatures move into the park: each set has a home site, which then pays 10% more on the reels and at the gate, in every park, for good (up to three times over as seasons go by). The finished album pays more and starts a new season. Spare cards become stars for the vault, which sells cards you are guaranteed not to own. The odds of every pack are shown in the game. |
 | Missions | Six a day and four a week, each counting something the game already tallies. They pay prizes and mission points, which open a row of chests and count towards the pass. |
 | Park Pass | A four-week season of thirty tiers, with a free prize and a premium prize on each. Pass points come from missions and the daily bonus. |
 | Festival | A week-long theme. Gems are prizes all over the game; they buy sixteen decorations (four items, four sizes), with a prize every fourth. Spare gems can be traded in. |
@@ -112,6 +113,18 @@ With no bridge present, `STORE_PREVIEW` in `js/config.js` decides what players s
 - **Test on real phones.** It has been tested in desktop Chromium at phone sizes, by script and by eye. It has not been run on a physical iPhone or Android phone.
 - **Clubs are computer-run.** If that is not what you want to ship, the club needs a server.
 
+## What is Park!'s own
+
+Spin-and-build games share a genre: spins that come back over time, a bet, a place to build, cards, pets and events. Within that, these are the parts of Park! that are its own design rather than the genre's usual formula:
+
+- **The park is the pay table.** In the usual formula the machine and the village are separate: the machine pays fixed prizes and the village is a coin sink. Here the park's eight sites are the reel symbols, so every purchase changes what the machine pays, an empty park's reels are mostly CLOSED boards, and the reels change their pictures with every park.
+- **Rush hours.** Three of the same site pays out and leaves that site busy, paying double, for the next five spins. The machine remembers something from spin to spin.
+- **No attacks, raids or shields**, and nothing picked blind. The big feature is Ring the Bell, a timing game: the prize is shown up front and how much of it you win is down to your swing.
+- **Cards live in the park.** A finished set is not just a payout: its creatures move in at a site and make it pay more in every park from then on.
+- **The gate.** The park earns on its own between visits, and finished parks keep earning.
+
+Prices are set against this: a spin pays little in an empty park and a lot in a full one, so `economy.js` plays a park through (always buying the cheapest thing) to find what a spin is worth on average over a build, and costs are worked from that.
+
 ## Code map
 
 ```
@@ -121,10 +134,10 @@ privacy.html, terms.html
 css/style.css         the shell, the Slots and Park pages, sheets and pop-ups
 css/screens.css       everything in js/screens/
 img/                  artwork cut from the mock-up pack
-js/config.js          game data and tuning: outcomes, parks, sites, levels, unlocks, cards, wheel, products, adverts
+js/config.js          game data and tuning: reel symbols and outcomes, rush hours, the bell, parks, sites, levels, unlocks, cards, wheel, products, adverts
 js/core.js            shared helpers: handing over rewards, weighted picks, the calendar
-js/economy.js         pure maths: units, costs, bets, the gate, levels
-js/rules.js           spins, building, the wheel, pearl dives, cards, events, league, shop, adverts
+js/economy.js         pure maths: units, what each site pays on the reels, costs, bets, the gate, levels
+js/rules.js           spins, rush hours, Ring the Bell, building, the wheel, cards, events, league, shop, adverts
 js/pets.js            pets and their talents
 js/games/             merge.js, draw.js, trail.js, chests.js: the side games' rules
 js/meta/              missions.js, pass.js, festival.js, club.js
@@ -135,6 +148,7 @@ js/state.js           save state, validation, export codes
 js/format.js          number and time formatting
 js/parkview.js        the park page
 js/slotview.js        the reels
+js/sitebadge.js       the eight site symbols, drawn from the park's painting as it is built
 js/ui.js              the shell: top bar, tab bar, the Slots page and its rails, sheets, scenes, pop-ups, and the kit
 js/screens/           one file per screen or group of screens, each handed the shell's kit
 js/preload.js         first pictures, with progress for the loading bar

@@ -3,9 +3,9 @@
 // source passed in, so it runs the same in the browser and in tests. The side
 // games and the club have their own modules (see games/ and meta/).
 import {
-  ADS, ALBUM_REWARD, CAP_STEPS, CARDS, CARD_SETS, DAILY, EVENT_MILESTONES, EVENT_POINTS, EVENT_THEMES, ITEMS, LEAGUE_POINTS, LEAGUE_PRIZES,
-  MIXED_WEIGHTS, OPENING_SPINS, OUTCOMES, PACKS, PARK_CHESTS, PAY, PRODUCTS, REEL_DROPS, RIVALS, STAGES, TOWN_REWARD, TRIPLE, TUNING as T,
-  UNLOCKS, UPGRADE_REWARDS, VAULT, WHEEL, levelReward, setUnlockTown,
+  ADS, ALBUM_REWARD, BELL, CAP_STEPS, CARDS, CARD_SETS, DAILY, EVENT_MILESTONES, EVENT_POINTS, EVENT_THEMES, HOMES, ITEMS, LEAGUE_POINTS, LEAGUE_PRIZES,
+  MIXED_WEIGHTS, OPENING_SPINS, OUTCOMES, PACKS, PARK_CHESTS, PAY, PRODUCTS, REEL_DROPS, RIVALS, RUSH, SITE_SYMBOLS, STAGES, TOWN_REWARD, TRIPLE, TUNING as T,
+  UNLOCKS, UPGRADE_REWARDS, VAULT, WHEEL, homeSite, levelReward, setUnlockTown, siteOf,
 } from './config.js';
 import { HOUR, dayNumber, earn, grant, hash, weighted } from './core.js';
 import * as E from './economy.js';
@@ -68,6 +68,20 @@ export function canSpin(state) {
   return !state.pending && state.tokens >= 1;
 }
 
+// A rush hour needs a site that is open. Early spins follow the script, and
+// there it goes to the best site built so far.
+function rushSite(state, rand, scripted) {
+  if (!scripted) {
+    const k = Math.floor(rand() * state.plots.length);
+    return state.plots[k].stage > 0 ? k : -1;
+  }
+  let best = -1;
+  state.plots.forEach((p, k) => {
+    if (p.stage > 0 && (best < 0 || E.sitePay(state, k) > E.sitePay(state, best))) best = k;
+  });
+  return best;
+}
+
 export function spin(state, rand, now) {
   if (state.pending) return { ok: false, why: 'pending' };
   setBet(state, state.bet);
@@ -81,20 +95,37 @@ export function spin(state, rand, now) {
   const n = state.stats.spins++;
   state.stats.tokensSpent += bet;
 
-  const kind = n < OPENING_SPINS.length ? OPENING_SPINS[n] : weighted(rand, OUTCOMES.map((o) => [o.kind, o.w]));
-  const reels = kind === 'mixed' ? mixedReels(rand) : [TRIPLE[kind], TRIPLE[kind], TRIPLE[kind]];
+  const scripted = n < OPENING_SPINS.length;
+  let kind = scripted ? OPENING_SPINS[n] : weighted(rand, OUTCOMES.map((o) => [o.kind, o.w]));
+  let site = -1;
+  if (kind === 'rush') {
+    site = rushSite(state, rand, scripted);
+    if (site < 0) kind = scripted ? 'coins3' : 'mixed';
+  }
+  const sym = kind === 'rush' ? SITE_SYMBOLS[site] : TRIPLE[kind];
+  const reels = kind === 'mixed' ? mixedReels(rand) : [sym, sym, sym];
   const u = E.unit(state.town);
-  const out = { ok: true, kind, reels, bet, coins: 0, tokens: 0, treats: 0, wheel: 0, pack: null, pending: null, drops: {} };
+  const out = { ok: true, kind, reels, bet, site, coins: 0, pays: [0, 0, 0], tokens: 0, treats: 0, wheel: 0, pack: null, pending: null, drops: {}, hot: null };
   let points = EVENT_POINTS.spin;
   const coinBoost = 1 + talent(state, 'reels');
+  // what one symbol on the line pays this spin, in coins
+  const symbolPay = (s) => {
+    const k = siteOf(s);
+    return (k >= 0 ? E.sitePay(state, k) : PAY[s] || 0) * u * bet * coinBoost;
+  };
 
   switch (kind) {
     case 'mixed':
-      for (const sym of reels) out.coins += (PAY[sym] || 0) * u * bet * coinBoost;
+      out.pays = reels.map((s) => Math.round(symbolPay(s)));
+      out.coins = out.pays[0] + out.pays[1] + out.pays[2];
+      break;
+    case 'rush':
+      out.coins = symbolPay(sym) * RUSH.mult * E.rushBonus(state);
+      state.stats.rushes++;
+      points += EVENT_POINTS.rush;
       break;
     case 'coins3':
-    case 'sacks3':
-      out.coins = PAY[kind] * u * bet * coinBoost;
+      out.coins = PAY.coins3 * u * bet * coinBoost;
       points += EVENT_POINTS.triple;
       break;
     case 'jackpot':
@@ -119,17 +150,10 @@ export function spin(state, rand, now) {
       state.pet.treats += out.treats;
       points += EVENT_POINTS.triple;
       break;
-    case 'raid': {
-      const stash = u * bet * (PAY.raidStash[0] + (PAY.raidStash[1] - PAY.raidStash[0]) * rand()) * E.raidBonus(state);
-      const tubs = PAY.raidShares.map((share) => E.nice(stash * share));
-      for (let i = tubs.length - 1; i > 0; i--) {
-        const j = Math.floor(rand() * (i + 1));
-        [tubs[i], tubs[j]] = [tubs[j], tubs[i]];
-      }
-      state.pending = { type: 'raid', bet, tubs, picks: [] };
-      points += EVENT_POINTS.raid;
+    case 'bell':
+      state.pending = { type: 'bell', bet, stash: E.nice(E.bellPrize(state) * u * bet), swings: [] };
+      points += EVENT_POINTS.bell;
       break;
-    }
     default:
       break;
   }
@@ -137,12 +161,16 @@ export function spin(state, rand, now) {
     out.coins = Math.round(out.coins);
     earn(state, out.coins);
   }
+  // a rush hour in progress runs down by one spin; a new one starts after this spin
+  if (state.hot && --state.hot.left <= 0) state.hot = null;
+  if (kind === 'rush') state.hot = { site, left: RUSH.hotSpins };
+  out.hot = state.hot ? { ...state.hot } : null;
   // bits and pieces for the side games, once they are open
-  if (n >= OPENING_SPINS.length) {
+  if (!scripted) {
     for (const d of REEL_DROPS) {
       if (!E.unlocked(state, d.needs)) continue;
-      for (const sym of reels) {
-        if (sym === d.sym && rand() < d.chance) out.drops[d.item] = (out.drops[d.item] || 0) + d.n;
+      for (const s of reels) {
+        if (s === d.sym && rand() < d.chance) out.drops[d.item] = (out.drops[d.item] || 0) + d.n;
       }
     }
     grant(state, out.drops);
@@ -152,27 +180,32 @@ export function spin(state, rand, now) {
   return out;
 }
 
-// Open one of the four shells. Three goes; one shell is empty.
-export function raidPick(state, tub) {
+// What a swing of the mallet pays, as a share of that swing's slice of the prize.
+export const bellShare = (power) => (power >= BELL.ringAt ? 1 : BELL.low + BELL.slope * power);
+
+// One swing at the bell tower. `power` runs from 0 to 1 and comes from the
+// player's timing; 0.85 or better sends the puck all the way up.
+export function bellSwing(state, power) {
   const p = state.pending;
-  if (!p || p.type !== 'raid' || !(tub >= 0 && tub < 4) || p.picks.includes(tub) || p.picks.length >= 3) return null;
-  p.picks.push(tub);
-  const amount = p.tubs[tub];
-  if (amount > 0) {
-    earn(state, amount);
-    state.league.points += LEAGUE_POINTS.barrel * p.bet;
-  }
-  const done = p.picks.length >= 3;
-  const out = { amount, done, total: 0, sweep: false, tubs: null };
+  if (!p || p.type !== 'bell' || p.swings.length >= BELL.shares.length) return null;
+  const hit = Math.max(0, Math.min(1, Number(power) || 0));
+  const rung = hit >= BELL.ringAt;
+  const amount = E.nice(p.stash * BELL.shares[p.swings.length] * bellShare(hit));
+  p.swings.push({ power: hit, amount });
+  earn(state, amount);
+  state.league.points += (LEAGUE_POINTS.swing + (rung ? LEAGUE_POINTS.ring : 0)) * p.bet;
+  const done = p.swings.length >= BELL.shares.length;
+  const out = { power: hit, rung, amount, done, total: 0, peal: false, bonus: 0 };
   if (done) {
-    out.total = p.picks.reduce((n, k) => n + p.tubs[k], 0);
-    out.sweep = p.picks.every((k) => p.tubs[k] > 0);
-    out.tubs = p.tubs.slice();
-    state.stats.raids++;
-    if (out.sweep) {
-      state.stats.sweeps++;
-      state.league.points += LEAGUE_POINTS.sweep * p.bet;
+    out.peal = p.swings.every((w) => w.power >= BELL.ringAt);
+    if (out.peal) {
+      out.bonus = E.nice(p.stash * BELL.peal);
+      earn(state, out.bonus);
+      state.stats.peals++;
+      state.league.points += LEAGUE_POINTS.peal * p.bet;
     }
+    out.total = p.swings.reduce((n, w) => n + w.amount, 0) + out.bonus;
+    state.stats.bells++;
     state.pending = null;
   }
   return out;
@@ -240,6 +273,7 @@ export function travel(state) {
   state.town++;
   state.stats.towns++;
   state.parkChests = 0;
+  state.hot = null;
   for (const p of state.plots) {
     p.stage = 0;
     p.cap = 0;
@@ -321,7 +355,12 @@ export function claimSet(state, s) {
   if (!CARD_SETS[s] || state.cards.sets[s] || !setComplete(state, s)) return null;
   state.cards.sets[s] = true;
   state.stats.sets++;
-  return grant(state, { tokens: Math.round(CARD_SETS[s].reward * seasonMult(state)), coins: 20 * (s + 1) });
+  // the set's creatures move into the park, to the same site in every park
+  const moved = state.cards.homes[s] < HOMES.max;
+  if (moved) state.cards.homes[s]++;
+  const reward = grant(state, { tokens: Math.round(CARD_SETS[s].reward * seasonMult(state)), coins: 20 * (s + 1) });
+  reward.home = moved ? { site: homeSite(s), level: state.cards.homes[s] } : null;
+  return reward;
 }
 
 // Finishing the album pays out and starts a fresh season of the same cards.

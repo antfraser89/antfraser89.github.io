@@ -47,11 +47,21 @@ export function createSlotView(canvas, hooks = {}) {
   let spriteSize = 0;
   function stamp(sym, cx, cy, size) {
     const img = sprites.get(sym);
-    if (!img || !img.complete || !img.naturalWidth) return;
+    if (!img) return;
+    if (img.getContext) {
+      // a site badge, drawn by the page: its picture fills four fifths of the canvas
+      const s2 = size * 1.2;
+      ctx.drawImage(img, cx - s2 / 2, cy - s2 / 2 + s2 * 0.02, s2, s2);
+      return;
+    }
+    if (!img.complete || !img.naturalWidth) return;
     const k = size / Math.max(img.naturalWidth, img.naturalHeight * 1.08);
     const [w2, h2] = [img.naturalWidth * k, img.naturalHeight * k];
     ctx.drawImage(img, cx - w2 / 2, cy - h2 / 2, w2, h2);
   }
+  // The eight site symbols are badges the page draws from the park's painting,
+  // and redraws as the park is built.
+  const setSprite = (sym, canvas) => sprites.set(sym, canvas);
 
   function resize() {
     dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -279,5 +289,5 @@ export function createSlotView(canvas, hooks = {}) {
   }
 
   resize();
-  return { spin, skip, flash, draw, resize, get spinning() { return running; }, get teasing() { return teasing; } };
+  return { spin, skip, flash, draw, resize, setSprite, get spinning() { return running; }, get teasing() { return teasing; } };
 }

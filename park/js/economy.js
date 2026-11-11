@@ -1,6 +1,6 @@
 // Pure economy maths: no DOM, no randomness, no mutation.
 import {
-  CAP_STEPS, MIXED_WEIGHTS, OPENING_SPINS, OUTCOMES, PACKS, PAY, PLOTS, STAGES, TUNING as T, levelOf, levelStars, unlockLevel,
+  BELL, CAP_STEPS, HOMES, MIXED_WEIGHTS, OPENING_SPINS, OUTCOMES, PACKS, PAY, PLOTS, RUSH, STAGES, TUNING as T, homeSite, levelOf, levelStars, unlockLevel,
 } from './config.js';
 import { nice, unit } from './core.js';
 import { petCap, talent } from './pets.js';
@@ -11,26 +11,83 @@ const sum = (list) => list.reduce((a, b) => a + b, 0);
 const OUTCOME_TOTAL = sum(OUTCOMES.map((o) => o.w));
 export const outcomeChance = (kind) => OUTCOMES.find((o) => o.kind === kind).w / OUTCOME_TOTAL;
 
-// Average coins a spin returns, in units, at a bet of one and no pet bonus.
-export function spinEV() {
-  const mixedTotal = sum(Object.values(MIXED_WEIGHTS));
-  const perReel = (MIXED_WEIGHTS.coin * PAY.coin + MIXED_WEIGHTS.sack * PAY.sack) / mixedTotal;
-  const raid = ((PAY.raidStash[0] + PAY.raidStash[1]) / 2) * 0.75; // three picks out of four shells
+// ---- what the reels pay --------------------------------------------------------
+
+const SLOT_SUM = sum(T.slotWeights);
+const STEP_SUM = sum(T.stageWeights) + sum(T.capWeights);
+const MIXED_TOTAL = sum(Object.values(MIXED_WEIGHTS));
+const SITE_CHANCE = MIXED_WEIGHTS.s0 / MIXED_TOTAL; // one site, on one reel of a mixed spin
+// bigger sites pay more: each one's weight against the average
+const REL = T.slotWeights.map((w) => (w * PLOTS.length) / SLOT_SUM);
+
+// How much of its full rate a site is working at: nothing until it is built,
+// then up with every star, and each capacity step adds a share on top.
+export const siteLevel = (plot) => (plot.stage > 0 ? (PAY.siteOpen + ((1 - PAY.siteOpen) * plot.stage) / STAGES) * (1 + T.capBoost * plot.cap) : 0);
+// Creatures from finished card sets live at a site and make it pay more.
+export function homeBonus(state, k) {
+  const homes = state.cards.homes;
+  let n = 0;
+  for (let s = 0; s < homes.length; s++) if (homeSite(s) === k) n += homes[s];
+  return n * HOMES.boost;
+}
+export const rushing = (state, k) => !!state.hot && state.hot.left > 0 && state.hot.site === k;
+// Units one symbol of site k pays on the line, at a bet of one.
+export const sitePay = (state, k) => PAY.site * REL[k] * siteLevel(state.plots[k]) * (1 + homeBonus(state, k)) * (rushing(state, k) ? RUSH.hotMult : 1);
+// The same for the star or capacity step after this one: what building buys.
+export function sitePayAfter(state, k, what) {
+  const p = state.plots[k];
+  const next = what === 'cap' ? { stage: p.stage, cap: p.cap + 1 } : { stage: p.stage + 1, cap: p.cap };
+  return PAY.site * REL[k] * siteLevel(next) * (1 + homeBonus(state, k));
+}
+// The prize on the bell tower, in units at a bet of one.
+const parkWorth = (plots) => plots.reduce((n, p, k) => n + REL[k] * siteLevel(p), 0);
+export const bellPrize = (state) => BELL.base + BELL.perPark * parkWorth(state.plots);
+
+// Average coins a spin returns in a park built this far, in units at a bet of
+// one, with no pets, card creatures or rush hour helping.
+function evOf(plots) {
+  const worth = parkWorth(plots);
+  const built = plots.filter((p) => p.stage > 0).length;
+  const mixed = 3 * ((MIXED_WEIGHTS.coin * PAY.coin + MIXED_WEIGHTS.sack * PAY.sack) / MIXED_TOTAL + SITE_CHANCE * PAY.site * worth);
+  const rush = outcomeChance('rush') / PLOTS.length; // the chance of a rush hour at any one site
+  const after = RUSH.hotSpins * outcomeChance('mixed') * 3 * SITE_CHANCE * (RUSH.hotMult - 1); // symbols' worth of extra in the spins that follow
   return (
+    (outcomeChance('mixed') + rush * (PLOTS.length - built)) * mixed +
+    rush * (RUSH.mult + after) * PAY.site * worth +
     outcomeChance('coins3') * PAY.coins3 +
-    outcomeChance('sacks3') * PAY.sacks3 +
     outcomeChance('jackpot') * PAY.jackpot +
-    outcomeChance('raid') * raid +
-    outcomeChance('mixed') * perReel * 3
+    outcomeChance('bell') * BELL.typical * (BELL.base + BELL.perPark * worth)
   );
 }
+export const spinEV = (state) => evOf(state.plots);
 
 // How many bet-one spins a park is meant to take from empty to finished.
 export const townSpins = (town) => Math.min(90 + 80 * town + 10 * town * town, T.spinsCap);
 
-const SLOT_SUM = sum(T.slotWeights);
-const STEP_SUM = sum(T.stageWeights) + sum(T.capWeights);
-const share = (town, slot, weight) => nice((spinEV() * unit(town) * townSpins(town) * T.slotWeights[slot] * weight) / (SLOT_SUM * STEP_SUM));
+// The reels pay little in an empty park and a lot in a full one, so prices are
+// set against the average over a whole build: play a park through, always
+// buying the cheapest thing on offer, and see what a spin was worth on the way.
+export const BUILD_EV = (() => {
+  const plots = PLOTS.map(() => ({ stage: 0, cap: 0 }));
+  const price = (k, p, cap) => T.slotWeights[k] * (cap ? T.capWeights[p.cap] : T.stageWeights[p.stage]);
+  let spins = 0;
+  for (;;) {
+    let best = null;
+    plots.forEach((p, k) => {
+      if (p.stage < STAGES && (!best || price(k, p, false) < best.cost)) best = { k, cap: false, cost: price(k, p, false) };
+      if (p.cap < CAP_STEPS && p.stage >= (p.cap + 1) * 2 && (!best || price(k, p, true) < best.cost)) best = { k, cap: true, cost: price(k, p, true) };
+    });
+    if (!best) break;
+    spins += best.cost / (SLOT_SUM * STEP_SUM) / evOf(plots);
+    if (best.cap) plots[best.k].cap++;
+    else plots[best.k].stage++;
+  }
+  return 1 / spins;
+})();
+export const EV_EMPTY = evOf(PLOTS.map(() => ({ stage: 0, cap: 0 })));
+export const EV_FULL = evOf(PLOTS.map(() => ({ stage: STAGES, cap: CAP_STEPS })));
+
+const share = (town, slot, weight) => nice((BUILD_EV * unit(town) * townSpins(town) * T.slotWeights[slot] * weight) / (SLOT_SUM * STEP_SUM));
 
 // Coins for star `stage` (1 to STAGES) of site `slot` in a given park.
 export const stageCost = (town, slot, stage) => share(town, slot, T.stageWeights[stage - 1]);
@@ -69,7 +126,7 @@ export function cheapest(state, k) {
 }
 
 export const tokenCap = (state) => T.tokenCap + petCap(state);
-export const raidBonus = (state) => 1 + talent(state, 'dive');
+export const rushBonus = (state) => 1 + talent(state, 'rush');
 
 // Bets on offer: always one, larger ones once you hold enough spins to use them.
 export function availableBets(state) {
@@ -82,7 +139,7 @@ export function availableBets(state) {
 export const ticket = (town, stage) => unit(town) * T.gateRate * stage;
 export function plotRate(state, k) {
   const p = state.plots[k];
-  return p.stage > 0 ? ticket(state.town, p.stage) * (1 + T.capBoost * p.cap) * (1 + talent(state, 'gate')) : 0;
+  return p.stage > 0 ? ticket(state.town, p.stage) * (1 + T.capBoost * p.cap) * (1 + talent(state, 'gate')) * (1 + homeBonus(state, k)) : 0;
 }
 // A finished park goes on earning a share of what it took at its best.
 const FULL = T.gateRate * STAGES * PLOTS.length * (1 + T.capBoost * CAP_STEPS);

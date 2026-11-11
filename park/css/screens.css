@@ -401,3 +401,88 @@ table.odds td:first-child { text-align: left; }
 /* long presses should hold the SPIN button, not offer to save a picture */
 img { -webkit-user-drag: none; -webkit-touch-callout: none; }
 #ui { -webkit-touch-callout: none; }
+
+/* ---- the park on the reels ------------------------------------------------- */
+/* what each reel paid, floating up off the pay line */
+.reel-pay { position: absolute; top: 50%; z-index: 3; transform: translate(-50%, -50%); padding: 1px 7px 2px; border-radius: 10px; background: linear-gradient(180deg, #4a3566, #2a1d3d); border: 2px solid #ffe680; color: #ffe680; font: 800 13px/1.2 var(--display); white-space: nowrap; pointer-events: none; opacity: 0; box-shadow: 0 3px 0 rgba(20, 10, 40, 0.45); }
+.reel-pay.on { animation: reel-pay 1.25s cubic-bezier(0.2, 0.9, 0.3, 1) forwards; }
+@keyframes reel-pay {
+  0% { opacity: 0; transform: translate(-50%, -30%) scale(0.6); }
+  14% { opacity: 1; transform: translate(-50%, -150%) scale(1.12); }
+  24% { transform: translate(-50%, -170%) scale(1); }
+  78% { opacity: 1; transform: translate(-50%, -205%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -235%) scale(0.96); }
+}
+/* a rush hour in progress, on the lower edge of the reel window */
+.hot-chip { position: absolute; left: 192px; top: 476px; z-index: 4; transform: translateX(-50%) scale(0.8); display: flex; align-items: center; gap: 5px; max-width: 262px; padding: 2px 10px 2px 2px; border-radius: 16px; border: 2px solid #fff; background: linear-gradient(180deg, #ffb13d, #f0641a); color: #fff; font: 700 11px/1.15 var(--font); white-space: nowrap; box-shadow: 0 3px 0 #9a3606, 0 0 16px rgba(255, 170, 40, 0.8); opacity: 0; pointer-events: none; transition: opacity 0.2s, transform 0.25s var(--ease); }
+.hot-chip.on { opacity: 1; pointer-events: auto; transform: translateX(-50%) scale(1); animation: hot-pulse 1.1s ease-in-out infinite; }
+.hot-chip img { width: 24px; height: 24px; flex: none; }
+.hot-chip span { overflow: hidden; text-overflow: ellipsis; }
+.hot-chip b { font: 800 12px var(--display); text-transform: uppercase; letter-spacing: 0.03em; color: #fff7c2; margin-right: 2px; }
+@keyframes hot-pulse { 50% { box-shadow: 0 3px 0 #9a3606, 0 0 26px rgba(255, 210, 60, 1); } }
+
+/* a site's picture is its badge from the reels */
+#ui .thumb.site-badge, .thumb.site-badge { width: 58px; height: 58px; background: none; box-shadow: none; border-radius: 0; object-fit: contain; filter: drop-shadow(0 2px 2px rgba(60, 30, 0, 0.3)); }
+#ui .thumb.big.site-badge { width: 84px; height: 84px; }
+.site-reel { margin-top: 5px; font: 700 11.5px/1.3 var(--font); color: #8a5a2e; }
+.site-reel b { color: #c2410c; font-family: var(--display); font-weight: var(--display-w); font-size: 12.5px; }
+.site-reel b.rush { color: #fff; background: linear-gradient(180deg, #ffb13d, #f0641a); padding: 0 6px 1px; border-radius: 8px; }
+.site-reel .pals { color: #1b7d6e; }
+.pv-tag.rush { background: linear-gradient(180deg, #ffb13d, #f0641a); border-color: #fff7c2; box-shadow: 0 0 12px rgba(255, 190, 60, 0.95), 0 2px 4px rgba(0, 0, 0, 0.3); animation: tag-bob 0.9s ease-in-out infinite; }
+.pv-tag u { display: inline-block; width: 17px; height: 17px; margin: -1px 4px -4px -5px; border-radius: 50%; border: 1.5px solid #fff; background-size: 300% 300%; background-color: #cfe6ee; text-decoration: none; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3); }
+
+/* the pay table: the park's eight sites first */
+.pay-lead { font-size: 13px !important; margin: 0 0 8px !important; }
+.pay-sites { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 6px; }
+.pay-site { display: grid; grid-template-columns: 40px 1fr; grid-template-rows: auto auto; column-gap: 7px; align-items: center; padding: 5px 8px 5px 5px; border-radius: 14px; border: 2px solid #fff; background: linear-gradient(180deg, #fffdf6, #fbf0d6); box-shadow: 0 2px 0 rgba(170, 120, 60, 0.4); text-align: left; color: var(--brown); }
+.pay-site img { grid-row: 1 / 3; width: 40px; height: 40px; }
+.pay-site span { font: 700 11px/1.15 var(--font); color: var(--brown-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pay-site b { font: 800 14px/1.1 var(--display); color: #c2410c; }
+.pay-site.closed b { font-size: 11.5px; color: #2f7fe6; }
+.pay-site.hot { border-color: #ffb13d; box-shadow: 0 0 10px rgba(255, 170, 40, 0.8); }
+.pay-row .syms img { object-fit: contain; }
+
+/* ---- Ring the Bell --------------------------------------------------------- */
+.overlay.bell .ov-box { width: 340px; }
+.bt-rig { position: relative; display: grid; grid-template-columns: 54px 1fr 112px; gap: 8px; align-items: end; height: 356px; margin: 2px 0 10px; }
+.bt-gauge { position: relative; width: 44px; height: 262px; margin: 0 auto 42px; border-radius: 22px; border: 3px solid #fff; background: #1b2f66; overflow: hidden; box-shadow: 0 4px 0 rgba(10, 20, 70, 0.5), inset 0 3px 6px rgba(0, 0, 0, 0.45); }
+.bt-gauge b { position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%) rotate(-90deg); transform-origin: 50% 50%; margin-bottom: 26px; font: 800 11px var(--font); letter-spacing: 0.12em; color: rgba(255, 255, 255, 0.85); text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); pointer-events: none; }
+.bt-fill { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: linear-gradient(0deg, #37c84b 0%, #c8e03a 45%, #ffc02e 70%, #ff5a3c 100%); background-size: 100% 262px; background-position: bottom; }
+.bt-zone { position: absolute; left: 0; right: 0; top: 0; height: 15%; z-index: 2; border-bottom: 2px dashed #fff; background: repeating-linear-gradient(45deg, rgba(255, 230, 128, 0.5) 0 6px, rgba(255, 230, 128, 0.2) 6px 12px); }
+.bt-zone::after { content: '🔔'; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 17px; }
+.bt-gauge.top { box-shadow: 0 4px 0 rgba(10, 20, 70, 0.5), 0 0 18px #ffe680; border-color: #ffe680; }
+.bt-tower { position: relative; height: 356px; }
+.bt-bell { position: absolute; left: 50%; top: 0; width: 74px; margin-left: -37px; z-index: 3; transform-origin: 50% 12%; filter: drop-shadow(0 5px 4px rgba(10, 20, 70, 0.5)); }
+.bt-bell.ring { animation: bt-ring 0.9s ease-out; }
+@keyframes bt-ring { 0% { transform: rotate(0); } 10% { transform: rotate(-24deg); } 25% { transform: rotate(20deg); } 40% { transform: rotate(-15deg); } 55% { transform: rotate(11deg); } 70% { transform: rotate(-7deg); } 85% { transform: rotate(4deg); } 100% { transform: rotate(0); } }
+.bt-flash { position: absolute; left: 50%; top: 36px; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: radial-gradient(circle, #fff, #ffe680 40%, rgba(255, 230, 128, 0) 70%); opacity: 0; z-index: 2; pointer-events: none; }
+.bt-flash.on { animation: bt-flash 0.7s ease-out; }
+@keyframes bt-flash { 0% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(26); } }
+.bt-rail { position: absolute; left: 50%; bottom: 44px; width: 40px; height: 250px; margin-left: -20px; border-radius: 8px 8px 4px 4px; border: 3px solid #fff; background: repeating-linear-gradient(0deg, #fff 0 12.5px, #ee3a3a 12.5px 25px); box-shadow: 0 4px 0 rgba(10, 20, 70, 0.5); }
+.bt-rail::before { content: ''; position: absolute; left: 50%; top: 4px; bottom: 4px; width: 14px; margin-left: -7px; border-radius: 7px; background: linear-gradient(90deg, #14224f, #2a3f86 50%, #14224f); box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.6); }
+.bt-rail span { position: absolute; left: 100%; margin-left: 9px; transform: translateY(50%); padding: 1px 6px; border-radius: 8px; background: rgba(15, 30, 90, 0.6); color: #fff; font: 700 10px/1.3 var(--font); white-space: nowrap; }
+.bt-rail span::before { content: ''; position: absolute; right: 100%; top: 50%; width: 7px; border-top: 2px solid #fff; }
+.bt-puck { position: absolute; left: 50%; bottom: 2px; width: 26px; height: 16px; margin-left: -13px; z-index: 2; border-radius: 8px; background: linear-gradient(180deg, #fff6c4, #ffc83d 55%, #e08a0a); border: 2px solid #fff; box-shadow: 0 2px 0 #9a5a00, 0 0 10px rgba(255, 216, 61, 0.9); will-change: transform; }
+.bt-base { position: absolute; left: 50%; bottom: 0; width: 132px; height: 46px; margin-left: -66px; border-radius: 12px 12px 8px 8px; border: 3px solid #fff; background: linear-gradient(180deg, #c98a4a, #8a5524); box-shadow: 0 5px 0 rgba(10, 20, 70, 0.5); }
+.bt-pad { position: absolute; right: 12px; top: -9px; width: 44px; height: 14px; border-radius: 8px; border: 2px solid #fff; background: linear-gradient(180deg, #ff8a7a, #d92a30); }
+.bt-mallet { position: absolute; left: 50%; bottom: 44px; width: 78px; height: 12px; margin-left: 30px; border-radius: 6px; background: linear-gradient(180deg, #e8b878, #a86a2c); border: 2px solid #fff; transform-origin: 100% 50%; transform: rotate(52deg); z-index: 4; }
+.bt-mallet::before { content: ''; position: absolute; left: -14px; top: -13px; width: 30px; height: 34px; border-radius: 9px; border: 2px solid #fff; background: linear-gradient(90deg, #7c8aa6, #dfe7f5 45%, #8794b0); }
+.bt-mallet.hit { animation: bt-hit 0.5s cubic-bezier(0.5, 0, 0.3, 1); }
+@keyframes bt-hit { 0% { transform: rotate(52deg); } 22% { transform: rotate(-4deg); } 34% { transform: rotate(6deg); } 100% { transform: rotate(52deg); } }
+.bt-side { display: flex; flex-direction: column; gap: 6px; align-self: center; }
+.bt-prize, .bt-chip { padding: 5px 8px 6px; border-radius: 12px; border: 2px solid rgba(255, 255, 255, 0.55); background: rgba(15, 30, 90, 0.45); color: #fff; text-align: left; }
+.bt-prize { border-color: #ffe680; background: linear-gradient(180deg, #4a3566, #2a1d3d); }
+.bt-prize small, .bt-chip small { display: block; font: 700 10px/1.2 var(--font); text-transform: uppercase; letter-spacing: 0.05em; color: #cfe0ff; }
+.bt-prize b { font: 800 17px/1.2 var(--display); color: #ffe680; }
+.bt-chip b { font: 800 14px/1.25 var(--display); }
+.bt-chip.now { border-color: #fff; background: linear-gradient(180deg, #3f9cff, #2463d4); box-shadow: 0 0 12px rgba(255, 255, 255, 0.55); }
+.bt-chip.done b { color: #ffe680; }
+.bt-chip.rung { border-color: #ffe680; background: linear-gradient(180deg, #f5b52e, #dd7f0e); }
+.bt-chip.rung b { color: #fff; }
+.bt-swing { font-size: 24px !important; letter-spacing: 0.04em; touch-action: manipulation; }
+.bt-swing:disabled { filter: saturate(0.5) brightness(0.85); }
+.overlay.bell .result small { display: block; font: 700 12px var(--font); color: #d6e6ff; }
+@media (prefers-reduced-motion: reduce) { .hot-chip.on, .pv-tag.rush, .bt-bell.ring, .bt-flash.on { animation: none; } }
+
+/* stars still to earn */
+.stars s { text-decoration: none; color: #d9c7a3; text-shadow: none; }

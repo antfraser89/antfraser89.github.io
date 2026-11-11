@@ -2,7 +2,7 @@
 // game, the tests and the balance tool all read the same numbers.
 
 export const GAME_TITLE = 'Park!';
-export const VERSION = '8.0.0';
+export const VERSION = '9.0.0';
 export const SAVE_KEY = 'park.save.v4';
 // a save written under an earlier key is picked up once and carried over
 export const LEGACY_SAVE_KEYS = ['park.save.v3'];
@@ -85,48 +85,75 @@ export const ITEMS = {
 };
 export const START_ITEMS = { energy: 30, pearls: 3, swords: 0, food: 20, shots: 6, keys: 2, gems: 0 };
 
-// What one spin can land on. Weights are per cent of spins.
+// ---- the machine ---------------------------------------------------------------
+// The reels are the park. Eight of the symbols are the park's own eight sites,
+// cut from its painting: a site you have built pays every time it stops on the
+// line, and the more you have built there the more it pays. A site you have
+// not built yet shows as closed and pays nothing. Three of the same site is
+// its rush hour.
+export const SITE_SYMBOLS = PLOTS.map((p) => 's' + p.index);
+export const siteOf = (sym) => (typeof sym === 'string' && sym.length === 2 && sym[0] === 's' ? Number(sym[1]) : -1);
+
+// What one spin can land on. Weights are per cent of spins. A rush hour picks
+// one of the eight sites; if that one is not built the spin is a mixed one.
 export const OUTCOMES = [
-  { kind: 'coins3', w: 7.5 },
-  { kind: 'sacks3', w: 3.2 },
-  { kind: 'jackpot', w: 0.8 },
-  { kind: 'raid', w: 5.0 },
-  { kind: 'wheel', w: 6.0 },
+  { kind: 'rush', w: 6.0 },
+  { kind: 'coins3', w: 5.0 },
+  { kind: 'jackpot', w: 1.5 },
+  { kind: 'bell', w: 5.0 },
+  { kind: 'wheel', w: 5.0 },
   { kind: 'tokens', w: 3.5 },
   { kind: 'treats', w: 4.0 },
   { kind: 'mixed', w: 70.0 },
 ];
 
-// Three balls win a turn on the prize wheel, three shells open the pearl
-// dive. Nobody attacks anybody, so there is nothing to defend.
-export const SYMBOLS = ['coin', 'sack', 'barrel', 'token', 'star', 'chips', 'ball', 'fish'];
-// The picture for each reel symbol (in img/). 'fish' is the starfish: it fills
-// out the reels and pays nothing.
-export const SYMBOL_ART = { coin: 'sym-coin', sack: 'sym-chest', barrel: 'sym-shell', token: 'ico-ticket', star: 'sym-bell', chips: 'sym-cherry', ball: 'sym-ball', fish: 'sym-star' };
-export const TRIPLE = { coins3: 'coin', sacks3: 'sack', jackpot: 'star', raid: 'barrel', wheel: 'ball', tokens: 'token', treats: 'chips' };
-export const MIXED_WEIGHTS = { coin: 30, sack: 12, barrel: 10, token: 9, star: 6, chips: 9, ball: 10, fish: 14 };
+// Three bells start Ring the Bell, three balls win a turn on the prize wheel,
+// three chests are the jackpot. Nobody attacks anybody.
+export const SYMBOLS = ['coin', 'sack', ...SITE_SYMBOLS, 'token', 'star', 'chips', 'ball', 'fish'];
+// The picture for each of the other symbols (in img/). 'fish' is the starfish:
+// it fills out the reels and pays nothing.
+export const SYMBOL_ART = { coin: 'sym-coin', sack: 'sym-chest', token: 'ico-ticket', star: 'sym-bell', chips: 'sym-cherry', ball: 'sym-ball', fish: 'sym-star' };
+export const TRIPLE = { coins3: 'coin', jackpot: 'sack', bell: 'star', wheel: 'ball', tokens: 'token', treats: 'chips' };
+export const MIXED_WEIGHTS = {
+  coin: 16, sack: 5, ...Object.fromEntries(SITE_SYMBOLS.map((s) => [s, 6])), token: 7, ball: 7, chips: 6, star: 5, fish: 6,
+};
 
 // Payouts in "units" (see economy.unit), before the bet multiplier.
 export const PAY = {
   coin: 1,
   sack: 3,
-  coins3: 12,
-  sacks3: 30,
-  jackpot: 100,
-  raidStash: [30, 55],
-  raidShares: [0.5, 0.3, 0.2, 0],
+  coins3: 10,
+  jackpot: 50,
+  site: 2, // a finished, middle-sized site pays this for each symbol on the line
+  siteOpen: 0.3, // a site pays this share of its full rate from its first star
   tokens: 6,
   treats: 3,
 };
+// Three of the same site: it pays this many symbols at once, and then that
+// site pays double for the next few spins.
+export const RUSH = { mult: 10, hotSpins: 5, hotMult: 2 };
+// Ring the Bell: three swings of the mallet at a prize that grows with the
+// park. A swing pays its share by how high the puck goes, in full if the bell
+// rings; three rings out of three adds a bonus.
+export const BELL = {
+  base: 16, // units in the prize with nothing built
+  perPark: 2, // and this much more for each full site's worth of park
+  shares: [0.3, 0.3, 0.4],
+  ringAt: 0.85, // how hard a swing has to be (0 to 1) to reach the bell
+  low: 0.3, // what the weakest swing pays, as a share
+  slope: 0.6, // and how much each bit of power adds
+  peal: 0.15, // bonus share of the prize for three rings
+  typical: 0.8, // what an ordinary player takes home, for the sums
+};
 
 // The first spins of a new game follow a script so every mechanic turns up early.
-export const OPENING_SPINS = ['coins3', 'mixed', 'sacks3', 'mixed', 'wheel', 'mixed', 'coins3', 'raid', 'treats', 'mixed', 'tokens'];
+export const OPENING_SPINS = ['coins3', 'mixed', 'coins3', 'rush', 'mixed', 'wheel', 'mixed', 'bell', 'treats', 'mixed', 'tokens'];
 
 // A little of everything else comes off the reels too: each symbol on the pay
 // line has a small chance of dropping something for the side games.
 export const REEL_DROPS = [
   { item: 'energy', sym: 'fish', chance: 0.5, n: 1, needs: 'merge' },
-  { item: 'pearls', sym: 'barrel', chance: 0.12, n: 1, needs: 'draw' },
+  { item: 'pearls', sym: 'sack', chance: 0.25, n: 1, needs: 'draw' },
   { item: 'shots', sym: 'ball', chance: 0.2, n: 1, needs: 'trail' },
   { item: 'keys', sym: 'star', chance: 0.15, n: 1, needs: 'chests' },
 ];
@@ -318,16 +345,21 @@ export const VAULT = [
   { id: 'grand', cost: 200, name: 'A gold card you are missing', pack: null, fresh: 0, gold: true },
 ];
 export const ALBUM_REWARD = { tokens: 250 };
+// Finish a set and its creatures move into the park for good: they live at one
+// site, in every park, and that site pays more. Finishing the set again in a
+// later season adds to it, up to `max` times.
+export const HOMES = { boost: 0.1, max: 3 };
+export const homeSite = (s) => s % PLOTS.length;
 
 // ---- events -----------------------------------------------------------------
 
 export const EVENT_THEMES = [
-  { name: 'Tide Rush', blurb: 'Every spin brings the tide a little higher.' },
+  { name: 'High Tide', blurb: 'Every spin brings the tide a little higher.' },
   { name: 'Ticket Frenzy', blurb: 'Tear through the roll, one spin at a time.' },
   { name: 'Shell Hunt', blurb: 'Comb the beach from the pier to the rocks.' },
   { name: 'Sunset Splash', blurb: 'Keep the park busy until the lights come on.' },
 ];
-export const EVENT_POINTS = { spin: 1, triple: 3, raid: 12, jackpot: 25 };
+export const EVENT_POINTS = { spin: 1, triple: 3, rush: 6, bell: 12, jackpot: 25 };
 // reward: tokens, coins (in units), treats or a pack
 export const EVENT_MILESTONES = [
   { at: 15, reward: { tokens: 10 } },
@@ -344,7 +376,7 @@ export const EVENT_MILESTONES = [
   { at: 2000, reward: { tokens: 200, pack: 'gold' } },
 ];
 
-export const LEAGUE_POINTS = { barrel: 4, sweep: 6, wheel: 8 };
+export const LEAGUE_POINTS = { swing: 2, ring: 4, peal: 6, wheel: 8 };
 export const LEAGUE_PRIZES = [
   { upTo: 1, reward: { tokens: 100, pack: 'gold' } },
   { upTo: 3, reward: { tokens: 50, pack: 'silver' } },

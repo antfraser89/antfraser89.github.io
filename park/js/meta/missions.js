@@ -10,7 +10,7 @@ const KINDS = [
   { stat: 'spins', n: [20, 300], text: (n) => `Spin the machine ${n} times`, go: 'spin' },
   { stat: 'upgrades', n: [5, 60], text: (n) => `Buy ${n} upgrades in the park`, go: 'build' },
   { stat: 'wheels', n: [2, 15], text: (n) => `Take ${n} turns on the prize wheel`, go: 'wheel' },
-  { stat: 'raids', n: [1, 10], text: (n) => `Go on ${n} pearl ${n === 1 ? 'dive' : 'dives'}`, go: 'spin' },
+  { stat: 'bells', n: [1, 10], text: (n) => `Have ${n} ${n === 1 ? 'go' : 'goes'} at Ring the Bell`, go: 'spin' },
   { stat: 'packs', n: [2, 15], text: (n) => `Open ${n} card packs`, go: 'cards', needs: 'cards' },
   { stat: 'fed', n: [6, 60], text: (n) => `Feed your pet ${n} cherries`, go: 'pet' },
   { stat: 'draws', n: [3, 30], text: (n) => `Burst ${n} Prize Draw bubbles`, go: 'draw', needs: 'draw' },
