@@ -1,21 +1,40 @@
 // The persistent game state, plus save / load / validation.
-import { CARD_BY_ID, CARD_SETS, PACKS, PLOTS, PRODUCTS, STAGES, TUNING, VERSION } from './config.js';
+import { CAP_STEPS, CARD_BY_ID, CARD_SETS, ITEMS, PACKS, PLOTS, PRODUCTS, STAGES, START_ITEMS, TUNING, VERSION } from './config.js';
+import { hash, int, num } from './core.js';
+import { cleanChests, freshChests } from './games/chests.js';
+import { cleanDraw, freshDraw } from './games/draw.js';
+import { cleanMerge, freshMerge } from './games/merge.js';
+import { cleanTrail, freshTrail } from './games/trail.js';
+import { cleanClub, freshClub } from './meta/club.js';
+import { cleanFestival, freshFestival } from './meta/festival.js';
+import { cleanMissions, freshMissions } from './meta/missions.js';
+import { cleanPass, freshPass } from './meta/pass.js';
+import { cleanPet, freshPet } from './pets.js';
 
-const newPlot = () => ({ stage: 0, cap: false, splat: false, flow: 0, served: 0 });
+const newPlot = () => ({ stage: 0, cap: 0 });
+const STATS = [
+  'spins', 'tokensSpent', 'coinsWon', 'raids', 'sweeps', 'jackpots', 'upgrades', 'towns', 'packs', 'cards', 'sets', 'fed', 'served', 'playTime',
+  'wheels', 'merges', 'mergeRounds', 'draws', 'shots', 'steps', 'chests', 'ads', 'helps', 'missions', 'decor',
+];
 
-export function newState(now = 0) {
+export function newState(now = 0, seed = 1 + Math.floor(Math.random() * 1e9)) {
+  let n = 0;
+  const seeded = () => hash(seed % 9973, 17, n++);
   return {
-    v: 2,
+    v: 4,
     version: VERSION,
-    seed: 1 + Math.floor(Math.random() * 1e9),
+    seed,
     coins: 0,
     tokens: TUNING.startTokens,
     tokenAt: now,
-    shields: 0,
     bet: 1,
     town: 0,
     plots: PLOTS.map(newPlot),
-    pending: null, // an attack or raid won on the machine and not yet played
+    parkChests: 0, // chests opened along this park's progress bar
+    level: 1, // the last level whose prize has been collected
+    boost: 0, // seconds of doubled takings left
+    pending: null, // a pearl dive won on the machine and not yet played
+    inv: { ...START_ITEMS },
     cards: {
       owned: {},
       stars: 0,
@@ -24,50 +43,40 @@ export function newState(now = 0) {
       packs: { bronze: 0, silver: 0, gold: 0 },
       dry: 0, // packs in a row with nothing new
     },
-    pet: { level: 0, xp: 0, treats: 0 },
+    pet: freshPet(),
     event: { start: 0, points: 0, claimed: 0 },
     league: { start: 0, points: 0, last: null },
     daily: { day: 0, last: -1 },
     mission: { index: 0, extra: null },
-    shop: { noAds: false, owned: {}, adDay: -1, adCount: 0, bought: 0 },
-    news: [],
+    shop: { noAds: false, owned: {}, bought: 0, dailyDay: -1, stamps: 0 },
+    ads: { day: -1, counts: {} },
     wheel: { tickets: 1, spun: 0, day: 0 },
-    nextAttackAt: 0,
-    stats: {
-      spins: 0, tokensSpent: 0, coinsWon: 0, attacks: 0, blocked: 0, raids: 0, sweeps: 0, jackpots: 0, upgrades: 0,
-      repairs: 0, towns: 0, packs: 0, cards: 0, sets: 0, fed: 0, balloons: 0, served: 0, playTime: 0, pied: 0, shielded: 0,
-    },
-    settings: { sfx: true, music: true, haptics: true },
+    merge: freshMerge(seed, now),
+    draw: freshDraw(),
+    trail: freshTrail(seed, now),
+    chests: freshChests(seeded),
+    missions: freshMissions(),
+    pass: freshPass(),
+    festival: freshFestival(),
+    club: freshClub(),
+    profile: { name: '', face: 0 },
+    seen: {}, // one-off hints already shown
+    stats: Object.fromEntries(STATS.map((k) => [k, 0])),
+    settings: { sfx: true, music: true, haptics: true, fast: false },
     clock: 0.08,
     lastSaved: 0,
   };
 }
 
-const num = (v, fallback = 0) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : fallback);
-const int = (v, fallback = 0) => Math.floor(num(v, fallback));
-
 function cleanPending(p) {
-  if (!p || typeof p !== 'object' || (p.type !== 'attack' && p.type !== 'raid')) return null;
-  const r = p.rival;
-  if (!r || typeof r !== 'object') return null;
-  const out = {
-    type: p.type,
+  if (!p || typeof p !== 'object' || p.type !== 'raid') return null;
+  if (!Array.isArray(p.tubs) || p.tubs.length !== 4) return null;
+  return {
+    type: 'raid',
     bet: Math.max(1, int(p.bet, 1)),
-    revenge: !!p.revenge,
-    rival: {
-      id: int(r.id),
-      town: int(r.town),
-      shield: !!r.shield,
-      stages: PLOTS.map((_, k) => Math.min(STAGES, Math.max(1, int(r.stages && r.stages[k], 3)))),
-      splats: PLOTS.map((_, k) => !!(r.splats && r.splats[k])),
-    },
+    tubs: p.tubs.map((v) => num(v)),
+    picks: Array.isArray(p.picks) ? p.picks.map((v) => int(v)).filter((v, i, a) => v < 4 && a.indexOf(v) === i).slice(0, 3) : [],
   };
-  if (p.type === 'raid') {
-    if (!Array.isArray(p.tubs) || p.tubs.length !== 4) return null;
-    out.tubs = p.tubs.map((v) => num(v));
-    out.picks = Array.isArray(p.picks) ? p.picks.map((v) => int(v)).filter((v, i, a) => v < 4 && a.indexOf(v) === i).slice(0, 3) : [];
-  }
-  return out;
 }
 
 // Rebuild a state from untrusted JSON: unknown keys are dropped and bad values
@@ -79,7 +88,6 @@ export function hydrate(raw) {
   s.coins = num(raw.coins);
   s.tokens = Math.min(int(raw.tokens, s.tokens), 1e7);
   s.tokenAt = num(raw.tokenAt);
-  s.shields = Math.min(int(raw.shields), TUNING.maxShields);
   s.bet = TUNING.bets.includes(raw.bet) ? raw.bet : 1;
   s.town = Math.min(int(raw.town), 500);
   if (Array.isArray(raw.plots)) {
@@ -87,13 +95,15 @@ export function hydrate(raw) {
       const r = raw.plots[k];
       if (!r || typeof r !== 'object') return;
       p.stage = Math.min(int(r.stage), STAGES);
-      p.cap = p.stage >= STAGES && !!r.cap;
-      p.splat = p.stage > 0 && !!r.splat;
-      p.flow = p.stage > 0 ? Math.min(num(r.flow), 20) : 0;
-      p.served = int(r.served);
+      // an older save kept capacity as a single yes-or-no
+      p.cap = r.cap === true ? CAP_STEPS : Math.min(int(r.cap), CAP_STEPS, Math.floor(p.stage / 2));
     });
   }
+  s.parkChests = Math.min(int(raw.parkChests), 4);
+  s.level = Math.max(1, int(raw.level, 1));
+  s.boost = Math.min(num(raw.boost), 6 * 3600);
   s.pending = cleanPending(raw.pending);
+  if (raw.inv && typeof raw.inv === 'object') for (const id of Object.keys(ITEMS)) s.inv[id] = Math.min(int(raw.inv[id], s.inv[id]), 1e7);
   const c = raw.cards;
   if (c && typeof c === 'object') {
     if (c.owned && typeof c.owned === 'object') {
@@ -108,11 +118,7 @@ export function hydrate(raw) {
     for (const type of Object.keys(PACKS)) s.cards.packs[type] = Math.min(int(c.packs && c.packs[type]), 9999);
     s.cards.dry = Math.min(int(c.dry), 10);
   }
-  if (raw.pet) {
-    s.pet.level = Math.min(int(raw.pet.level), 30);
-    s.pet.xp = int(raw.pet.xp);
-    s.pet.treats = int(raw.pet.treats);
-  }
+  s.pet = cleanPet(raw.pet);
   if (raw.event) {
     s.event.start = num(raw.event.start);
     s.event.points = int(raw.event.points);
@@ -138,21 +144,33 @@ export function hydrate(raw) {
   if (raw.shop && typeof raw.shop === 'object') {
     s.shop.noAds = !!raw.shop.noAds;
     for (const p of PRODUCTS) if (p.once && raw.shop.owned && raw.shop.owned[p.id]) s.shop.owned[p.id] = true;
-    s.shop.adDay = typeof raw.shop.adDay === 'number' && Number.isFinite(raw.shop.adDay) ? Math.floor(raw.shop.adDay) : -1;
-    s.shop.adCount = int(raw.shop.adCount);
     s.shop.bought = int(raw.shop.bought);
+    s.shop.dailyDay = Number.isInteger(raw.shop.dailyDay) ? raw.shop.dailyDay : -1;
+    s.shop.stamps = Math.min(int(raw.shop.stamps), 3);
   }
-  if (Array.isArray(raw.news)) {
-    s.news = raw.news.slice(0, 12).filter((n) => n && typeof n === 'object').map((n) => ({
-      t: num(n.t), rival: int(n.rival), blocked: !!n.blocked, plot: Math.min(int(n.plot), PLOTS.length - 1),
-      art: int(n.art), revenge: !!n.revenge, seen: !!n.seen,
-    }));
+  if (raw.ads && typeof raw.ads === 'object' && Number.isInteger(raw.ads.day) && raw.ads.counts && typeof raw.ads.counts === 'object') {
+    s.ads.day = raw.ads.day;
+    for (const [k, v] of Object.entries(raw.ads.counts)) s.ads.counts[k] = Math.min(int(v), 99);
   }
-  s.nextAttackAt = num(raw.nextAttackAt);
   if (raw.wheel && typeof raw.wheel === 'object') s.wheel = { tickets: Math.min(int(raw.wheel.tickets), 9999), spun: int(raw.wheel.spun), day: int(raw.wheel.day) };
-  if (raw.stats) for (const k of Object.keys(s.stats)) s.stats[k] = num(raw.stats[k]);
+  s.merge = cleanMerge(raw.merge, s.seed);
+  s.draw = cleanDraw(raw.draw);
+  s.trail = cleanTrail(raw.trail, s.seed);
+  s.chests = cleanChests(raw.chests);
+  s.missions = cleanMissions(raw.missions);
+  s.pass = cleanPass(raw.pass);
+  s.festival = cleanFestival(raw.festival);
+  s.club = cleanClub(raw.club);
+  if (raw.profile && typeof raw.profile === 'object') {
+    s.profile.name = typeof raw.profile.name === 'string' ? raw.profile.name.replace(/[<>&"']/g, '').slice(0, 14) : '';
+    s.profile.face = Math.min(int(raw.profile.face), 15);
+  }
+  if (raw.seen && typeof raw.seen === 'object') for (const k of Object.keys(raw.seen).slice(0, 60)) if (/^[a-z0-9_-]{1,24}$/i.test(k)) s.seen[k] = true;
+  if (raw.stats) for (const k of STATS) s.stats[k] = num(raw.stats[k]);
+  if (!s.stats.wheels && s.wheel.spun) s.stats.wheels = s.wheel.spun;
   if (raw.settings) {
-    for (const k of Object.keys(s.settings)) s.settings[k] = raw.settings[k] !== false;
+    for (const k of ['sfx', 'music', 'haptics']) s.settings[k] = raw.settings[k] !== false;
+    s.settings.fast = raw.settings.fast === true;
   }
   s.clock = num(raw.clock, s.clock) % 1;
   s.lastSaved = num(raw.lastSaved);

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
-  CARDS, CARD_SETS, DAILY, EVENT_MILESTONES, OPENING_SPINS, OUTCOMES, PACKS, PLOTS, RIVALS, STAGES, TUNING, VAULT, WHEEL, townInfo,
+  CAP_STEPS, CARDS, CARD_SETS, DAILY, EVENT_MILESTONES, OPENING_SPINS, OUTCOMES, PACKS, PLOTS, RIVALS, STAGES, TUNING, VAULT, WHEEL, townInfo,
 } from '../js/config.js';
 import * as E from '../js/economy.js';
 import { fmt, fmtClock, fmtTime, money } from '../js/format.js';
@@ -16,8 +16,7 @@ const MIN = 60e3;
 const HOUR = 3600e3;
 
 const fresh = (seed = 1) => {
-  const state = newState(T0);
-  state.seed = seed;
+  const state = newState(T0, seed);
   return { state, rand: S.mulberry32(seed) };
 };
 // Skip the scripted opening so spins are random.
@@ -246,7 +245,7 @@ test('packs can be bought with coins at a price that follows the town', () => {
 
 // ---- pet, events, league, daily -------------------------------------------
 
-test('feeding Chips levels him up, pays tokens and raises the token cap', () => {
+test('feeding the pet levels it up, pays spins and raises the spin meter', () => {
   const { state } = fresh();
   assert.equal(R.feedPet(state), null);
   state.pet.treats = 200;
@@ -343,21 +342,22 @@ test('missions pay out in order and never run out', () => {
 // ---- the living fair -----------------------------------------------------
 
 test('hydrate survives junk and clamps bad values', () => {
-  for (const junk of [null, 42, 'x', [], { plots: 'no' }, { coins: -5, tokens: NaN, shields: 99, bet: 7, town: -3 }]) {
+  for (const junk of [null, 42, 'x', [], { plots: 'no' }, { coins: -5, tokens: NaN, bet: 7, town: -3, inv: { energy: -4 }, merge: { cells: 'x' }, club: 7 }]) {
     const s = hydrate(junk);
     assert.ok(s.coins >= 0 && Number.isFinite(s.tokens));
     assert.equal(s.plots.length, PLOTS.length);
-    assert.ok(s.shields <= TUNING.maxShields);
     assert.equal(s.bet, 1);
     assert.equal(s.town, 0);
   }
   const s = hydrate({
-    plots: [{ stage: 99, splat: true }, { stage: 0, splat: true }],
+    plots: [{ stage: 99, cap: 99 }, { stage: 0, cap: 3 }, { stage: 10, cap: true }],
     cards: { owned: { 'pond-0': 2, nonsense: 5 }, packs: { gold: 1e9 } },
     pending: { type: 'raid', rival: {}, tubs: [1, 2, 3] },
   });
   assert.equal(s.plots[0].stage, STAGES);
-  assert.equal(s.plots[1].splat, false);
+  assert.equal(s.plots[0].cap, CAP_STEPS);
+  assert.equal(s.plots[1].cap, 0, 'no capacity without the levels for it');
+  assert.equal(s.plots[2].cap, CAP_STEPS, 'an older save kept capacity as yes or no');
   assert.deepEqual(s.cards.owned, { 'pond-0': 2 });
   assert.equal(s.cards.packs.gold, 9999);
   assert.equal(s.pending, null, 'a broken pending raid is dropped rather than trusted');
@@ -406,10 +406,10 @@ test('a completed purchase hands over its contents; one-time items only once', a
   const { state } = fresh();
   state.town = 2;
   const tokens = state.tokens;
-  const big = PRODUCTS.find((p) => p.id === 'tokens_m');
-  assert.equal(R.applyPurchase(state, 'tokens_m').tokens, big.grant.tokens);
+  const big = PRODUCTS.find((p) => p.id === 'spins_2');
+  assert.equal(R.applyPurchase(state, 'spins_2').tokens, big.grant.tokens);
   assert.equal(state.tokens, tokens + big.grant.tokens);
-  assert.ok(R.applyPurchase(state, 'tokens_m'), 'token bundles can be bought again');
+  assert.ok(R.applyPurchase(state, 'spins_2'), 'spin packs can be bought again');
   const starter = R.applyPurchase(state, 'starter');
   assert.equal(starter.coins, 150 * E.unit(2), 'coins scale with the town');
   assert.equal(state.cards.packs.gold, 1);
@@ -420,14 +420,21 @@ test('a completed purchase hands over its contents; one-time items only once', a
   assert.equal(state.shop.noAds, true);
   assert.equal(R.applyPurchase(state, 'no-such-thing'), null);
   assert.equal(parseSave(serialize(state)).shop.noAds, true);
-  assert.deepEqual(hydrate({ plots: [], shop: { owned: { tokens_m: true, starter: true, junk: 1 } } }).shop.owned, { starter: true });
+  assert.deepEqual(hydrate({ plots: [], shop: { owned: { spins_2: true, starter: true, junk: 1 } } }).shop.owned, { starter: true });
 
   // advert tokens: a few a day, then tomorrow
   const noon = new Date(2030, 5, 10, 12).getTime();
-  for (let i = 0; i < ADS.perDay; i++) assert.equal(R.claimAdTokens(state, noon).tokens, ADS.tokens);
+  for (let i = 0; i < ADS.tokens.perDay; i++) assert.equal(R.claimAdTokens(state, noon).tokens, ADS.tokens.reward.tokens);
   assert.equal(R.adTokensLeft(state, noon), 0);
   assert.equal(R.claimAdTokens(state, noon + HOUR), null);
-  assert.equal(R.adTokensLeft(state, noon + 24 * HOUR), ADS.perDay);
+  assert.equal(R.adTokensLeft(state, noon + 24 * HOUR), ADS.tokens.perDay);
+  // the daily bundle comes back tomorrow; three purchases fill the stamp card
+  assert.ok(R.applyPurchase(state, 'daily', noon));
+  assert.equal(R.applyPurchase(state, 'daily', noon + HOUR), null);
+  assert.ok(R.applyPurchase(state, 'daily', noon + 24 * HOUR));
+  assert.equal(state.shop.stamps, 3);
+  assert.ok(R.claimStamps(state).tokens > 0);
+  assert.equal(R.claimStamps(state), null);
 });
 
 
@@ -444,10 +451,11 @@ test('every park has four rides and four facilities, named for its theme', () =>
   assert.notEqual(townInfo(0).theme.key, townInfo(1).theme.key);
 });
 
-test('a site climbs ten stars, then buys capacity; a finished park moves on', () => {
+test('a site has ten stars and five capacity steps; a finished park moves on', () => {
   const { state } = fresh();
   assert.equal(R.upgradePlot(state, 0), null, 'nothing is free');
   state.coins = 1e12;
+  assert.equal(R.upgradeCap(state, 0), null, 'capacity waits for level 20');
   let last = 0;
   for (let stage = 1; stage <= STAGES; stage++) {
     const cost = E.stageCost(0, 0, stage);
@@ -455,21 +463,30 @@ test('a site climbs ten stars, then buys capacity; a finished park moves on', ()
     last = cost;
     const up = R.upgradePlot(state, 0);
     assert.equal(up.stage, stage);
-    assert.equal(up.cap, false);
+    assert.equal(E.nextCap(state, 0).open, stage >= 2, 'the first capacity step opens at level 20');
   }
+  assert.equal(R.upgradePlot(state, 0), null, 'no more stars to buy');
   assert.equal(E.townComplete(state), false);
-  const cap = R.upgradePlot(state, 0);
-  assert.ok(cap.cap && cap.stage === STAGES);
-  assert.equal(R.upgradePlot(state, 0), null, 'nothing left to buy');
+  for (let step = 1; step <= CAP_STEPS; step++) assert.equal(R.upgradeCap(state, 0).cap, step);
+  assert.equal(R.upgradeCap(state, 0), null, 'nothing left to buy');
+  assert.equal(E.cheapest(state, 0), null);
   assert.equal(R.travel(state), null, 'the park is not finished');
-  for (const p of PLOTS.slice(1)) for (let n = 0; n <= STAGES; n++) assert.ok(R.upgradePlot(state, p.index));
+  for (const p of PLOTS.slice(1)) {
+    for (let n = 0; n < STAGES; n++) assert.ok(R.upgradePlot(state, p.index));
+    for (let n = 0; n < CAP_STEPS; n++) assert.ok(R.upgradeCap(state, p.index));
+  }
   assert.ok(E.townComplete(state));
   assert.equal(E.stagesBuilt(state), E.PARK_STARS);
+  assert.equal(E.parkChestsDue(state), 4, 'a chest for each quarter of the park');
+  for (let i = 0; i < 4; i++) assert.equal(R.claimParkChest(state).index, i);
+  assert.equal(R.claimParkChest(state), null);
   const tokens = state.tokens;
   const moved = R.travel(state);
   assert.equal(moved.town, 1);
   assert.ok(state.tokens > tokens);
-  assert.ok(state.plots.every((p) => p.stage === 0 && !p.cap));
+  assert.ok(state.plots.every((p) => p.stage === 0 && p.cap === 0));
+  assert.equal(state.parkChests, 0);
+  assert.ok(E.legacyRate(state) > 0, 'the finished park goes on earning');
 });
 
 test('prices are capped: late parks cost what the one before did', () => {
@@ -527,10 +544,10 @@ test('nothing ever attacks the park: no shields, no closures, no incoming', () =
     const res = R.spin(state, rand, i * 1000);
     kinds.add(res.kind);
     if (state.pending) for (const tub of [0, 1, 2]) R.raidPick(state, tub);
-    assert.deepEqual(R.tick(state, i * 3600e3, rand, 4).incidents, []);
+    R.tick(state, i * 3600e3);
   }
   assert.ok(!kinds.has('attack') && !kinds.has('shield'));
-  assert.ok(state.plots.every((p) => !p.splat));
+  assert.ok(!('shields' in state) && state.plots.every((p) => !('splat' in p)));
 });
 
 test('the gate takes money in step with the stars, awake or away', () => {

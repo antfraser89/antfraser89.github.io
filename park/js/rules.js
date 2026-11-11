@@ -1,66 +1,20 @@
-// The rules of the game: spinning, building, rivals, cards, the pet and the
-// timed events. Everything here works on plain state with the clock and the
-// random source passed in, so it runs the same in the browser and in tests.
+// The rules of the main game: spinning, building, cards and the timed
+// events. Everything here works on plain state with the clock and the random
+// source passed in, so it runs the same in the browser and in tests. The side
+// games and the club have their own modules (see games/ and meta/).
 import {
-  ADS, ALBUM_REWARD, CARDS, CARD_SETS, DAILY, EVENT_MILESTONES, EVENT_POINTS, EVENT_THEMES, LEAGUE_POINTS, LEAGUE_PRIZES, WHEEL,
-  MIXED_WEIGHTS, OPENING_SPINS, OUTCOMES, PACKS, PAY, PET, PLOTS, PRODUCTS, RIVALS, STAGES, TOWN_REWARD, TRIPLE, TUNING as T,
-  UPGRADE_REWARDS, VAULT, setUnlockTown, townInfo,
+  ADS, ALBUM_REWARD, CAP_STEPS, CARDS, CARD_SETS, DAILY, EVENT_MILESTONES, EVENT_POINTS, EVENT_THEMES, ITEMS, LEAGUE_POINTS, LEAGUE_PRIZES,
+  MIXED_WEIGHTS, OPENING_SPINS, OUTCOMES, PACKS, PARK_CHESTS, PAY, PRODUCTS, REEL_DROPS, RIVALS, STAGES, TOWN_REWARD, TRIPLE, TUNING as T,
+  UNLOCKS, UPGRADE_REWARDS, VAULT, WHEEL, levelReward, setUnlockTown,
 } from './config.js';
+import { HOUR, dayNumber, earn, grant, hash, weighted } from './core.js';
 import * as E from './economy.js';
+import { talent } from './pets.js';
 
-const HOUR = 3600e3;
+export { dayNumber, grant };
+export { feedPet, setPet, buyPet, activePet } from './pets.js';
 
-function weighted(rand, entries) {
-  let total = 0;
-  for (const [, w] of entries) total += w;
-  let roll = rand() * total;
-  for (const [value, w] of entries) {
-    roll -= w;
-    if (w > 0 && roll <= 0) return value;
-  }
-  return entries[entries.length - 1][0];
-}
-
-function earn(state, coins) {
-  state.coins += coins;
-  state.stats.coinsWon += coins;
-}
-
-// Hand over a reward ({tokens, coins (in units), treats, pack}) and report
-// what was actually given, in real amounts.
-export function grant(state, reward) {
-  const out = { tokens: 0, coins: 0, treats: 0, pack: null, packs: null };
-  if (!reward) return out;
-  if (reward.packs) {
-    out.packs = {};
-    for (const type of Object.keys(PACKS)) {
-      const n = reward.packs[type] || 0;
-      if (n > 0) {
-        out.packs[type] = n;
-        state.cards.packs[type] += n;
-      }
-    }
-  }
-  if (reward.tokens) {
-    out.tokens = reward.tokens;
-    state.tokens += reward.tokens;
-  }
-  if (reward.coins) {
-    out.coins = reward.coins * E.unit(state.town);
-    earn(state, out.coins);
-  }
-  if (reward.treats) {
-    out.treats = reward.treats;
-    state.pet.treats += reward.treats;
-  }
-  if (reward.pack) {
-    out.pack = reward.pack;
-    state.cards.packs[reward.pack]++;
-  }
-  return out;
-}
-
-// ---- tokens -----------------------------------------------------------------
+// ---- spins ------------------------------------------------------------------
 
 export function regenTokens(state, now) {
   const cap = E.tokenCap(state);
@@ -78,7 +32,7 @@ export function regenTokens(state, now) {
   return add;
 }
 
-// Seconds until the next token arrives, or 0 when the meter is full.
+// Seconds until the next spin arrives, or 0 when the meter is full.
 export function nextTokenIn(state, now) {
   if (state.tokens >= E.tokenCap(state)) return 0;
   return Math.max(0, (state.tokenAt + T.tokenEvery * 1000 - now) / 1000);
@@ -98,18 +52,6 @@ export function cycleBet(state) {
   return state.bet;
 }
 
-// ---- rivals -----------------------------------------------------------------
-
-function makeRival(state, rand, id = Math.floor(rand() * RIVALS.length)) {
-  const stages = PLOTS.map(() => 2 + Math.floor(rand() * 4));
-  const splats = PLOTS.map(() => rand() < 0.09);
-  if (splats.filter(Boolean).length > 2) splats.fill(false);
-  return { id: id % RIVALS.length, town: state.town, shield: rand() < T.rivalShieldChance, stages, splats };
-}
-
-export const rivalName = (id) => RIVALS[id % RIVALS.length].name;
-export const rivalPark = (id) => RIVALS[id % RIVALS.length].park;
-
 // ---- the machine ------------------------------------------------------------
 
 function mixedReels(rand) {
@@ -123,7 +65,7 @@ function mixedReels(rand) {
 }
 
 export function canSpin(state) {
-  return !state.pending && state.tokens >= Math.min(state.bet, 1) && state.tokens >= 1;
+  return !state.pending && state.tokens >= 1;
 }
 
 export function spin(state, rand, now) {
@@ -142,20 +84,21 @@ export function spin(state, rand, now) {
   const kind = n < OPENING_SPINS.length ? OPENING_SPINS[n] : weighted(rand, OUTCOMES.map((o) => [o.kind, o.w]));
   const reels = kind === 'mixed' ? mixedReels(rand) : [TRIPLE[kind], TRIPLE[kind], TRIPLE[kind]];
   const u = E.unit(state.town);
-  const out = { ok: true, kind, reels, bet, coins: 0, tokens: 0, treats: 0, wheel: 0, pack: null, pending: null };
+  const out = { ok: true, kind, reels, bet, coins: 0, tokens: 0, treats: 0, wheel: 0, pack: null, pending: null, drops: {} };
   let points = EVENT_POINTS.spin;
+  const coinBoost = 1 + talent(state, 'reels');
 
   switch (kind) {
     case 'mixed':
-      for (const sym of reels) out.coins += (PAY[sym] || 0) * u * bet;
+      for (const sym of reels) out.coins += (PAY[sym] || 0) * u * bet * coinBoost;
       break;
     case 'coins3':
     case 'sacks3':
-      out.coins = PAY[kind] * u * bet;
+      out.coins = PAY[kind] * u * bet * coinBoost;
       points += EVENT_POINTS.triple;
       break;
     case 'jackpot':
-      out.coins = PAY.jackpot * u * bet;
+      out.coins = PAY.jackpot * u * bet * coinBoost;
       out.pack = 'silver';
       state.cards.packs.silver++;
       state.stats.jackpots++;
@@ -172,7 +115,7 @@ export function spin(state, rand, now) {
       points += EVENT_POINTS.triple;
       break;
     case 'treats':
-      out.treats = PAY.treats * bet;
+      out.treats = Math.round(PAY.treats * bet * (1 + talent(state, 'treats')));
       state.pet.treats += out.treats;
       points += EVENT_POINTS.triple;
       break;
@@ -183,34 +126,33 @@ export function spin(state, rand, now) {
         const j = Math.floor(rand() * (i + 1));
         [tubs[i], tubs[j]] = [tubs[j], tubs[i]];
       }
-      state.pending = { type: 'raid', bet, revenge: false, rival: makeRival(state, rand), tubs, picks: [] };
+      state.pending = { type: 'raid', bet, tubs, picks: [] };
       points += EVENT_POINTS.raid;
       break;
     }
     default:
       break;
   }
-  if (out.coins) earn(state, out.coins);
+  if (out.coins) {
+    out.coins = Math.round(out.coins);
+    earn(state, out.coins);
+  }
+  // bits and pieces for the side games, once they are open
+  if (n >= OPENING_SPINS.length) {
+    for (const d of REEL_DROPS) {
+      if (!E.unlocked(state, d.needs)) continue;
+      for (const sym of reels) {
+        if (sym === d.sym && rand() < d.chance) out.drops[d.item] = (out.drops[d.item] || 0) + d.n;
+      }
+    }
+    grant(state, out.drops);
+  }
   out.pending = state.pending;
   out.milestones = addEventPoints(state, points * bet, now);
   return out;
 }
 
-// Throw the pie at one of the rival's attractions.
-export function resolveAttack(state, slot) {
-  const p = state.pending;
-  if (!p || p.type !== 'attack' || !PLOTS[slot] || p.rival.splats[slot]) return null;
-  const blocked = p.rival.shield;
-  const coins = (blocked ? PAY.attackBlocked : PAY.attackHit) * E.unit(state.town) * p.bet * (p.revenge ? 0.5 : 1);
-  earn(state, coins);
-  state.stats.attacks++;
-  if (blocked) state.stats.blocked++;
-  state.league.points += (blocked ? LEAGUE_POINTS.blocked : LEAGUE_POINTS.hit) * p.bet;
-  state.pending = null;
-  return { blocked, coins, slot, rival: p.rival };
-}
-
-// Rummage in one of the four tubs. Three goes; one tub is only sawdust.
+// Open one of the four shells. Three goes; one shell is empty.
 export function raidPick(state, tub) {
   const p = state.pending;
   if (!p || p.type !== 'raid' || !(tub >= 0 && tub < 4) || p.picks.includes(tub) || p.picks.length >= 3) return null;
@@ -221,7 +163,7 @@ export function raidPick(state, tub) {
     state.league.points += LEAGUE_POINTS.barrel * p.bet;
   }
   const done = p.picks.length >= 3;
-  const out = { amount, done, total: 0, sweep: false, tubs: null, rival: p.rival };
+  const out = { amount, done, total: 0, sweep: false, tubs: null };
   if (done) {
     out.total = p.picks.reduce((n, k) => n + p.tubs[k], 0);
     out.sweep = p.picks.every((k) => p.tubs[k] > 0);
@@ -236,69 +178,46 @@ export function raidPick(state, tub) {
   return out;
 }
 
-function scheduleIncoming(state, from, rand) {
-  const [lo, hi] = T.incomingEvery;
-  state.nextAttackAt = from + (lo + (hi - lo) * rand()) * 60e3;
-}
-
-// Rivals throw pies back. A padlock stops one; otherwise an attraction closes
-// until it has been cleaned up.
-export function processIncoming(state, now, rand, max = 1) {
-  const out = [];
-  if (state.stats.spins < 12) return out;
-  if (!(state.nextAttackAt > 0)) {
-    scheduleIncoming(state, now, rand);
-    return out;
-  }
-  let landed = 0;
-  while (now >= state.nextAttackAt && out.length < max && landed < 2) {
-    const at = state.nextAttackAt;
-    scheduleIncoming(state, at, rand);
-    const open = PLOTS.map((p) => p.index).filter((k) => state.plots[k].stage > 0 && !state.plots[k].splat);
-    if (!open.length) continue;
-    const rival = Math.floor(rand() * RIVALS.length);
-    let item;
-    if (state.shields > 0) {
-      state.shields--;
-      state.stats.shielded++;
-      item = { t: at, rival, blocked: true, plot: 0, art: 0, revenge: false, seen: false };
-    } else {
-      const k = open[Math.floor(rand() * open.length)];
-      state.plots[k].splat = true;
-      state.stats.pied++;
-      landed++; // never more than two closures to come back to
-      item = { t: at, rival, blocked: false, plot: k, art: townInfo(state.town).lineup[k], revenge: true, seen: false };
-    }
-    state.news.unshift(item);
-    out.push(item);
-  }
-  if (now >= state.nextAttackAt) scheduleIncoming(state, now, rand);
-  if (state.news.length > 12) state.news.length = 12;
-  return out;
-}
-
-// One free pie back at whoever got you.
-export function startRevenge(state, item, rand) {
-  if (state.pending || !item || !item.revenge) return false;
-  item.revenge = false;
-  state.pending = { type: 'attack', bet: 1, revenge: true, rival: makeRival(state, rand, item.rival) };
-  return true;
-}
-
 // ---- building ---------------------------------------------------------------
 
-// Buy the next star for a site or, once it has all ten, its capacity upgrade.
+// Buy the next star for a site.
 export function upgradePlot(state, k) {
+  const next = state.plots[k] && E.nextStar(state, k);
+  if (!next || state.coins < next.cost) return null;
   const p = state.plots[k];
-  if (!p || (p.stage >= STAGES && p.cap)) return null;
-  const next = p.stage >= STAGES ? STAGES + 1 : p.stage + 1;
-  const cost = E.stageCost(state.town, k, next);
-  if (state.coins < cost) return null;
-  state.coins -= cost;
-  if (next > STAGES) p.cap = true;
-  else p.stage++;
+  state.coins -= next.cost;
+  p.stage++;
   state.stats.upgrades++;
-  return { stage: p.stage, cap: p.cap, cost, reward: UPGRADE_REWARDS[next] ? grant(state, UPGRADE_REWARDS[next]) : null, complete: E.townComplete(state) };
+  return { kind: 'star', stage: p.stage, cap: p.cap, cost: next.cost, reward: UPGRADE_REWARDS[next.stage] ? grant(state, UPGRADE_REWARDS[next.stage]) : null, complete: E.townComplete(state) };
+}
+
+// Buy the next capacity step for a site (more seats, gates, spaces...).
+export function upgradeCap(state, k) {
+  const next = state.plots[k] && E.nextCap(state, k);
+  if (!next || !next.open || state.coins < next.cost) return null;
+  const p = state.plots[k];
+  state.coins -= next.cost;
+  p.cap++;
+  state.stats.upgrades++;
+  return { kind: 'cap', stage: p.stage, cap: p.cap, cost: next.cost, reward: null, complete: E.townComplete(state) };
+}
+
+// Open the next chest on the park's progress bar.
+export function claimParkChest(state) {
+  if (E.parkChestsDue(state) < 1) return null;
+  const index = state.parkChests++;
+  return { index, reward: grant(state, PARK_CHESTS[index]) };
+}
+
+// Collect anything owed for levels reached since the last look.
+export function levelUps(state) {
+  const out = [];
+  const now = E.level(state);
+  while (state.level < now) {
+    state.level++;
+    out.push({ level: state.level, reward: grant(state, levelReward(state.level)), unlocks: UNLOCKS.filter((u) => u.level === state.level) });
+  }
+  return out;
 }
 
 // One turn of the prize wheel.
@@ -306,34 +225,24 @@ export function wheelSpin(state, rand) {
   if (state.wheel.tickets < 1) return null;
   state.wheel.tickets--;
   state.wheel.spun++;
+  state.stats.wheels++;
   const index = weighted(rand, WHEEL.map((wedge, i) => [i, wedge.w]));
   state.league.points += LEAGUE_POINTS.wheel;
-  return { index, reward: grant(state, WHEEL[index].reward) };
+  const prize = { ...WHEEL[index].reward };
+  if (prize.coins) prize.coins = Math.round(prize.coins * (1 + talent(state, 'wheel')));
+  return { index, reward: grant(state, prize) };
 }
 
-export function repairPlot(state, k) {
-  const p = state.plots[k];
-  if (!p || !p.splat) return null;
-  const cost = E.repairCost(state.town, k, p.stage);
-  if (state.coins < cost) return null;
-  state.coins -= cost;
-  p.splat = false;
-  state.stats.repairs++;
-  return { cost };
-}
-
-// Pack up a finished park and move to the next town.
+// Leave a finished park for the next one. The old park goes on earning.
 export function travel(state) {
   if (!E.townComplete(state)) return null;
   const reward = grant(state, TOWN_REWARD);
   state.town++;
   state.stats.towns++;
+  state.parkChests = 0;
   for (const p of state.plots) {
     p.stage = 0;
-    p.cap = false;
-    p.splat = false;
-    p.flow = 0;
-    p.served = 0;
+    p.cap = 0;
   }
   return { reward, town: state.town };
 }
@@ -356,7 +265,7 @@ function addCard(state, card) {
   state.stats.cards++;
   let stars = 0;
   if (had > 0) {
-    stars = card.gold ? 10 : card.stars;
+    stars = Math.round((card.gold ? 10 : card.stars) * (1 + talent(state, 'stars')));
     state.cards.stars += stars;
   }
   return { id: card.id, isNew: had === 0, stars };
@@ -451,25 +360,6 @@ export function vaultBuy(state, id, rand) {
   return { pack: tier.pack, cards };
 }
 
-// ---- pet --------------------------------------------------------------------
-
-export function feedPet(state, count = Infinity) {
-  const used = Math.min(count, state.pet.treats);
-  if (!(used > 0)) return null;
-  state.pet.treats -= used;
-  state.pet.xp += used;
-  state.stats.fed += used;
-  const out = { used, levels: 0, tokens: 0 };
-  while (state.pet.level < PET.maxLevel && state.pet.xp >= PET.xpFor(state.pet.level)) {
-    state.pet.xp -= PET.xpFor(state.pet.level);
-    state.pet.level++;
-    out.levels++;
-    out.tokens += PET.levelTokens(state.pet.level);
-  }
-  state.tokens += out.tokens;
-  return out;
-}
-
 // ---- the spin event ---------------------------------------------------------
 
 export function eventInfo(state, now) {
@@ -494,12 +384,7 @@ function addEventPoints(state, points, now) {
   return got;
 }
 
-// ---- the pie league ---------------------------------------------------------
-
-const hash = (a, b, c) => {
-  const v = Math.sin(a * 12.9898 + b * 78.233 + c * 37.719) * 43758.5453;
-  return v - Math.floor(v);
-};
+// ---- the league table ---------------------------------------------------------
 
 // Rival scores climb through the day at their own pace, the same every time
 // you look, so the table can be rebuilt from the clock alone.
@@ -513,7 +398,7 @@ function leagueRows(state, start, now, points) {
   const len = T.leagueHours * HOUR;
   const cycle = Math.floor(start / len);
   const hours = Math.min(T.leagueHours, Math.max(0, (now - start) / HOUR));
-  const rows = RIVALS.map((r, i) => ({ name: r.name, id: i, you: false, points: rivalScore(state, cycle, i, hours) }));
+  const rows = RIVALS.map((r, i) => ({ name: r.name, id: i, face: r.face, you: false, points: rivalScore(state, cycle, i, hours) }));
   rows.push({ name: 'You', id: -1, you: true, points });
   rows.sort((a, b) => b.points - a.points || (a.you ? -1 : 1));
   return rows;
@@ -544,7 +429,6 @@ export function leagueInfo(state, now) {
 
 // ---- daily gift -------------------------------------------------------------
 
-export const dayNumber = (now) => Math.floor((now - new Date(now).getTimezoneOffset() * 60e3) / (24 * HOUR));
 export const dailyReady = (state, now) => dayNumber(now) !== state.daily.last;
 
 export function claimDaily(state, now) {
@@ -559,43 +443,78 @@ export function claimDaily(state, now) {
 // ---- shop and adverts ---------------------------------------------------------
 
 export const productById = (id) => PRODUCTS.find((p) => p.id === id) || null;
-export const productOwned = (state, id) => !!state.shop.owned[id];
+// "Owned" means it cannot be bought again right now: one-off products once
+// bought, the daily bundle until tomorrow, the pass for the rest of its season.
+export function productOwned(state, id, now = 0) {
+  const p = productById(id);
+  if (!p) return false;
+  if (p.daily) return state.shop.dailyDay === dayNumber(now);
+  if (p.pass) return state.pass.premium;
+  return !!state.shop.owned[id];
+}
 
 // Hand over what a completed purchase paid for. Taking the money is the
 // payment provider's job; this only runs once that has succeeded.
-export function applyPurchase(state, id) {
+export function applyPurchase(state, id, now = 0) {
   const product = productById(id);
-  if (!product || (product.once && state.shop.owned[id])) return null;
+  if (!product || productOwned(state, id, now)) return null;
   const reward = grant(state, product.grant || {});
   if (product.once) state.shop.owned[id] = true;
+  if (product.daily) state.shop.dailyDay = dayNumber(now);
   if (product.noAds) state.shop.noAds = true;
+  if (product.pass) state.pass.premium = true;
   state.shop.bought++;
+  state.shop.stamps = Math.min(3, (state.shop.stamps || 0) + 1);
   return reward;
 }
 
-// Free tokens for watching an advert, a few times a day.
-export function adTokensLeft(state, now) {
-  return state.shop.adDay === dayNumber(now) ? Math.max(0, ADS.perDay - state.shop.adCount) : ADS.perDay;
+// Every purchase stamps the card; three stamps pay out and the card starts again.
+export const STAMP_REWARD = { tokens: 75, pack: 'gold' };
+export function claimStamps(state) {
+  if (!(state.shop.stamps >= 3)) return null;
+  state.shop.stamps = 0;
+  return grant(state, STAMP_REWARD);
 }
 
-export function claimAdTokens(state, now) {
-  if (adTokensLeft(state, now) <= 0) return null;
+// Rewarded adverts: each placement has its own daily allowance.
+function adDay(state, now) {
   const day = dayNumber(now);
-  if (state.shop.adDay !== day) {
-    state.shop.adDay = day;
-    state.shop.adCount = 0;
-  }
-  state.shop.adCount++;
-  return grant(state, { tokens: ADS.tokens });
+  if (state.ads.day !== day) state.ads = { day, counts: {} };
+  return state.ads;
 }
+export function adLeft(state, id, now) {
+  const def = ADS[id];
+  if (!def || (def.needs && !E.unlocked(state, def.needs))) return 0;
+  const used = state.ads.day === dayNumber(now) ? state.ads.counts[id] || 0 : 0;
+  return Math.max(0, def.perDay - used);
+}
+// Call only once the advert has been watched to the end.
+export function claimAd(state, id, now) {
+  if (adLeft(state, id, now) <= 0) return null;
+  const ads = adDay(state, now);
+  ads.counts[id] = (ads.counts[id] || 0) + 1;
+  state.stats.ads++;
+  const def = ADS[id];
+  if (def.boost) {
+    state.boost = Math.max(state.boost, 0) + def.boost * 60;
+    return { boost: def.boost };
+  }
+  return grant(state, def.reward);
+}
+export const adTokensLeft = (state, now) => adLeft(state, 'tokens', now);
+export const claimAdTokens = (state, now) => claimAd(state, 'tokens', now);
 
 // ---- time passing -----------------------------------------------------------
 
-// Everything driven by the wall clock: tokens trickle in, the event and the
-// league roll over, and rivals take their shots.
-export function tick(state, now, rand, maxIncoming = 1) {
+// Everything driven by the wall clock: spins trickle in and the event and the
+// league roll over. The side games keep their own clocks (see game.js).
+export function tick(state, now) {
   const tokens = regenTokens(state, now);
   eventInfo(state, now);
   const league = leagueInfo(state, now).settled;
-  return { tokens, league, incidents: [] }; // nobody attacks anybody in this game
+  return { tokens, league };
 }
+
+// Things in ITEMS that a reward handed over, as [id, amount] pairs.
+export const itemsIn = (reward) => Object.keys(ITEMS).filter((id) => reward && reward[id] > 0).map((id) => [id, reward[id]]);
+export { CAP_STEPS, STAGES };

@@ -4,7 +4,7 @@
 import { PLOTS, TUNING as T, buildingAt } from './config.js';
 import * as E from './economy.js';
 import { advanceMission, currentMission } from './goals.js';
-import { grant } from './rules.js';
+import { grant } from './core.js';
 
 export function mulberry32(seed) {
   let a = seed >>> 0;
@@ -34,8 +34,11 @@ export function step(world, dt) {
   world.time += dt;
   s.stats.playTime += dt;
   s.clock = (s.clock + dt / T.dayLength) % 1;
+  const twice = E.boosted(s) ? 2 : 1;
+  if (s.boost > 0) s.boost = Math.max(0, s.boost - dt);
+  s.coins += E.legacyRate(s) * twice * dt; // parks already finished
   for (const p of PLOTS) {
-    const rate = E.plotRate(s, p.index);
+    const rate = E.plotRate(s, p.index) * twice;
     if (rate <= 0) continue;
     const amount = rate * dt;
     s.coins += amount;
@@ -52,7 +55,7 @@ export function step(world, dt) {
 // Credit the till for time spent away.
 export function applyOffline(world, seconds) {
   const s = world.state;
-  const counted = Math.min(Math.max(0, seconds), T.offlineCapHours * 3600);
+  const counted = Math.min(Math.max(0, seconds), E.awayHours(s) * 3600);
   const amount = E.offlineEarnings(s, seconds);
   if (amount > 0) s.coins += amount;
   return { amount, counted, capped: seconds > counted };

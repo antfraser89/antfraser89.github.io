@@ -2,69 +2,88 @@
 // game, the tests and the balance tool all read the same numbers.
 
 export const GAME_TITLE = 'Park!';
-export const VERSION = '7.0.0';
-export const SAVE_KEY = 'park.save.v3';
-// saves written under an earlier name are picked up once and carried over
-export const LEGACY_SAVE_KEYS = []; // earlier saves used a different park and cannot be carried over
+export const VERSION = '8.0.0';
+export const SAVE_KEY = 'park.save.v4';
+// a save written under an earlier key is picked up once and carried over
+export const LEGACY_SAVE_KEYS = ['park.save.v3'];
 export const CURRENCY = '£';
-
-// The park's ground. Where the paths and plots go is in layout.js: each kind
-// of town has its own map. The gate is always at the bottom, in the middle.
-export const WORLD = {
-  w: 1080,
-  h: 1480,
-  gateY: 1390,
-  spawnY: 1500,
-  queueGap: 12,
-};
 
 // Every park has the same eight things to build: four rides, then the
 // entrance, the car park, the restrooms and the food stalls.
 export const PLOTS = [0, 1, 2, 3, 4, 5, 6, 7].map((k) => ({ index: k, kind: k < 4 ? 'ride' : 'facility' }));
 
-// Ten stars each, a star every ten levels (so level 100 at the top), and then
-// one last purchase of extra capacity.
+// Two things to buy at every site. The price track has ten stars, one every
+// ten levels (so level 100 at the top). The capacity track (seats, gates,
+// spaces, toilets, stalls) has five steps; step n opens at level 20 x n.
 export const STAGES = 10;
 export const LEVELS_PER_STAGE = 10;
+export const CAP_STEPS = 5;
 
 export const TUNING = {
   // spins
   startTokens: 60,
   tokenCap: 60,
-  tokenEvery: 120, // seconds per regenerated token
+  tokenEvery: 120, // seconds per regenerated spin
   bets: [1, 2, 3, 5, 10, 20, 50],
-  betNeedsTokens: 12, // a bet of N is offered once you hold N x this many tokens
-  maxShields: 3,
+  betNeedsTokens: 12, // a bet of N is offered once you hold N x this many spins
   // coins
   unitBase: 1000,
   unitGrowth: 1.55,
   slotWeights: [1.0, 1.25, 1.5, 1.8, 0.7, 0.8, 0.6, 0.75],
-  stageWeights: [1, 1.2, 1.45, 1.7, 2, 2.3, 2.7, 3.1, 3.6, 4.2, 3], // ten stars, then the capacity upgrade
+  stageWeights: [1, 1.2, 1.45, 1.7, 2, 2.3, 2.7, 3.1, 3.6, 4.2], // the ten stars
+  capWeights: [1.1, 1.5, 2, 2.6, 3.3], // the five capacity steps
+  capBoost: 0.12, // each capacity step adds this share to what a site takes
   gateRate: 0.00022, // coins a second, per star, as a share of the park's unit
+  legacyShare: 0.06, // a finished park keeps earning this share of its full takings
   unitCapPark: 14, // prices stop climbing after this park
   spinsCap: 1800, // and no park takes more spins than this
-  repairShare: 0.2,
-  ticketRate: 0.0014, // coins per rider, in units, per stage
   offlineCapHours: 3,
   offlineMinSeconds: 60,
-  // guests
-  flowTau: 30,
-  queueLimit: 9,
-  maxGuests: 150,
-  boardInterval: 0.16,
-  boardWait: 0.9,
-  walkSpeed: 96,
-  // rivals
-  rivalShieldChance: 0.3,
-  incomingEvery: [28, 75], // minutes between pies thrown at you
-  incomingMaxAway: 4,
-  // flavour
-  balloonEvery: [45, 80],
   dayLength: 300,
   // events
   eventHours: 48,
   leagueHours: 24,
 };
+
+// ---- the player's level ------------------------------------------------------
+// Every star bought in any park counts. Levels pace when things open up.
+
+export const levelStars = (level) => 4 * (level - 1) * level; // stars needed to reach a level
+export function levelOf(stars) {
+  let level = 1;
+  while (levelStars(level + 1) <= stars) level++;
+  return level;
+}
+export const levelReward = (level) => ({ tokens: Math.min(10 + level * 2, 60), coins: 10 + level * 2, ...(level % 5 === 0 ? { pack: 'gold' } : {}) });
+
+// What opens at each level. `id` is what the rest of the game asks about.
+export const UNLOCKS = [
+  { level: 2, id: 'cards', name: 'Cards', blurb: 'Open packs and fill the album.' },
+  { level: 3, id: 'missions', name: 'Missions', blurb: 'Fresh jobs every day, with a chest at the end.' },
+  { level: 4, id: 'draw', name: 'Lucky Pearl', blurb: 'Draw prize bubbles from the giant clam.' },
+  { level: 5, id: 'pets', name: 'Pet shop', blurb: 'More pals, each with a talent of their own.' },
+  { level: 6, id: 'merge', name: 'Rockpool Merge', blurb: 'Match shells to make rarer ones.' },
+  { level: 7, id: 'club', name: 'Park Pals', blurb: 'Swap spins and cards, and build together.' },
+  { level: 8, id: 'trail', name: 'Treasure Trail', blurb: 'Grow swords, clear the path, fire the cannon.' },
+  { level: 9, id: 'chests', name: 'Lucky Chests', blurb: 'Six chests, six prizes, one key each.' },
+  { level: 10, id: 'pass', name: 'Park Pass', blurb: 'A season of prizes for playing.' },
+  { level: 10, id: 'festival', name: 'Festival', blurb: 'Earn gems in every game and dress the pier.' },
+];
+export const unlockLevel = (id) => (UNLOCKS.find((u) => u.id === id) || { level: 1 }).level;
+
+// ---- things you can hold -------------------------------------------------------
+// Beyond coins, spins, cherries and card packs. `icon` is a picture in img/.
+
+export const ITEMS = {
+  energy: { name: 'energy', one: 'energy', icon: 'ico-energy' },
+  pearls: { name: 'pearl tokens', one: 'pearl token', icon: 'ico-pearl' },
+  swords: { name: 'swords', one: 'sword', icon: 'ico-sword' },
+  food: { name: 'plant food', one: 'plant food', icon: 'ico-food' },
+  shots: { name: 'cannonballs', one: 'cannonball', icon: 'ico-cannonball' },
+  keys: { name: 'keys', one: 'key', icon: 'ico-key' },
+  gems: { name: 'gems', one: 'gem', icon: 'ico-gem' },
+};
+export const START_ITEMS = { energy: 30, pearls: 3, swords: 0, food: 20, shots: 6, keys: 2, gems: 0 };
 
 // What one spin can land on. Weights are per cent of spins.
 export const OUTCOMES = [
@@ -78,8 +97,8 @@ export const OUTCOMES = [
   { kind: 'mixed', w: 70.0 },
 ];
 
-// No attacks and no shields: three balls win a turn on the prize wheel, three
-// shells open the pearl dive.
+// Three balls win a turn on the prize wheel, three shells open the pearl
+// dive. Nobody attacks anybody, so there is nothing to defend.
 export const SYMBOLS = ['coin', 'sack', 'barrel', 'token', 'star', 'chips', 'ball', 'fish'];
 // The picture for each reel symbol (in img/). 'fish' is the starfish: it fills
 // out the reels and pays nothing.
@@ -94,11 +113,8 @@ export const PAY = {
   coins3: 12,
   sacks3: 30,
   jackpot: 100,
-  attackHit: 20,
-  attackBlocked: 8,
   raidStash: [30, 55],
   raidShares: [0.5, 0.3, 0.2, 0],
-  shieldOverflow: 5,
   tokens: 6,
   treats: 3,
 };
@@ -106,48 +122,41 @@ export const PAY = {
 // The first spins of a new game follow a script so every mechanic turns up early.
 export const OPENING_SPINS = ['coins3', 'mixed', 'sacks3', 'mixed', 'wheel', 'mixed', 'coins3', 'raid', 'treats', 'mixed', 'tokens'];
 
-const A = (id, name, kind, cap, cycle, blurb, w, h) => ({ id, name, kind, cap, cycle, blurb, w, h });
-
-export const ATTRACTIONS = [
-  A('toffee', 'Toffee Apple Cart', 'stall', 2, 2.4, 'Sticky, shiny and gone in four bites.', 170, 150),
-  A('ducks', 'Hook-a-Duck', 'game', 3, 3.4, 'Every duck wins a prize. Mostly.', 190, 160),
-  A('teacups', 'Teacup Twirl', 'ride', 6, 6, 'A gentle spin for the brave and the dizzy.', 230, 150),
-  A('helter', 'Helter Skelter', 'ride', 4, 5, 'Climb the tower, grab a mat, whoosh.', 150, 250),
-  A('coconut', 'Coconut Shy', 'game', 3, 4, 'Three balls a go. The coconuts are not glued down.', 200, 160),
-  A('floss', 'Candy Floss Kiosk', 'stall', 3, 3, 'Sugar clouds on a stick, spun to order.', 160, 180),
-  A('dodgems', 'Dodgems', 'ride', 8, 8, 'Bump first, apologise later.', 250, 170),
-  A('carousel', 'Galloping Carousel', 'ride', 10, 9, 'Painted horses and a wheezy organ.', 240, 210),
-  A('ghost', 'Ghost Train', 'ride', 6, 8, 'Cobwebs, cackles and one very damp curtain.', 250, 190),
-  A('waltzer', 'Whirling Waltzer', 'ride', 9, 8, 'Scream if you want to go faster.', 250, 170),
-  A('wheel', 'Big Wheel', 'ride', 12, 12, 'The whole park laid out below you.', 240, 280),
-  A('coaster', 'Comet Coaster', 'ride', 12, 9, 'One lift hill, one loop, no regrets.', 270, 230),
+// A little of everything else comes off the reels too: each symbol on the pay
+// line has a small chance of dropping something for the side games.
+export const REEL_DROPS = [
+  { item: 'energy', sym: 'fish', chance: 0.5, n: 1, needs: 'merge' },
+  { item: 'pearls', sym: 'barrel', chance: 0.12, n: 1, needs: 'draw' },
+  { item: 'shots', sym: 'ball', chance: 0.2, n: 1, needs: 'trail' },
+  { item: 'keys', sym: 'star', chance: 0.15, n: 1, needs: 'chests' },
 ];
-ATTRACTIONS.forEach((d, i) => { d.index = i; });
-const idx = (id) => ATTRACTIONS.findIndex((d) => d.id === id);
 
-// Which six attractions each park has, by plot. The tall ones sit in the back row.
-// The parks. Each theme is one painted backdrop with the same layout, so the
-// same eight sites sit in the same places; the rides change their names.
+// ---- parks -------------------------------------------------------------------
+// Each theme is one painted backdrop with the same layout, so the same eight
+// sites sit in the same places; the rides change their names.
 export const PARKS_TOTAL = 100;
 export const PARK_THEMES = [
   { key: 'coral', name: 'Coral Cove', tag: 'Shells, pearls and warm shallows', rides: ['Jellyfish Swing', 'Pearl Spinner', 'Reef Runner', 'Tide Wheel'] },
-  { key: 'pirate', name: 'Pirate Harbour', tag: 'Sails, maps and buried treasure', rides: ['Crow\u2019s Nest Swing', 'Compass Spinner', 'Plank Runner', 'Harbour Wheel'] },
+  { key: 'pirate', name: 'Pirate Harbour', tag: 'Sails, maps and buried treasure', rides: ['Crow’s Nest Swing', 'Compass Spinner', 'Plank Runner', 'Harbour Wheel'] },
   { key: 'jungle', name: 'Jungle Falls', tag: 'Vines, lotus pools and warm rain', rides: ['Canopy Swing', 'Lotus Spinner', 'Vine Runner', 'Falls Wheel'] },
   { key: 'winter', name: 'Snowlight Village', tag: 'Lanterns, pines and fresh snow', rides: ['Frost Swing', 'Snowflake Spinner', 'Sleigh Runner', 'Aurora Wheel'] },
 ];
 const RIDE_BLURBS = ['Round and round over the water.', 'The showpiece in the middle of the park.', 'Fast, loud and over too soon.', 'The whole park laid out below you.'];
 export const FACILITIES = [
-  { id: 'entrance', name: 'Entrance', blurb: 'More gates, shorter queues.', cap: 'Gates' },
-  { id: 'parking', name: 'Parking', blurb: 'Somewhere for everyone to leave the car.', cap: 'Parking spaces' },
-  { id: 'restrooms', name: 'Restrooms', blurb: 'Nobody enjoys a park without them.', cap: 'Toilets' },
-  { id: 'food', name: 'Food Stalls', blurb: 'Hot chips, cold drinks, sticky fingers.', cap: 'Stalls' },
+  { id: 'entrance', name: 'Entrance', blurb: 'More gates, shorter queues.', cap: 'Gates', capBase: 2 },
+  { id: 'parking', name: 'Parking', blurb: 'Somewhere for everyone to leave the car.', cap: 'Parking spaces', capBase: 20 },
+  { id: 'restrooms', name: 'Restrooms', blurb: 'Nobody enjoys a park without them.', cap: 'Toilets', capBase: 2 },
+  { id: 'food', name: 'Food Stalls', blurb: 'Hot chips, cold drinks, sticky fingers.', cap: 'Stalls', capBase: 1 },
 ];
-// What stands on site k in park t.
+const RIDE_SEATS = [8, 12, 12, 16];
+// What stands on site k in park t. `capBase` is how many seats (or gates, and
+// so on) it starts with; each capacity step adds half as many again.
 export function buildingAt(t, k) {
   const theme = PARK_THEMES[t % PARK_THEMES.length];
-  if (k < 4) return { index: k, id: 'ride' + k, name: theme.rides[k], kind: 'ride', blurb: RIDE_BLURBS[k], cap: 'Seats' };
+  if (k < 4) return { index: k, id: 'ride' + k, name: theme.rides[k], kind: 'ride', blurb: RIDE_BLURBS[k], cap: 'Seats', capBase: RIDE_SEATS[k] };
   return { index: k, kind: 'facility', ...FACILITIES[k - 4] };
 }
+export const capCount = (building, cap) => Math.round(building.capBase * (1 + cap / 2));
 
 // Parks go on past the hundredth: looks cycle, prices are capped.
 export function townInfo(t) {
@@ -156,24 +165,37 @@ export function townInfo(t) {
   return { index: t, number: t + 1, name: lap ? `${theme.name} ${lap + 1}` : theme.name, tag: theme.tag, theme, lineup: [0, 1, 2, 3, 4, 5, 6, 7] };
 }
 
+// Four chests along each park's progress bar, at a quarter, a half, three
+// quarters and all of its stars.
+export const PARK_CHESTS = [
+  { tokens: 8, coins: 20 },
+  { tokens: 12, coins: 40, energy: 10 },
+  { tokens: 18, coins: 70, pack: 'silver' },
+  { tokens: 25, coins: 120, pearls: 2 },
+];
+export const UPGRADE_REWARDS = { 5: { tokens: 2 }, 10: { pack: 'bronze' } };
+export const TOWN_REWARD = { tokens: 25, pack: 'gold' };
+
 // The prize wheel: eight wedges, weighted.
 export const WHEEL = [
   { reward: { coins: 15 }, w: 22 }, { reward: { tokens: 5 }, w: 18 }, { reward: { coins: 40 }, w: 16 }, { reward: { treats: 4 }, w: 14 },
   { reward: { tokens: 12 }, w: 10 }, { reward: { pack: 'bronze' }, w: 10 }, { reward: { coins: 120 }, w: 6 }, { reward: { pack: 'silver' }, w: 4 },
 ];
 
-// ---- rivals -----------------------------------------------------------------
+// ---- other players -------------------------------------------------------------
+// There is no server yet, so the league table, the club and the team event
+// are filled with computer-run players. `face` is a cell on img/avatars.webp.
 
 export const RIVALS = [
-  { name: 'Dotty Marlowe', park: "Marlowe's Mirth" },
-  { name: 'Big Reg Pickles', park: 'Pickles Pleasure Park' },
-  { name: 'Madame Zelda Finch', park: "Finch's Fortunes" },
-  { name: 'Cornelius Quill', park: 'The Quill Carnival' },
-  { name: 'Nan Bramble', park: "Bramble's Bonanza" },
-  { name: 'Lord Flashbang', park: 'Flashbang Follies' },
-  { name: 'Mabel Sprocket', park: 'Sprocket & Daughters' },
-  { name: 'The Tiddler Twins', park: 'Tiddler Towers' },
-  { name: 'Captain Humbug', park: "Humbug's Hullabaloo" },
+  { name: 'Dotty', park: "Dotty's Dunes", face: 0 },
+  { name: 'Big Reg', park: 'Pickles Pier', face: 1 },
+  { name: 'Zelda', park: "Finch's Lagoon", face: 2 },
+  { name: 'Quill', park: 'Quill Quay', face: 3 },
+  { name: 'Nan', park: 'Bramble Bay', face: 4 },
+  { name: 'Flash', park: 'Flashbang Falls', face: 5 },
+  { name: 'Mabel', park: 'Sprocket Sands', face: 6 },
+  { name: 'Tiddler', park: 'Tiddler Towers', face: 7 },
+  { name: 'Humbug', park: 'Humbug Harbour', face: 8 },
 ];
 
 // ---- shop and adverts ---------------------------------------------------------
@@ -184,21 +206,42 @@ export const RIVALS = [
 export const STORE_PREVIEW = true;
 
 // Display prices are placeholders; a real store supplies localised ones.
-// Coins are in units, so a sack is worth the same number of spins in any town.
+// Coins are in units, so a pack is worth the same number of spins in any park.
 export const PRODUCTS = [
-  { id: 'tokens_s', group: 'tokens', name: 'Pocketful', price: '£0.99', grant: { tokens: 60 } },
-  { id: 'tokens_m', group: 'tokens', name: 'Bagful', price: '£2.99', grant: { tokens: 220 }, tag: 'Popular' },
-  { id: 'tokens_l', group: 'tokens', name: 'Bucketful', price: '£6.99', grant: { tokens: 600 } },
-  { id: 'tokens_xl', group: 'tokens', name: 'Wheelbarrow', price: '£14.99', grant: { tokens: 1500 }, tag: 'Best value' },
+  { id: 'spins_1', group: 'spins', name: '60 spins', price: '£1.99', grant: { tokens: 60 }, art: 'ico-tickets' },
+  { id: 'spins_2', group: 'spins', name: '160 spins', price: '£4.99', grant: { tokens: 160 }, art: 'ico-tickets', bonus: '7% more' },
+  { id: 'spins_3', group: 'spins', name: '330 spins', price: '£9.99', grant: { tokens: 330 }, art: 'ico-spinpack', bonus: '10% more' },
+  { id: 'spins_4', group: 'spins', name: '720 spins', price: '£19.99', grant: { tokens: 720 }, art: 'ico-spinpack', bonus: '20% more', tag: 'Popular' },
+  { id: 'spins_5', group: 'spins', name: '2,100 spins', price: '£49.99', grant: { tokens: 2100 }, art: 'ico-spinpack', bonus: '40% more' },
+  { id: 'spins_6', group: 'spins', name: '6,000 spins', price: '£99.99', grant: { tokens: 6000 }, art: 'ico-spinpack', bonus: '100% more', tag: 'Best value' },
+  { id: 'coins_1', group: 'coins', name: 'Handful', price: '£1.99', grant: { coins: 150 }, art: 'ico-coins' },
+  { id: 'coins_2', group: 'coins', name: 'Purse', price: '£4.99', grant: { coins: 420 }, art: 'ico-coins', bonus: '10% more' },
+  { id: 'coins_3', group: 'coins', name: 'Stack', price: '£9.99', grant: { coins: 900 }, art: 'ico-coins', bonus: '20% more' },
+  { id: 'coins_4', group: 'coins', name: 'Chest', price: '£19.99', grant: { coins: 2000 }, art: 'ico-coins-big', bonus: '35% more', tag: 'Popular' },
+  { id: 'coins_5', group: 'coins', name: 'Safe', price: '£49.99', grant: { coins: 5600 }, art: 'ico-coins-big', bonus: '60% more' },
+  { id: 'coins_6', group: 'coins', name: 'Cartload', price: '£99.99', grant: { coins: 14000 }, art: 'ico-coins-big', bonus: '100% more', tag: 'Best value' },
+  { id: 'daily', group: 'bundle', name: 'Daily bundle', price: '£4.99', grant: { tokens: 150, coins: 300, energy: 50 }, daily: true, tag: '4x value' },
   { id: 'starter', group: 'bundle', name: 'Starter bundle', price: '£1.99', grant: { tokens: 120, coins: 150, packs: { gold: 1 } }, once: true, tag: 'One time only' },
   { id: 'goldpacks', group: 'bundle', name: 'Three gold packs', price: '£3.99', grant: { packs: { gold: 3 } } },
-  { id: 'coins', group: 'bundle', name: 'Sack of coins', price: '£2.99', grant: { coins: 400 } },
+  { id: 'games', group: 'bundle', name: 'Games bundle', price: '£3.99', grant: { energy: 100, pearls: 10, shots: 12, keys: 6 } },
+  { id: 'pass', group: 'extra', name: 'Park Pass', price: '£4.99', pass: true, desc: 'Opens the premium prizes for this season of the Park Pass.' },
   {
     id: 'noads', group: 'extra', name: 'No interruptions', price: '£3.99', once: true, noAds: true,
     desc: 'Removes the adverts between parks. Adverts you choose to watch for a reward stay.',
   },
 ];
-export const ADS = { tokens: 25, perDay: 6 };
+
+// Adverts are always the player's choice, and always for something. Each
+// placement has its own daily allowance.
+export const ADS = {
+  tokens: { reward: { tokens: 25 }, perDay: 6, name: 'Free spins' },
+  energy: { reward: { energy: 20 }, perDay: 4, name: 'Merge energy', needs: 'merge' },
+  pearls: { reward: { pearls: 2 }, perDay: 3, name: 'Pearl tokens', needs: 'draw' },
+  shots: { reward: { shots: 5 }, perDay: 3, name: 'Cannonballs', needs: 'trail' },
+  keys: { reward: { keys: 2 }, perDay: 3, name: 'Keys', needs: 'chests' },
+  wheel: { reward: { wheel: 1 }, perDay: 2, name: 'A turn on the wheel' },
+  boost: { boost: 30, perDay: 3, name: 'Double takings for 30 minutes' },
+};
 
 // ---- cards ------------------------------------------------------------------
 
@@ -276,19 +319,6 @@ export const VAULT = [
 ];
 export const ALBUM_REWARD = { tokens: 500 };
 
-// ---- pet --------------------------------------------------------------------
-
-export const PET = {
-  name: 'Puddle',
-  kind: 'duck',
-  card: 'pond-8', // the pet's portrait is this card's painting
-  xpFor: (level) => 6 + level * 6 + level * level,
-  maxLevel: 30,
-  raidBonusPerLevel: 0.05,
-  capPerLevel: 2,
-  levelTokens: (level) => 6 + level * 2,
-};
-
 // ---- events -----------------------------------------------------------------
 
 export const EVENT_THEMES = [
@@ -297,7 +327,7 @@ export const EVENT_THEMES = [
   { name: 'Shell Hunt', blurb: 'Comb the beach from the pier to the rocks.' },
   { name: 'Sunset Splash', blurb: 'Keep the park busy until the lights come on.' },
 ];
-export const EVENT_POINTS = { spin: 1, triple: 3, attack: 8, raid: 12, jackpot: 25 };
+export const EVENT_POINTS = { spin: 1, triple: 3, raid: 12, jackpot: 25 };
 // reward: tokens, coins (in units), treats or a pack
 export const EVENT_MILESTONES = [
   { at: 15, reward: { tokens: 10 } },
@@ -314,7 +344,7 @@ export const EVENT_MILESTONES = [
   { at: 2000, reward: { tokens: 200, pack: 'gold' } },
 ];
 
-export const LEAGUE_POINTS = { hit: 10, blocked: 5, barrel: 4, sweep: 6, wheel: 8 };
+export const LEAGUE_POINTS = { barrel: 4, sweep: 6, wheel: 8 };
 export const LEAGUE_PRIZES = [
   { upTo: 1, reward: { tokens: 100, pack: 'gold' } },
   { upTo: 3, reward: { tokens: 50, pack: 'silver' } },
@@ -331,9 +361,6 @@ export const DAILY = [
   { pack: 'silver' },
   { tokens: 100, pack: 'gold' },
 ];
-
-export const UPGRADE_REWARDS = { 5: { tokens: 2 }, 10: { pack: 'bronze' } };
-export const TOWN_REWARD = { tokens: 25, pack: 'gold' };
 
 export const GUEST_LOOKS = {
   shirts: ['#e5484d', '#f76b15', '#ffc53d', '#46a758', '#12a594', '#3e63dd', '#8e4ec6', '#e93d82', '#f5f5f5', '#30a46c', '#0090ff', '#ad7f58'],

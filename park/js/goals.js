@@ -1,5 +1,6 @@
 // Missions: one always-on objective that teaches the game, then keeps paying.
-import { PET, townInfo } from './config.js';
+import { townInfo } from './config.js';
+import { PETS } from './pets.js';
 import { cardsOwned } from './rules.js';
 
 const stat = (key, target, reward, text, go) => ({ text, target, reward, go, cur: (s) => s.stats[key] });
@@ -10,18 +11,18 @@ export const MISSIONS = [
   { text: 'Build your first ride', target: 1, reward: { tokens: 5 }, go: 'build', cur: (s) => Math.min(1, s.stats.upgrades) },
   { text: 'Take anything in the park to level 20', target: 2, reward: { pack: 'bronze' }, go: 'build', cur: (s) => Math.max(maxStage(s), s.stats.towns ? 2 : 0) },
   stat('packs', 1, { tokens: 10 }, 'Open a card pack', 'cards'),
-  { text: 'Take a turn on the prize wheel', target: 1, reward: { tokens: 10 }, go: 'wheel', cur: (s) => s.wheel.spun },
+  { text: 'Take a turn on the prize wheel', target: 1, reward: { tokens: 10 }, go: 'wheel', cur: (s) => s.stats.wheels },
   stat('raids', 1, { tokens: 10 }, 'Go on a pearl dive', 'spin'),
   { text: 'Take anything in the park to level 50', target: 5, reward: { pack: 'silver' }, go: 'build', cur: (s) => Math.max(maxStage(s), s.stats.towns ? 5 : 0) },
-  stat('fed', 6, { tokens: 10 }, `Feed ${PET.name} 6 cherries`, 'pet'),
+  stat('fed', 6, { tokens: 10 }, `Feed ${PETS[0].name} 6 cherries`, 'pet'),
   { text: 'Collect 8 different cards', target: 8, reward: { tokens: 15 }, go: 'cards', cur: (s) => Math.max(cardsOwned(s), s.cards.season > 1 ? 8 : 0) },
   { text: 'Take anything in the park to level 100', target: 10, reward: { tokens: 15 }, go: 'build', cur: (s) => Math.max(maxStage(s), s.stats.towns ? 10 : 0) },
   { text: `Finish ${townInfo(0).name}`, target: 1, reward: { tokens: 25 }, go: 'build', cur: (s) => Math.min(1, s.stats.towns) },
   stat('spins', 100, { tokens: 20 }, 'Spin the machine 100 times', 'spin'),
   stat('sets', 1, { pack: 'gold' }, 'Complete a card set', 'cards'),
-  { text: 'Spin the prize wheel 10 times', target: 10, reward: { tokens: 20 }, go: 'wheel', cur: (s) => s.wheel.spun },
+  { text: 'Spin the prize wheel 10 times', target: 10, reward: { tokens: 20 }, go: 'wheel', cur: (s) => s.stats.wheels },
   { text: `Open ${townInfo(2).name}`, target: 2, reward: { tokens: 30 }, go: 'build', cur: (s) => s.stats.towns },
-  { text: `Raise ${PET.name} to level 3`, target: 3, reward: { tokens: 20 }, go: 'pet', cur: (s) => s.pet.level },
+  { text: 'Raise your pet to level 3', target: 3, reward: { tokens: 20 }, go: 'pet', cur: (s) => s.pet.level },
   stat('raids', 5, { tokens: 20 }, 'Go on 5 pearl dives', 'spin'),
   { text: 'Collect 25 different cards', target: 25, reward: { pack: 'silver' }, go: 'cards', cur: (s) => Math.max(cardsOwned(s), s.cards.season > 1 ? 25 : 0) },
   { text: `Open ${townInfo(4).name}`, target: 4, reward: { pack: 'gold' }, go: 'build', cur: (s) => s.stats.towns },
