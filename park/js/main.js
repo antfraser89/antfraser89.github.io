@@ -2,8 +2,10 @@
 import { createAudio } from './audio.js';
 import { GAME_TITLE, LEGACY_SAVE_KEYS, OPENING_SPINS, PLOTS, SAVE_KEY, TUNING } from './config.js';
 import * as E from './economy.js';
+import * as G from './game.js';
 import { money } from './format.js';
 import { createParkView } from './parkview.js';
+import { preload, preloadRest } from './preload.js';
 import * as R from './rules.js';
 import * as S from './sim.js';
 import { newState, parseSave, serialize } from './state.js';
@@ -98,12 +100,13 @@ function handleEvents() {
   world.events.length = 0;
 }
 
-// Catch up after time away: the gate's takings, the token meter, the rivals.
+// Catch up after time away: the gate's takings, the spin meter, and
+// everything in the side games that runs on the clock.
 function comeBack(seconds, announceIt) {
   if (!(seconds > 5)) return;
   const till = S.applyOffline(world, seconds);
-  const res = R.tick(world.state, clock(), Math.random, TUNING.incomingMaxAway);
-  if (announceIt && seconds >= TUNING.offlineMinSeconds) ui.showAway(seconds, till, res.tokens, res.incidents);
+  const res = G.tick(world.state, clock());
+  if (announceIt && seconds >= TUNING.offlineMinSeconds) ui.showAway(seconds, till, res.tokens);
   ui.showLeague(res.league);
 }
 
@@ -139,7 +142,7 @@ function frame(now) {
   tickClock += dt;
   if (tickClock >= 1) {
     tickClock = 0;
-    const res = R.tick(world.state, clock(), Math.random, 1);
+    const res = G.tick(world.state, clock());
     ui.showLeague(res.league);
     if (!ui.busy && world.state.stats.spins >= OPENING_SPINS.length) ui.showDaily();
   }
@@ -169,6 +172,24 @@ document.addEventListener('visibilitychange', () => {
   audio.sync();
 });
 window.addEventListener('pagehide', save);
+
+// The phone's back button (or the browser's) closes whatever is open rather
+// than leaving the game. One spare history entry is kept while anything is open.
+let spare = false;
+window.addEventListener('popstate', () => {
+  spare = false;
+  ui.back();
+});
+setInterval(() => {
+  if (ui.layers > 0 && !spare) {
+    try {
+      history.pushState({ park: 1 }, '');
+      spare = true;
+    } catch {
+      /* not allowed here: the back button just behaves as usual */
+    }
+  }
+}, 400);
 window.addEventListener('resize', () => {
   ui.measure();
 });
@@ -187,15 +208,34 @@ document.title = GAME_TITLE;
 ui.refresh();
 ui.measure();
 
-// The splash doubles as the first tap, which browsers need before sound can play.
+// The splash doubles as the first tap, which browsers need before sound can
+// play. Its bar follows the pictures as they arrive.
 ui.showSplash(() => {
+  preloadRest();
   if (!loaded) {
     ui.showWelcome();
   } else if (state.lastSaved > 0) {
     comeBack((clock() - state.lastSaved) / 1000, true);
     ui.showDaily();
   }
-});
+}, preload);
+
+// Offline play, where the browser allows it. A single-file build has no
+// separate worker file, so this quietly does nothing there.
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol) && !window.PARK_ART) {
+  window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
+}
+
+// If something throws, say so once and offer a reload; the save is untouched.
+let complained = false;
+function complain() {
+  if (complained) return;
+  complained = true;
+  save();
+  ui.toast('Something went wrong. <button class="btn small" onclick="location.reload()">Reload</button>', 'oops');
+}
+window.addEventListener('error', (e) => { if (e.error) complain(); });
+window.addEventListener('unhandledrejection', complain);
 
 requestAnimationFrame((t) => {
   last = t;

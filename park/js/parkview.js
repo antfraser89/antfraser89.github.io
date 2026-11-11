@@ -89,7 +89,7 @@ export function createParkView(world, hooks = {}) {
   }
 
   // How far colour should reach from a site: nothing until it is built.
-  const want = (plot) => (plot.stage <= 0 ? 0 : 74 + plot.stage * 17 + (plot.cap ? 60 : 0));
+  const want = (plot) => (plot.stage <= 0 ? 0 : 74 + plot.stage * 17 + plot.cap * 12);
 
   function paintMask() {
     const s = world.state;
@@ -112,17 +112,16 @@ export function createParkView(world, hooks = {}) {
     const s = world.state;
     SITES.forEach((site, k) => {
       const plot = s.plots[k];
-      const done = plot.stage >= STAGES && plot.cap;
-      const next = Math.min(plot.stage, STAGES) + 1;
-      const cost = done ? 0 : E.stageCost(s.town, k, next);
-      const can = !done && s.coins >= cost;
+      const done = E.siteDone(plot);
+      const cost = done ? 0 : E.cheapest(s, k);
+      const can = !done && cost != null && s.coins >= cost;
       const key = `${plot.stage}|${plot.cap}|${can}|${cost}`;
       if (sites[k].key === key) return;
       sites[k].key = key;
       const tag = sites[k].tag;
       if (plot.stage === 0) {
         tag.className = 'pv-tag build' + (can ? ' can' : '');
-        tag.innerHTML = `<b>Build</b> ${money(cost)}`;
+        tag.innerHTML = `<b>Build</b> ${money(E.stageCost(s.town, k, 1))}`;
       } else if (done) {
         tag.className = 'pv-tag done';
         tag.innerHTML = '<b>MAX</b>';

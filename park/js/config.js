@@ -54,17 +54,17 @@ export function levelOf(stars) {
   while (levelStars(level + 1) <= stars) level++;
   return level;
 }
-export const levelReward = (level) => ({ tokens: Math.min(10 + level * 2, 60), coins: 10 + level * 2, ...(level % 5 === 0 ? { pack: 'gold' } : {}) });
+export const levelReward = (level) => ({ tokens: Math.min(5 + Math.floor(level / 2), 25), coins: 10 + level * 2, ...(level % 5 === 0 ? { pack: 'gold' } : {}) });
 
 // What opens at each level. `id` is what the rest of the game asks about.
 export const UNLOCKS = [
   { level: 2, id: 'cards', name: 'Cards', blurb: 'Open packs and fill the album.' },
   { level: 3, id: 'missions', name: 'Missions', blurb: 'Fresh jobs every day, with a chest at the end.' },
-  { level: 4, id: 'draw', name: 'Lucky Pearl', blurb: 'Draw prize bubbles from the giant clam.' },
+  { level: 4, id: 'draw', name: 'Prize Draw', blurb: 'Burst prize bubbles round the giant clam.' },
   { level: 5, id: 'pets', name: 'Pet shop', blurb: 'More pals, each with a talent of their own.' },
   { level: 6, id: 'merge', name: 'Rockpool Merge', blurb: 'Match shells to make rarer ones.' },
   { level: 7, id: 'club', name: 'Park Pals', blurb: 'Swap spins and cards, and build together.' },
-  { level: 8, id: 'trail', name: 'Treasure Trail', blurb: 'Grow swords, clear the path, fire the cannon.' },
+  { level: 8, id: 'trail', name: 'Expedition', blurb: 'Grow swords, clear the trail, fire the cannon.' },
   { level: 9, id: 'chests', name: 'Lucky Chests', blurb: 'Six chests, six prizes, one key each.' },
   { level: 10, id: 'pass', name: 'Park Pass', blurb: 'A season of prizes for playing.' },
   { level: 10, id: 'festival', name: 'Festival', blurb: 'Earn gems in every game and dress the pier.' },
@@ -168,18 +168,18 @@ export function townInfo(t) {
 // Four chests along each park's progress bar, at a quarter, a half, three
 // quarters and all of its stars.
 export const PARK_CHESTS = [
-  { tokens: 8, coins: 20 },
-  { tokens: 12, coins: 40, energy: 10 },
-  { tokens: 18, coins: 70, pack: 'silver' },
-  { tokens: 25, coins: 120, pearls: 2 },
+  { tokens: 3, coins: 20 },
+  { tokens: 5, coins: 40, energy: 6 },
+  { tokens: 6, coins: 70, pack: 'bronze' },
+  { tokens: 10, coins: 120, pearls: 1 },
 ];
 export const UPGRADE_REWARDS = { 5: { tokens: 2 }, 10: { pack: 'bronze' } };
 export const TOWN_REWARD = { tokens: 25, pack: 'gold' };
 
 // The prize wheel: eight wedges, weighted.
 export const WHEEL = [
-  { reward: { coins: 15 }, w: 22 }, { reward: { tokens: 5 }, w: 18 }, { reward: { coins: 40 }, w: 16 }, { reward: { treats: 4 }, w: 14 },
-  { reward: { tokens: 12 }, w: 10 }, { reward: { pack: 'bronze' }, w: 10 }, { reward: { coins: 120 }, w: 6 }, { reward: { pack: 'silver' }, w: 4 },
+  { reward: { coins: 15 }, w: 22 }, { reward: { tokens: 3 }, w: 18 }, { reward: { coins: 40 }, w: 16 }, { reward: { treats: 4 }, w: 14 },
+  { reward: { tokens: 8 }, w: 10 }, { reward: { pack: 'bronze' }, w: 10 }, { reward: { coins: 120 }, w: 6 }, { reward: { pack: 'silver' }, w: 4 },
 ];
 
 // ---- other players -------------------------------------------------------------
@@ -253,39 +253,39 @@ const RARITY = [1, 1, 2, 2, 3, 3, 4, 4, 5];
 const SET = (id, name, color, reward, cards) => ({ id, name, color, reward, sheet: 'cards-' + id, cards });
 
 export const CARD_SETS = [
-  SET('pond', 'Pond Life', '#2aa6c9', 40, [
+  SET('pond', 'Pond Life', '#2aa6c9', 20, [
     [8, 'Peeping Frog'], [5, 'Sunset Fish'], [6, 'Busy Beaver'], [3, 'Darting Dragonfly'],
     [4, 'Paddling Turtle'], [0, 'Lilypad Leaper'], [2, 'Patient Heron'], [1, 'Floating Otter'], [7, 'Bath-time Duck'],
   ]),
-  SET('desert', 'Desert Days', '#e9a23b', 60, [
+  SET('desert', 'Desert Days', '#e9a23b', 25, [
     [5, 'Flowering Cactus'], [2, 'Sunning Gecko'], [8, 'Thorny Lizard'], [6, 'Coiled Snake'],
     [3, 'Sand Chick'], [7, 'Desert Tortoise'], [1, 'Little Camel'], [0, 'Fennec Pup'], [4, 'Big-eared Fox'],
   ]),
-  SET('hatch', 'Hatch Day', '#7c6ee6', 80, [
+  SET('hatch', 'Hatch Day', '#7c6ee6', 30, [
     [8, 'Full Nest'], [1, 'Green Peeper'], [0, 'First Roar'], [7, 'Blue Splash'],
     [5, 'Purple Stretch'], [3, 'Bluebird Baby'], [4, 'Tiny Tricorn'], [6, 'Violet Horns'], [2, 'Pink Flutter'],
   ]),
-  SET('tropic', 'Tropical Crew', '#2fae5a', 100, [
+  SET('tropic', 'Tropical Crew', '#2fae5a', 35, [
     [0, 'Tree Frog'], [7, 'Emerald Snake'], [8, 'Blue Dart Frog'], [6, 'Cheeky Monkey'],
     [2, 'Sleepy Sloth'], [5, 'Toucan'], [1, 'Scarlet Macaw'], [3, 'Blue Morpho'], [4, 'Jaguar Cub'],
   ]),
-  SET('garden', 'Garden Party', '#ec6aa0', 130, [
+  SET('garden', 'Garden Party', '#ec6aa0', 40, [
     [8, 'Ladybird Hat'], [2, 'Lotus Frog'], [1, 'Tortoise in Bloom'], [3, 'Bluebird Bonnet'],
     [4, 'Sunday Squirrel'], [6, 'Sunflower Hedgehog'], [5, 'Dapper Fox'], [7, 'Daisy Butterfly'], [0, 'Bonnet Bunny'],
   ]),
-  SET('leafy', 'Leafy Lane', '#5fb236', 160, [
+  SET('leafy', 'Leafy Lane', '#5fb236', 50, [
     [6, 'Little Sprout'], [5, 'Happy Frog'], [8, 'Bumblebee'], [0, 'Leaf Turtle'],
     [4, 'Curly Chameleon'], [2, 'Blossom Frog'], [7, 'Calling Toucan'], [1, 'Swinging Sloth'], [3, 'Garden Sprite'],
   ]),
-  SET('grotto', 'Glitter Grotto', '#6a5be0', 200, [
+  SET('grotto', 'Glitter Grotto', '#6a5be0', 60, [
     [6, 'Grotto Crab'], [3, 'Pink Bat'], [4, 'Sparkle Hedgehog'], [0, 'Jewel Turtle'],
     [5, 'Glass Serpent'], [7, 'Lantern Owl'], [1, 'Frosty Fox'], [8, 'Grotto Giant'], [2, 'Crystal Deer'],
   ]),
-  SET('ember', 'Little Embers', '#f0642c', 250, [
+  SET('ember', 'Little Embers', '#f0642c', 70, [
     [3, 'Lava Egg'], [1, 'Flame Sprite'], [5, 'Spark Cub'], [7, 'Horned Cub'],
     [2, 'Blaze Pup'], [8, 'Magma Tortoise'], [0, 'Ember Dragon'], [4, 'Sun Dragon'], [6, 'Phoenix Chick'],
   ]),
-  SET('lava', 'Lava Lodge', '#d8432c', 320, [
+  SET('lava', 'Lava Lodge', '#d8432c', 90, [
     [1, 'Steam Puff'], [6, 'Spotted Gecko'], [2, 'Boulder Tortoise'], [0, 'Lava Paddler'],
     [3, 'Crystal-back Lizard'], [7, 'Stone Rhino'], [4, 'Flame Parrot'], [5, 'Cinder Fox'], [8, 'Mountain Keeper'],
   ]),
@@ -317,7 +317,7 @@ export const VAULT = [
   { id: 'big', cost: 80, name: 'Gold pack + a new card', pack: 'gold', fresh: 1, gold: false },
   { id: 'grand', cost: 200, name: 'A gold card you are missing', pack: null, fresh: 0, gold: true },
 ];
-export const ALBUM_REWARD = { tokens: 500 };
+export const ALBUM_REWARD = { tokens: 250 };
 
 // ---- events -----------------------------------------------------------------
 

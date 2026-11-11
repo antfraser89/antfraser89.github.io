@@ -153,7 +153,7 @@ test('prize draw: a big bubble at least every sixteen, the pearl at the end of t
     if (d.grand) {
       grands++;
       sinceBig = 0;
-      assert.ok(d.grand.tokens >= 150);
+      assert.ok(d.grand.tokens >= 80);
     }
     const stockLeft = state.draw.stock.some((n) => n > 0);
     if (stockLeft) assert.ok(sinceBig < Draw.DRAW.bigEvery, 'never a longer wait than promised');
@@ -293,6 +293,10 @@ test('festival: gems buy sixteen decorations, with a prize every fourth', () => 
   while (Festival.claimFestival(state, T0)) prizes++;
   assert.equal(prizes, 4);
   assert.equal(Festival.festivalInfo(state, T0).bought, 16);
+  const gems = state.inv.gems;
+  assert.ok(Festival.tradeGems(state).tokens > 0);
+  assert.equal(state.inv.gems, gems - Festival.FESTIVAL.trade.cost);
+  state.inv.gems = gems;
   const later = Festival.festivalInfo(state, T0 + 8 * 24 * HOUR);
   assert.ok(later.bought === 0 && later.name);
   assert.equal(state.inv.gems, 1e6 - Festival.FESTIVAL.items.reduce((n, it) => n + it.cost.reduce((a, b) => a + b, 0), 0), 'gems are kept between festivals');

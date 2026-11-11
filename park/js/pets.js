@@ -7,7 +7,7 @@ export const PET_MAX = 30;
 export const PET_TUNING = {
   xpFor: (level) => 6 + level * 6 + level * level,
   capPerLevel: 2, // every level adds this many spins to the meter, whoever is out
-  levelTokens: (level) => 6 + level * 2,
+  levelTokens: (level) => 4 + level,
 };
 
 // perk: what the talent changes; per: how much each pal level adds.

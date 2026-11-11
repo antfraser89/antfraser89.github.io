@@ -86,6 +86,10 @@ export function grant(state, reward) {
     out.points = reward.points;
     state.pass.points += reward.points;
   }
+  if (reward.boost) {
+    out.boost = reward.boost; // minutes of doubled takings
+    state.boost = Math.max(0, state.boost) + reward.boost * 60;
+  }
   for (const id of Object.keys(ITEMS)) {
     if (reward[id] > 0) {
       out[id] = reward[id];

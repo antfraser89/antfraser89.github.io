@@ -13,10 +13,10 @@ const KINDS = [
   { stat: 'raids', n: [1, 10], text: (n) => `Go on ${n} pearl ${n === 1 ? 'dive' : 'dives'}`, go: 'spin' },
   { stat: 'packs', n: [2, 15], text: (n) => `Open ${n} card packs`, go: 'cards', needs: 'cards' },
   { stat: 'fed', n: [6, 60], text: (n) => `Feed your pet ${n} cherries`, go: 'pet' },
-  { stat: 'draws', n: [3, 30], text: (n) => `Draw ${n} Lucky Pearl bubbles`, go: 'draw', needs: 'draw' },
+  { stat: 'draws', n: [3, 30], text: (n) => `Burst ${n} Prize Draw bubbles`, go: 'draw', needs: 'draw' },
   { stat: 'merges', n: [15, 200], text: (n) => `Merge shells ${n} times`, go: 'merge', needs: 'merge' },
   { stat: 'shots', n: [4, 30], text: (n) => `Fire the cannon ${n} times`, go: 'trail', needs: 'trail' },
-  { stat: 'steps', n: [1, 8], text: (n) => `Clear ${n} ${n === 1 ? 'flag' : 'flags'} on the Treasure Trail`, go: 'trail', needs: 'trail' },
+  { stat: 'steps', n: [1, 8], text: (n) => `Clear ${n} ${n === 1 ? 'flag' : 'flags'} on the Expedition`, go: 'trail', needs: 'trail' },
   { stat: 'chests', n: [2, 18], text: (n) => `Open ${n} Lucky Chests`, go: 'chests', needs: 'chests' },
   { stat: 'ads', n: [1, 8], text: (n) => `Watch ${n} ${n === 1 ? 'advert' : 'adverts'} for a prize`, go: 'free' },
   { stat: 'helps', n: [2, 15], text: (n) => `Help your Park Pals ${n} times`, go: 'club', needs: 'club' },
@@ -27,13 +27,13 @@ export const MISSIONS = {
   daily: 6,
   weekly: 4,
   points: [10, 30], // mission points for a daily and a weekly mission
-  reward: (state, weekly) => (weekly ? { tokens: 30 + Math.min(E.level(state), 30), coins: 60, gems: 20 } : { tokens: 5 + Math.floor(Math.min(E.level(state), 30) / 5), coins: 12 }),
+  reward: (state, weekly) => (weekly ? { tokens: 20, coins: 60, gems: 20 } : { tokens: 3 + Math.floor(Math.min(E.level(state), 30) / 10), coins: 12 }),
   // the row of chests: mission points needed, and what is inside
   chests: [
-    { at: 20, reward: { tokens: 10, coins: 20 } },
-    { at: 40, reward: { tokens: 15, energy: 15, pearls: 1 } },
-    { at: 60, reward: { tokens: 25, pack: 'silver', keys: 1 } },
-    { at: 120, reward: { tokens: 50, pack: 'gold', gems: 30 } },
+    { at: 20, reward: { tokens: 6, coins: 20 } },
+    { at: 40, reward: { tokens: 10, energy: 10, pearls: 1 } },
+    { at: 60, reward: { tokens: 15, pack: 'silver', keys: 1 } },
+    { at: 120, reward: { tokens: 30, pack: 'gold', gems: 30 } },
   ],
 };
 

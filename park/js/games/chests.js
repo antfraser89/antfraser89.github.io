@@ -6,11 +6,11 @@ import { grant, int } from '../core.js';
 export const CHESTS = {
   // the six prizes, in the order they sit round the ring on the painting
   prizes: (level) => [
-    { coins: 60 + level * 15 }, { pack: level >= 4 ? 'gold' : level >= 2 ? 'silver' : 'bronze' }, { coins: 20 + level * 5 },
-    { wheel: 2 }, { energy: 25 + level * 5 }, { tokens: 15 + level * 3 },
+    { coins: 60 + Math.min(level, 10) * 15 }, { pack: level >= 6 ? 'gold' : level >= 3 ? 'silver' : 'bronze' }, { coins: 20 + Math.min(level, 10) * 5 },
+    { wheel: 1 }, { energy: 12 + Math.min(level, 10) * 2 }, { tokens: 8 + Math.min(level, 10) * 2 },
   ],
   boards: 3, // boards to a level
-  levelReward: (level) => ({ tokens: 40 + level * 10, gems: 30 + level * 5 }),
+  levelReward: (level) => ({ tokens: 20 + Math.min(level, 10) * 4, gems: 30 + Math.min(level, 10) * 5 }),
 };
 
 function shuffle(rand) {

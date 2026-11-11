@@ -20,13 +20,13 @@ export const DRAW = {
   // big bubbles: each has a stock for the round
   big: [
     { id: 'bigGems', reward: { gems: 60 }, stock: 3 },
-    { id: 'bigEnergy', reward: { energy: 60 }, stock: 5 },
-    { id: 'bigSpins', reward: { tokens: 50 }, stock: 3 },
+    { id: 'bigEnergy', reward: { energy: 40 }, stock: 5 },
+    { id: 'bigBoost', reward: { boost: 20 }, stock: 3 }, // twenty minutes of doubled takings
   ],
   bigChance: 0.04,
   bigEvery: 16, // a big bubble at least this often
   grandAt: 80, // draws in a round to win the pearl
-  grand: (round) => ({ tokens: 150 + round * 25, gems: 100, pack: 'gold' }),
+  grand: (round) => ({ tokens: Math.min(80 + round * 10, 150), gems: 100, pack: 'gold' }),
 };
 
 export const freshDraw = () => ({ round: 0, total: 0, sinceBig: 0, stock: DRAW.big.map((b) => b.stock), drawn: 0 });

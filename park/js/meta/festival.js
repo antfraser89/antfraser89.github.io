@@ -13,6 +13,8 @@ export const FESTIVAL = {
     { id: 'chest', name: 'Treasure Chest', art: 'decor-chest', cost: [60, 110, 180, 260] },
     { id: 'harp', name: 'Coral Harp', art: 'decor-harp', cost: [60, 110, 180, 260] },
   ],
+  // once the pier is fully dressed, spare gems can still be traded in
+  trade: { cost: 200, reward: { pack: 'silver', tokens: 10, energy: 10 } },
   prizes: [
     { at: 4, reward: { tokens: 30, coins: 60 } },
     { at: 8, reward: { tokens: 50, pack: 'silver', energy: 30 } },
@@ -65,5 +67,11 @@ export function claimFestival(state, now) {
   if (!info.ready) return null;
   state.festival.claimed++;
   return grant(state, info.next.reward);
+}
+// Swap spare gems for a small parcel, as often as you like.
+export function tradeGems(state) {
+  if (state.inv.gems < FESTIVAL.trade.cost) return null;
+  state.inv.gems -= FESTIVAL.trade.cost;
+  return grant(state, FESTIVAL.trade.reward);
 }
 export const FESTIVAL_MS = HOURS * HOUR;
