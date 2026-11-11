@@ -82,7 +82,7 @@ export default function install(kit) {
     openScene('draw', 'bg-draw', [
       sceneInfo(30, 65, 'Park Prize Draw', ['Each draw costs one pearl token and bursts a bubble: the prize inside is yours.', 'The three green bubbles are big prizes with a limited number each round. One is guaranteed at least every sixteen draws.', `Draw ${D.DRAW.grandAt} times in a round to win the pearl itself, then everything is refilled.`, 'Pearl tokens come from shells on the reels, missions, chests, the Park Pass and adverts you choose to watch.']),
       sceneClose(360, 65),
-      round, total, at(h('div', { class: 'dr-bar' }, bar, barText), 74, 124, 240, 28), count, more, nodes, pearl, pity,
+      round, total, at(h('div', { class: 'dr-bar' }, bar, barText), 73, 121, 246, 37), count, more, nodes, pearl, pity,
       hot(25, 685, 153, 76, 'Draw once', () => go(1)),
       hot(212, 685, 156, 76, 'Draw ten times', () => go(10)),
     ], () => {

@@ -84,12 +84,14 @@
 
 /* ---- offers ----------------------------------------------------------------- */
 
-.hero { position: relative; margin: 0 0 10px; border-radius: 20px; overflow: hidden; border: 3px solid #fff; box-shadow: var(--lift); background: #2aa6ff; min-height: 120px; }
-.hero img { display: block; width: 100%; }
-.hero-over { position: absolute; right: 8px; bottom: 8px; left: 46%; padding: 7px 9px 9px; border-radius: 16px; background: rgba(255, 253, 242, 0.95); color: var(--brown); text-align: center; box-shadow: 0 3px 0 rgba(15, 40, 110, 0.3); }
-.hero-over b { display: block; font: 800 17px var(--display); }
-.hero-over .sub { font-size: 12.5px; font-weight: 800; margin: 2px 0 6px; }
-.hero-over .sub img, .offer img.ico, .product .sub img { height: 15px; vertical-align: -3px; }
+.hero { display: grid; grid-template-columns: 38% 1fr; margin: 0 0 10px; border-radius: 20px; overflow: hidden; border: 3px solid #fff; box-shadow: var(--lift); background: linear-gradient(180deg, #fffdf2, #f7e6bb); min-height: 132px; }
+.hero-pic { position: relative; background: left center / auto 100% no-repeat #49b6ff; }
+.hero-pic i { position: absolute; left: 4px; top: 4px; padding: 1px 8px 2px; border-radius: 99px; background: #fffdf2; color: #8a3b12; font: 800 10px var(--font); font-style: normal; box-shadow: 0 2px 0 rgba(15, 40, 110, 0.3); }
+.hero-side { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; padding: 8px; color: var(--brown); text-align: center; }
+.hero-side b { font: 800 19px/1 var(--display); }
+.hero-side .chip { margin: 0; }
+.hero-side .sub { font-size: 13px; font-weight: 800; line-height: 1.5; }
+.hero-side .sub img, .product .sub img { height: 16px; width: auto; vertical-align: -3px; margin-right: 1px; }
 .offer-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .offer { position: relative; display: flex; flex-direction: column; align-items: center; padding: 8px 5px 8px; border-radius: 16px; background: linear-gradient(180deg, #fffdf2, #f7e6bb); border: 3px solid #fff; box-shadow: var(--lift); color: var(--brown); text-align: center; }
 .offer .amount { font: 800 21px/1 var(--display); color: #1b56c4; text-shadow: 0 1px 0 #fff; }
@@ -100,7 +102,11 @@
 .offer .more.none { background: none; }
 .offer .ribbon { position: absolute; left: 50%; top: -9px; transform: translateX(-50%); white-space: nowrap; padding: 1px 8px; border-radius: 99px; font-style: normal; z-index: 1; }
 .btn.price { margin-top: 5px; padding: 5px 10px 6px; font-size: 14px; min-width: 70px; border-radius: 12px; }
-.shop-hdr { display: block; width: 100%; border-radius: 18px; border: 3px solid #fff; margin-bottom: 8px; box-shadow: var(--lift); }
+.shop-hdr { position: relative; border-radius: 18px; border: 3px solid #fff; margin-bottom: 8px; box-shadow: var(--lift); overflow: hidden; }
+.shop-hdr img { display: block; width: 100%; }
+.hdr-i, .hdr-x { position: absolute; top: 0; width: 13%; height: 26%; border-radius: 50%; }
+.hdr-i { left: 0; }
+.hdr-x { right: 0; }
 .product.free { flex-wrap: wrap; }
 .more-free { flex-basis: 100%; margin-top: 6px; background: none; border: 0; color: #1b56c4; font: 800 13px var(--font); text-align: right; }
 .stamp-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; margin-top: 10px; text-align: left; border: 0; }
@@ -200,7 +206,8 @@ table.odds td:first-child { text-align: left; }
 .p-row { display: grid; grid-template-columns: 1fr 44px 1fr; align-items: center; gap: 0; }
 .p-cell { position: relative; min-height: 44px; display: grid; place-items: center; padding: 5px 6px; border-radius: 14px; background: linear-gradient(180deg, #6cc4ff, #2f8cf0); border: 3px solid #fff; color: #fff; font: 800 13.5px var(--font); text-align: center; box-shadow: 0 3px 0 #1b56c4; }
 .p-cell.paid { background: linear-gradient(180deg, #fff08a, #ffc83d); color: var(--brown); box-shadow: 0 3px 0 #d97a06; }
-.p-cell img { height: 17px; vertical-align: -3px; }
+.p-cell img { height: 17px; width: auto; vertical-align: -3px; margin-right: 1px; }
+.p-cell span { display: block; line-height: 1.5; }
 .p-cell .pk { font-size: 11px; }
 .p-cell.locked::after { content: '🔒'; position: absolute; right: 3px; bottom: 1px; font-size: 12px; }
 .p-cell.got { filter: saturate(0.4) brightness(1.05); }
@@ -365,3 +372,22 @@ table.odds td:first-child { text-align: left; }
 .how { text-align: left; }
 .how p { position: relative; margin: 0 0 9px; padding-left: 18px; font-weight: 700; font-size: 14px; line-height: 1.35; }
 .how p::before { content: '★'; position: absolute; left: 0; top: 0; color: #f59e0b; font-size: 12px; }
+
+/* the painted card pack, tinted for each kind */
+.pack-big.painted { width: 150px; height: auto; }
+.pack-big.painted.bronze { filter: hue-rotate(-95deg) saturate(0.85) drop-shadow(0 12px 14px rgba(10, 30, 90, 0.5)); }
+.pack-big.painted.silver { filter: grayscale(0.85) brightness(1.15) drop-shadow(0 12px 14px rgba(10, 30, 90, 0.5)); }
+.pack-big.painted.gold { filter: hue-rotate(-75deg) saturate(1.5) brightness(1.1) drop-shadow(0 12px 14px rgba(10, 30, 90, 0.5)); }
+
+/* round buttons for scenes that have none painted */
+.hot.drawn-x, .hot.drawn-i { width: 40px !important; height: 40px !important; margin: 2px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 3px 0 rgba(20, 20, 90, 0.4); }
+.hot.drawn-x { background: linear-gradient(180deg, #ff8a7a, #ee3a3a); }
+.hot.drawn-i { background: linear-gradient(180deg, #6cc4ff, #2f8cf0); }
+.hot.drawn-x::before { content: '✕'; color: #fff; font: 800 18px/1 var(--font); }
+.hot.drawn-i::before { content: 'i'; color: #fff; font: 800 22px/1 var(--display); }
+.mg-next { display: flex; align-items: center; gap: 12px; padding: 8px 14px; border-radius: 18px; background: rgba(36, 22, 94, 0.55); border: 2px solid rgba(255, 255, 255, 0.6); color: #fff; }
+.mg-next img { width: 44px; height: 44px; object-fit: contain; }
+.mg-next small { display: block; font: 800 11px var(--font); color: #ffe680; text-transform: uppercase; letter-spacing: 0.04em; }
+.mg-next b { font: 800 15px var(--display); }
+.mg-next b img { width: auto; height: 17px; vertical-align: -3px; }
+.hero-pic::after { content: ''; position: absolute; right: 0; top: 0; bottom: 0; width: 34px; background: linear-gradient(90deg, rgba(251, 241, 214, 0), #fbf1d6 80%); }

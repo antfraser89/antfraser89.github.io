@@ -16,12 +16,12 @@ export const PETS = [
   { id: 'biscuit', name: 'Biscuit', kind: 'puppy', art: ['pets', 0], perk: 'gate', per: 0.04, how: 'buy', price: 250, blurb: 'Greets everyone at the gate: the park takes more.' },
   { id: 'mittens', name: 'Mittens', kind: 'kitten', art: ['pets', 1], perk: 'reels', per: 0.02, how: 'buy', price: 400, blurb: 'Bats at the reels: coin wins pay more.' },
   { id: 'clover', name: 'Clover', kind: 'bunny', art: ['pets', 2], perk: 'away', per: 0.1, how: 'buy', price: 400, blurb: 'Minds the park while you are out: it earns for longer.' },
-  { id: 'pip', name: 'Pip', kind: 'bluebird', art: ['pets', 3], perk: 'energy', per: 2, how: 'level', level: 5, blurb: 'Tidies the rockpool: more merge energy.' },
+  { id: 'pip', name: 'Pip', kind: 'budgie', art: ['pets', 3], perk: 'energy', per: 2, how: 'level', level: 5, blurb: 'Tidies the rockpool: more merge energy.' },
   { id: 'shelby', name: 'Shelby', kind: 'turtle', art: ['pets', 4], perk: 'treats', per: 0.05, how: 'buy', price: 600, blurb: 'Finds the ripest cherries: more of them on every win.' },
   { id: 'nibbles', name: 'Nibbles', kind: 'hamster', art: ['pets', 5], perk: 'stars', per: 0.05, how: 'buy', price: 600, blurb: 'Hoards spare cards: they are worth more stars.' },
   { id: 'coral', name: 'Coral', kind: 'axolotl', art: ['pets', 6], perk: 'draw', per: 0.03, how: 'buy', price: 900, blurb: 'Blows lucky bubbles: Lucky Pearl prizes are bigger.' },
   { id: 'bandit', name: 'Bandit', kind: 'raccoon', art: ['pets', 7], perk: 'swords', per: 0.05, how: 'buy', price: 900, blurb: 'Digs in the garden: the sword plant grows faster.' },
-  { id: 'snowy', name: 'Snowy', kind: 'llama', art: ['pets', 8], perk: 'wheel', per: 0.05, how: 'level', level: 10, blurb: 'Leans on the prize wheel: its coin prizes are bigger.' },
+  { id: 'snowy', name: 'Snowy', kind: 'alpaca', art: ['pets', 8], perk: 'wheel', per: 0.05, how: 'level', level: 10, blurb: 'Leans on the prize wheel: its coin prizes are bigger.' },
 ];
 export const PET_BY_ID = Object.fromEntries(PETS.map((p) => [p.id, p]));
 

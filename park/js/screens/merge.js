@@ -8,11 +8,15 @@ import * as R from '../rules.js';
 const CELL = 48;
 const LEFT = 27;
 const TOP = 158;
-const NAMES = ['Pebble shell', 'Spiral shell', 'Scallop', 'Sunset scallop', 'Conch', 'Royal conch', 'Pearl clam', 'Golden nautilus', 'Crown shell', 'Legend shell', 'Mythic shell', 'Star shell'];
+// the pictures, plainest to rarest (img/merge-NN.webp), and what each is called
+const SHELLS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 12];
+const NAMES = ['Pearl', 'Pink scallop', 'Striped scallop', 'Fan clam', 'Cookie clam', 'Spiral conch', 'Whelk', 'Sunset scallop', 'Spiky murex', 'Royal conch'];
+// low shells are drawn smaller, so the chain grows as it goes
+const SIZE = [26, 30, 33, 38, 39, 40, 42, 41, 43, 46];
 
 export default function install(kit) {
   const { h, setText, setHTML, toggle, st, ART, rand, click, nope, buzz, audio, describe, toast, celebrate, refresh, onSave, clock, openScene, closeScene, at, sceneClose, sceneInfo, itemIcon, adFor, root, fx } = kit;
-  const art = (level) => ART('merge-' + String(level).padStart(2, '0'));
+  const art = (level) => ART('merge-' + String(SHELLS[level - 1]).padStart(2, '0'));
   const cellXY = (i) => [LEFT + (i % M.MERGE.cols) * CELL, TOP + Math.floor(i / M.MERGE.cols) * CELL];
 
   function open() {
@@ -31,6 +35,7 @@ export default function install(kit) {
     } }), 268, 510, 104, 44);
     const info = at(h('div', { class: 'mg-info' }), 18, 572, 354, 62);
     const timer = at(h('div', { class: 'mg-timer' }), 18, 640, 354, 20);
+    const nextPrize = at(h('div', { class: 'mg-next' }), 18, 668, 354, 66);
 
     const toStage = (e) => {
       const r = root.getBoundingClientRect();
@@ -48,7 +53,7 @@ export default function install(kit) {
       board.replaceChildren(...cells.map((v, i) => {
         if (v === 0) return null;
         const [x, y] = cellXY(i);
-        const el = h('div', { class: 'mg-item' + (v < 0 ? ' buried' : '') + (i === picked ? ' picked' : ''), style: `left:${x - LEFT}px;top:${y - TOP}px` }, h('img', { src: art(Math.abs(v)), alt: NAMES[Math.abs(v) - 1], draggable: 'false' }));
+        const el = h('div', { class: 'mg-item' + (v < 0 ? ' buried' : '') + (i === picked ? ' picked' : ''), style: `left:${x - LEFT}px;top:${y - TOP}px` }, h('img', { src: art(Math.abs(v)), alt: NAMES[Math.abs(v) - 1], draggable: 'false', style: `width:${SIZE[Math.abs(v) - 1]}px` }));
         el.dataset.i = String(i);
         return el;
       }).filter(Boolean));
@@ -144,9 +149,9 @@ export default function install(kit) {
     }
 
     openScene('merge', null, [
-      sceneInfo(28, 62, 'Rockpool Merge', ['Tap the basket to drop a shell. It costs a point of energy.', 'Drag a shell onto one the same to make the next shell along the row at the top.', 'Shells half-buried in the sand cannot be moved, but their match can be dropped onto them.', 'The first of each new shell pays a prize. Make the last shell in the row to finish the round.', 'Stuck? Pick a shell and hand it back to free its square.']),
-      sceneClose(362, 62),
-      final, strip, board, energy, gen, mult, info, timer,
+      sceneInfo(28, 62, 'Rockpool Merge', ['Tap the basket to drop a shell. It costs a point of energy.', 'Drag a shell onto one the same to make the next shell along the row at the top.', 'Shells half-buried in the sand cannot be moved, but their match can be dropped onto them.', 'The first of each new shell pays a prize. Make the last shell in the row to finish the round.', 'Stuck? Pick a shell and hand it back to free its square.'], true),
+      sceneClose(362, 62, undefined, true),
+      final, strip, board, energy, gen, mult, info, timer, nextPrize,
     ], () => {
       const s = st();
       const m = s.merge;
@@ -174,6 +179,9 @@ export default function install(kit) {
       } else {
         info.replaceChildren(h('div', null, h('b', null, M.boardFull(s) && !M.anyMerge(s) ? 'No pairs left' : 'Tap a shell to see what it is'), h('small', null, M.boardFull(s) && !M.anyMerge(s) ? 'Pick a shell and hand it back to make room.' : `The basket drops a shell for ${m.mult} energy.`)));
       }
+      // the next shell that will pay a prize for being the first of its kind
+      const nextLevel = Object.keys(M.MERGE.firsts).map(Number).find((l) => l > m.best);
+      setHTML(nextPrize, nextLevel ? `<img src="${art(nextLevel)}" alt=""><div><small>First ${NAMES[nextLevel - 1]} this round</small><b>${describe(M.MERGE.firsts[nextLevel], true)}</b></div>` : `<img src="${art(M.MERGE.chain)}" alt=""><div><small>Make the ${NAMES[M.MERGE.chain - 1]}</small><b>to win the final prize</b></div>`);
       const secs = M.nextEnergyIn(s, clock());
       setText(timer, secs > 0 ? `+1 energy in ${fmtClock(secs)} · ${R.adLeft(s, 'energy', clock())} free top-ups left today (+${ADS.energy.reward.energy})` : `Energy is full (${M.energyCap(s)})`);
     });

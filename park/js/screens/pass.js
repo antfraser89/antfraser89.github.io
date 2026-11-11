@@ -22,8 +22,8 @@ export default function install(kit) {
     } });
     const premium = h('button', { class: 'btn', onclick: () => buy(product) });
     const rows = Array.from({ length: P.PASS.tiers }, (_, t) => {
-      const free = h('div', { class: 'p-cell free', html: describe(P.PASS.free(t), true) });
-      const paid = h('div', { class: 'p-cell paid', html: describe(P.paidPrize(t), true) });
+      const free = h('div', { class: 'p-cell free' }, h('span', { html: describe(P.PASS.free(t), true) }));
+      const paid = h('div', { class: 'p-cell paid' }, h('span', { html: describe(P.paidPrize(t), true) }));
       const el = h('div', { class: 'p-row' }, free, h('b', { class: 'p-tier' }, String(t + 1)), paid);
       return { el, free, paid };
     });

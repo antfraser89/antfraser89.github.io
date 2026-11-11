@@ -133,7 +133,11 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
   // "Park!" with its exclamation mark set apart, so it can bounce
   // Artwork cut from the style-guide mockups lives in img/. A single-file build
   // can hand the same pictures over as data URIs in window.PARK_ART.
-  const ART = (name) => (window.PARK_ART && window.PARK_ART[name]) || `img/${name}.webp`;
+  // A cannonball has no painting of its own, so it is drawn here.
+  const DRAWN = {
+    'ico-cannonball': 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><radialGradient id="g" cx=".35" cy=".3" r=".75"><stop offset="0" stop-color="#e6bcff"/><stop offset=".45" stop-color="#8a3ae0"/><stop offset="1" stop-color="#3f128a"/></radialGradient></defs><circle cx="32" cy="34" r="27" fill="#2a0a5a"/><circle cx="32" cy="31" r="27" fill="url(#g)"/><ellipse cx="23" cy="20" rx="9" ry="6" fill="#fff" opacity=".55" transform="rotate(-28 23 20)"/></svg>'),
+  };
+  const ART = (name) => DRAWN[name] || (window.PARK_ART && window.PARK_ART[name]) || `img/${name}.webp`;
   const wordmark = () => h('div', { class: 'wordmark' }, h('img', { src: ART('logo'), alt: GAME_TITLE }));
   // The host, in one of his poses: welcome, thumbs, party or sad.
   const host = (cls, pose = 'thumbs') => h('img', { class: cls, src: ART('panda-' + pose), alt: '' });
@@ -743,16 +747,16 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
   // An invisible button over something painted.
   const hot = (x, y, w, ht, label, fn, cls = '') => at(h('button', { class: 'hot ' + cls, 'aria-label': label, onclick: () => { click(); fn(); } }), x, y, w, ht);
   // The round "i" and "x" buttons most paintings have in their top corners.
-  const sceneClose = (x, y, fn = closeScene) => hot(x - 22, y - 22, 44, 44, 'Close', fn);
+  const sceneClose = (x, y, fn = closeScene, drawn = false) => hot(x - 22, y - 22, 44, 44, 'Close', fn, drawn ? 'drawn-x' : '');
   // The "i" button. The first time a screen is opened it explains itself unasked.
-  const sceneInfo = (x, y, title, lines) => {
+  const sceneInfo = (x, y, title, lines, drawn = false) => {
     const show1 = () => modal(howTo(title, lines));
     const key = 'how-' + title.toLowerCase().replace(/[^a-z]+/g, '').slice(0, 18);
     if (!st().seen[key]) {
       st().seen[key] = true;
       setTimeout(show1, 350);
     }
-    return hot(x - 22, y - 22, 44, 44, 'How it works', show1);
+    return hot(x - 22, y - 22, 44, 44, 'How it works', show1, drawn ? 'drawn-i' : '');
   };
   const howTo = (title, lines) => ([
     h('h2', null, title), h('div', { class: 'how' }, lines.map((line) => h('p', { html: line }))),
@@ -1026,7 +1030,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     const title = h('h2', null, packType ? PACKS[packType].name : 'New cards');
     const more = h('div', { class: 'actions' });
     const foot = h('p', { class: 'fineprint' }, note);
-    const packImg = packType ? h('img', { class: 'pack-big', src: packURL(packType), alt: '' }) : null;
+    const packImg = packType ? h('img', { class: 'pack-big painted ' + packType, src: ART('pack-art'), alt: '' }) : null;
     overlay('reveal', [title, packImg, row, foot, more], { dismiss: false });
     const flips = cards.map((c) => {
       const def = CARDS.find((d) => d.id === c.id);
@@ -1397,7 +1401,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
       modal([
         h('div', { class: 'kicker' }, 'Preview purchase'),
         h('h2', null, product.name),
-        h('div', { class: 'prize', html: describe(product.grant, true) || 'No more adverts between parks' }),
+        h('div', { class: 'prize', html: describe(product.grant, true) || product.desc || '' }),
         h('p', null, `In the finished game this costs ${priceOf(product)}. No payment provider is connected in this build, so nothing is charged.`),
         h('div', { class: 'actions' },
           h('button', { class: 'btn plain big', onclick: () => { click(); done(false); } }, 'Cancel'),
@@ -1407,7 +1411,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
   }
 
   async function buy(product) {
-    if (R.productOwned(st(), product.id)) return;
+    if (R.productOwned(st(), product.id, clock())) return;
     const b = bridge();
     let ok = false;
     if (b && b.purchase) {
@@ -1423,7 +1427,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
       return;
     }
     if (!ok) return;
-    const reward = R.applyPurchase(st(), product.id);
+    const reward = R.applyPurchase(st(), product.id, clock());
     if (!reward) return;
     if (lootItems(reward).length) celebrate({ kicker: 'Thank you!', title: product.name, reward });
     else toast(`Thank you! ${product.name} is yours.`, 'gold');

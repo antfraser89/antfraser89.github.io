@@ -8,7 +8,7 @@ export default function install(kit) {
   function open(weekly = false) {
     let tab = weekly;
     const chestBar = h('i');
-    const chestEls = M.MISSIONS.chests.map((c, i) => h('button', { class: 'm-chest', style: `left:${(c.at / M.MISSIONS.chests[M.MISSIONS.chests.length - 1].at) * 100}%`, 'aria-label': `Chest at ${c.at} points`, onclick: () => claimChest(i) }, h('img', { src: ART('ico-chest-open'), alt: '' }), h('small', null, String(c.at))));
+    const chestEls = M.MISSIONS.chests.map((c, i) => h('button', { class: 'm-chest', style: `left:${(c.at / M.MISSIONS.chests[M.MISSIONS.chests.length - 1].at) * 100}%`, 'aria-label': `Chest at ${c.at} points`, onclick: () => claimChest(i) }, h('img', { src: ART('ico-chest-gold'), alt: '' }), h('small', null, String(c.at))));
     const pts = h('b');
     const tabs = [h('button', { class: 'seg', onclick: () => { click(); tab = false; refresh(); } }, 'Today'), h('button', { class: 'seg', onclick: () => { click(); tab = true; refresh(); } }, 'This week')];
     const list = h('div', { class: 'm-list' });
@@ -39,6 +39,8 @@ export default function install(kit) {
       chestBar.style.width = Math.min(100, (info.points / top) * 100) + '%';
       info.chests.forEach((c, i) => {
         toggle(chestEls[i], 'open', c.open);
+        const pic = ART(c.open ? 'ico-chest-open' : 'ico-chest-gold');
+        if (chestEls[i].firstChild.getAttribute('src') !== pic) chestEls[i].firstChild.src = pic;
         toggle(chestEls[i], 'ready', c.ready);
       });
       toggle(tabs[0], 'on', !tab);

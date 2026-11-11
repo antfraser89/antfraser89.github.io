@@ -8,13 +8,13 @@ import { talent } from '../pets.js';
 export const MERGE = {
   cols: 7,
   rows: 7,
-  chain: 9, // how many shells there are, plainest to rarest
+  chain: 10, // how many shells there are, plainest to rarest
   energyCap: 30,
   energyEvery: 180, // seconds for a point of energy to come back
   mults: [1, 2, 4, 8], // spend more energy at once for a better shell
   drop: [[1, 70], [2, 24], [3, 6]], // the level a plain drop lands at
   // the first time each shell is made in a round
-  firsts: { 3: { gems: 2 }, 4: { gems: 4, coins: 6 }, 5: { gems: 6, tokens: 3 }, 6: { gems: 10, coins: 25 }, 7: { gems: 15, tokens: 6 }, 8: { gems: 25, pack: 'bronze' } },
+  firsts: { 3: { gems: 2 }, 4: { gems: 4, coins: 6 }, 5: { gems: 6, tokens: 3 }, 6: { gems: 10, coins: 25 }, 7: { gems: 15, tokens: 6 }, 8: { gems: 25, pack: 'bronze' }, 9: { gems: 40, tokens: 10 } },
   final: (round) => ({ tokens: Math.min(20 + round * 5, 60), gems: 60 + Math.min(round, 10) * 10, coins: 120 + Math.min(round, 10) * 30, pack: 'silver' }),
   buried: 10, // shells half-buried in the sand at the start of a round
 };

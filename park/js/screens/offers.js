@@ -41,13 +41,16 @@ export default function install(kit) {
     const stampLine = h('button', { class: 'row stamp-row', onclick: () => { click(); openStamps(); } });
     setSheet('shop', 'Offers', [
       preview ? h('div', { class: 'shop-note' }, STORE_PREVIEW ? 'Preview shop: no payment or advert provider is connected in this build, so purchases are free and adverts are stand-ins.' : 'The shop opens soon.') : null,
-      h('div', { class: 'hero', 'data-pid': 'daily' }, h('img', { src: ART('hdr-bundle'), alt: '' }), h('div', { class: 'hero-over' }, h('b', null, 'Daily bundle'), daily.what, daily.btn)),
+      h('div', { class: 'hero', 'data-pid': 'daily' }, h('div', { class: 'hero-pic', style: `background-image:url(${ART('hdr-bundle')})` }, h('i', null, 'Today only')),
+        h('div', { class: 'hero-side' }, h('b', null, 'Daily bundle'), h('i', { class: 'chip' }, '4x value'), daily.what, daily.btn)),
       h('div', { class: 'product wide free' }, h('div', { class: 'art', html: TOKEN }), h('div', { class: 'meta' }, h('div', { class: 'name' }, `${ADS.tokens.reward.tokens} free spins`), adSub), adBtn,
         h('button', { class: 'more-free', onclick: () => { click(); openFree(); } }, 'All free prizes ›')),
       h('h5', { 'data-pid': 'spins' }, 'Spin packs'),
       h('div', { class: 'offer-grid' }, spins.map((t) => t.el)),
       h('h5', { 'data-pid': 'coins' }, 'Coin shop'),
-      h('img', { class: 'shop-hdr', src: ART('hdr-coinshop'), alt: '' }),
+      h('div', { class: 'shop-hdr' }, h('img', { src: ART('hdr-coinshop'), alt: '' }),
+        h('button', { class: 'hot hdr-i', 'aria-label': 'About coins', onclick: () => { click(); modal([h('h2', null, 'Coin shop'), h('p', null, 'Coins buy everything in the park. Prices in the park rise from park to park, so the coin packs grow with you: a pack is always worth the same amount of building.'), h('div', { class: 'actions' }, h('button', { class: 'btn big wide', onclick: () => { click(); closeModal(); } }, 'OK'))]); } }),
+        h('button', { class: 'hot hdr-x', 'aria-label': 'Close', onclick: () => { click(); kit.closeSheet(); } })),
       h('div', { class: 'offer-grid' }, coins.map((t) => t.el)),
       h('h5', { 'data-pid': 'bundle' }, 'Bundles and extras'),
       others.filter((t) => t !== daily).map((t) => t.el),

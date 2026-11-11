@@ -187,15 +187,15 @@ export const WHEEL = [
 // are filled with computer-run players. `face` is a cell on img/avatars.webp.
 
 export const RIVALS = [
-  { name: 'Dotty', park: "Dotty's Dunes", face: 0 },
-  { name: 'Big Reg', park: 'Pickles Pier', face: 1 },
-  { name: 'Zelda', park: "Finch's Lagoon", face: 2 },
-  { name: 'Quill', park: 'Quill Quay', face: 3 },
-  { name: 'Nan', park: 'Bramble Bay', face: 4 },
-  { name: 'Flash', park: 'Flashbang Falls', face: 5 },
-  { name: 'Mabel', park: 'Sprocket Sands', face: 6 },
-  { name: 'Tiddler', park: 'Tiddler Towers', face: 7 },
-  { name: 'Humbug', park: 'Humbug Harbour', face: 8 },
+  { name: 'Dotty', park: "Dotty's Dunes", face: 3 },
+  { name: 'Big Reg', park: 'Pickles Pier', face: 6 },
+  { name: 'Zelda', park: "Finch's Lagoon", face: 7 },
+  { name: 'Quill', park: 'Quill Quay', face: 8 },
+  { name: 'Nan', park: 'Bramble Bay', face: 10 },
+  { name: 'Flash', park: 'Flashbang Falls', face: 13 },
+  { name: 'Mabel', park: 'Sprocket Sands', face: 11 },
+  { name: 'Tiddler', park: 'Tiddler Towers', face: 9 },
+  { name: 'Humbug', park: 'Humbug Harbour', face: 4 },
 ];
 
 // ---- shop and adverts ---------------------------------------------------------
@@ -215,11 +215,11 @@ export const PRODUCTS = [
   { id: 'spins_5', group: 'spins', name: '2,100 spins', price: '£49.99', grant: { tokens: 2100 }, art: 'ico-spinpack', bonus: '40% more' },
   { id: 'spins_6', group: 'spins', name: '6,000 spins', price: '£99.99', grant: { tokens: 6000 }, art: 'ico-spinpack', bonus: '100% more', tag: 'Best value' },
   { id: 'coins_1', group: 'coins', name: 'Handful', price: '£1.99', grant: { coins: 150 }, art: 'ico-coins' },
-  { id: 'coins_2', group: 'coins', name: 'Purse', price: '£4.99', grant: { coins: 420 }, art: 'ico-coins', bonus: '10% more' },
-  { id: 'coins_3', group: 'coins', name: 'Stack', price: '£9.99', grant: { coins: 900 }, art: 'ico-coins', bonus: '20% more' },
+  { id: 'coins_2', group: 'coins', name: 'Purse', price: '£4.99', grant: { coins: 420 }, art: 'prize-04', bonus: '10% more' },
+  { id: 'coins_3', group: 'coins', name: 'Stack', price: '£9.99', grant: { coins: 900 }, art: 'prize-05', bonus: '20% more' },
   { id: 'coins_4', group: 'coins', name: 'Chest', price: '£19.99', grant: { coins: 2000 }, art: 'ico-coins-big', bonus: '35% more', tag: 'Popular' },
-  { id: 'coins_5', group: 'coins', name: 'Safe', price: '£49.99', grant: { coins: 5600 }, art: 'ico-coins-big', bonus: '60% more' },
-  { id: 'coins_6', group: 'coins', name: 'Cartload', price: '£99.99', grant: { coins: 14000 }, art: 'ico-coins-big', bonus: '100% more', tag: 'Best value' },
+  { id: 'coins_5', group: 'coins', name: 'Safe', price: '£49.99', grant: { coins: 5600 }, art: 'prize-06', bonus: '60% more' },
+  { id: 'coins_6', group: 'coins', name: 'Treasure', price: '£99.99', grant: { coins: 14000 }, art: 'ico-chest-open', bonus: '100% more', tag: 'Best value' },
   { id: 'daily', group: 'bundle', name: 'Daily bundle', price: '£4.99', grant: { tokens: 150, coins: 300, energy: 50 }, daily: true, tag: '4x value' },
   { id: 'starter', group: 'bundle', name: 'Starter bundle', price: '£1.99', grant: { tokens: 120, coins: 150, packs: { gold: 1 } }, once: true, tag: 'One time only' },
   { id: 'goldpacks', group: 'bundle', name: 'Three gold packs', price: '£3.99', grant: { packs: { gold: 3 } } },
