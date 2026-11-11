@@ -47,6 +47,7 @@ test('fmt keeps three significant figures and rounds down', () => {
   assert.equal(money(1500), '£1.50K');
   assert.equal(fmtTime(125), '2m 05s');
   assert.equal(fmtClock(75), '1:15');
+  assert.equal(fmtClock(3 * 3600 + 59 * 60 + 41), '3:59:41');
 });
 
 // ---- economy -------------------------------------------------------------

@@ -55,7 +55,7 @@ export default function install(kit) {
     // start the ladder at the tier the player is on
     const info = P.passInfo(st(), clock());
     const row = rows[Math.min(P.PASS.tiers - 1, Math.max(0, info.tier - 1))];
-    if (row && info.tier > 3) row.el.scrollIntoView({ block: 'center' });
+    if (row && info.tier > 3) kit.scrollSheetTo(row.el, 'center');
   }
 
   // add two "what was given" records together for one haul

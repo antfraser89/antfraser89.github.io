@@ -171,12 +171,15 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     if (reward.treats) parts.push(`${CHIPS}${reward.treats}`);
     if (reward.wheel) parts.push(`${img(symURL('ball'))}${reward.wheel}`);
     for (const id of Object.keys(ITEMS)) if (reward[id] > 0) parts.push(`${itemIcon(id)}${fmt(reward[id])}`);
-    if (reward.boost) parts.push(`<span class="pk gold">2× takings · ${reward.boost} min</span>`);
-    if (reward.pack) parts.push(`<span class="pk ${reward.pack}">${PACKS[reward.pack].name}</span>`);
+    if (reward.boost) parts.push(`<span class="pk">${img(ART('ico-boost'))}2× ${reward.boost}m</span>`);
+    // A card pack is its foil pouch, with the count; in a sentence (not raw) it
+    // is named as well. Coloured words were unreadable on coloured buttons.
+    const pack = (type, n) => `<span class="pk"><img class="ico pk-ico" src="${packURL(type)}" alt="${PACKS[type].name}">${n > 1 || raw ? '×' + n : ''}${raw ? '' : ' ' + (n > 1 ? `${PACKS[type].name}s` : PACKS[type].name)}</span>`;
+    if (reward.pack) parts.push(pack(reward.pack, 1));
     if (reward.packs) {
       for (const type of Object.keys(PACKS)) {
         const n = reward.packs[type] || 0;
-        if (n > 0) parts.push(`<span class="pk ${type}">${n} × ${PACKS[type].name}</span>`);
+        if (n > 0) parts.push(pack(type, n));
       }
     }
     return parts.join(' ');
@@ -512,8 +515,10 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
   }
 
   // The headline moment: huge lettering over the park.
-  function bigWin(title, sub) {
-    const el = h('div', { class: 'bigwin' }, h('span', null, title), h('b', null, sub));
+  // It sits over the reels; the amount counts up on the sign above them.
+  function bigWin(title, sub, picture = null) {
+    document.querySelectorAll('.bigwin').forEach((old) => old.remove());
+    const el = h('div', { class: 'bigwin' }, picture ? h('img', { src: picture, alt: '' }) : null, h('span', null, title), sub ? h('b', null, sub) : null);
     root.append(el);
     setTimeout(() => el.remove(), 2300);
   }
@@ -608,6 +613,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
       return;
     }
     held = res;
+    if (s.stats.upgrades >= 1) s.seen.reels = true; // the pointer at the reels has done its job
     banner.classList.remove('on');
     audio.play('spin');
     buzz(12);
@@ -664,7 +670,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
         audio.play('bigwin');
         fly(COIN, reelCanvas, coinCard, 16);
         fx.rain(80);
-        bigWin('Rush hour!', `+${money(res.coins)}`);
+        bigWin('Rush hour!', `${siteName(res.site)} ×${RUSH.mult}`, siteURL(res.site));
         shake();
         buzz([30, 40, 30]);
         toast(`${img(siteURL(res.site))} Everyone wants the <b>${siteName(res.site)}</b>: it pays double for the next ${RUSH.hotSpins} spins.`, 'gold');
@@ -675,7 +681,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
         audio.play('jackpot');
         fly(COIN, reelCanvas, coinCard, 22);
         fx.rain(190);
-        bigWin('Jackpot!', `+${money(res.coins)}`);
+        bigWin('Jackpot!', `and a ${PACKS.silver.name.toLowerCase()}`);
         shake();
         renderer.fireworks(4);
         buzz([40, 40, 40, 40, 80]);
@@ -761,6 +767,19 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
       h('button', { class: 'close-btn', 'aria-label': 'Close', html: ICON.close, onclick: () => { click(); closeSheet(); } })),
     sheetBody);
   let current = null;
+
+  // Bring something in the open sheet into view. Only the sheet's body
+  // scrolls: scrollIntoView would also scroll the stage itself (it climbs every
+  // ancestor, overflow hidden or not) and leave the whole game shifted up.
+  function scrollSheetTo(el, block = 'start') {
+    if (!el || !sheetBody.contains(el)) return;
+    const box = sheetBody.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    const k = sheetBody.clientHeight / (box.height || 1); // the stage is scaled to fit the screen
+    let y = sheetBody.scrollTop + (r.top - box.top) * k;
+    y -= block === 'center' ? (sheetBody.clientHeight - r.height * k) / 2 : 8;
+    sheetBody.scrollTop = Math.max(0, y);
+  }
 
   // opts: back (a function for the back arrow), page (fill the screen), tab
   // (which tab to light up while it is open)
@@ -1009,15 +1028,18 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
         onSave();
         refresh();
       } }, 'Claim');
+      // where the set's creatures will live once it is finished
+      const home = h('img', { class: 'set-home', src: BLANK, alt: '' });
+      const homeTag = h('b', { class: 'set-home-tag' });
       const el = h('button', { class: 'set-tile', style: `--set:${set.color}`, onclick: () => { click(); openSet(s); } },
-        h('div', { class: 'set-art' }, h('i', { style: cellStyle(set.cards[8]) })),
+        h('div', { class: 'set-art' }, h('i', { style: cellStyle(set.cards[8]) }), home, homeTag),
         h('div', { class: 'set-name' }, set.name), h('div', { class: 'dots' }, dots), state, claim);
-      return { s, set, dots, state, claim, el };
+      return { s, set, dots, state, claim, el, home, homeTag };
     });
     setSheet('album', 'Cards', [have, h('div', { class: 'packs' }, packTiles.map((p) => p.el)), vaultBtn, albumBtnBig, h('div', { class: 'sets' }, tiles.map((t) => t.el))], () => {
       const s = st();
       const sets = R.unlockedSets(s);
-      setHTML(have, `Season ${s.cards.season} · <b>${R.cardsOwned(s)} of ${CARDS.length}</b> cards. Finish a set for spins; finish the album for <b>${TOKEN}500</b>.`);
+      setHTML(have, `Season ${s.cards.season} · <b>${R.cardsOwned(s)} of ${CARDS.length}</b> cards. Finish a set and its creatures <b>move into the park</b>, at the ride in the corner, which pays ${Math.round(HOMES.boost * 100)}% more for good. The whole album pays <b>${TOKEN}${R.albumPrize(s)}</b>.`);
       for (const p of packTiles) {
         const n = s.cards.packs[p.type];
         setText(p.count, n > 0 ? ` ×${n}` : '');
@@ -1039,8 +1061,16 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
         const complete = R.setComplete(s, t.s);
         show(t.claim, complete && !s.cards.sets[t.s]);
         setHTML(t.state, !unlocked ? `Opens at park ${setUnlockTown(t.s) + 1}`
-          : s.cards.sets[t.s] ? 'Complete ✓'
-            : complete ? '' : `${R.setCount(s, t.s)}/9 · prize ${TOKEN}${t.set.reward}`);
+          : s.cards.sets[t.s] ? `Living at the ${siteName(homeSite(t.s))}`
+            : complete ? '' : `${R.setCount(s, t.s)}/9 · prize ${TOKEN}${R.setPrize(s, t.s)}`);
+        const url = siteURL(homeSite(t.s));
+        if (url && t.home.__src !== url) {
+          t.home.__src = url;
+          t.home.src = url;
+        }
+        const lives = s.cards.homes[t.s];
+        toggle(t.home, 'lives', lives > 0);
+        setText(t.homeTag, lives > 0 ? `+${Math.round(lives * HOMES.boost * 100)}%` : '');
       }
     }, { page: true, tab: 'album' });
   }
@@ -1063,7 +1093,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
       const state = st();
       const lives = state.cards.homes[s];
       const where = siteName(homeSite(s));
-      setHTML(note, `Collect all nine for <b>${TOKEN}${set.reward}</b>${lives < HOMES.max ? `, and they move into the park: the <b>${where}</b> pays ${Math.round(HOMES.boost * 100)}% more, for good` : ''}.`
+      setHTML(note, `Collect all nine for <b>${TOKEN}${R.setPrize(state, s)}</b>${lives < HOMES.max ? `, and they move into the park: the <b>${where}</b> pays ${Math.round(HOMES.boost * 100)}% more, for good` : ''}.`
         + (lives > 0 ? ` <b>Living at the ${where}: +${Math.round(lives * HOMES.boost * 100)}%.</b>` : '') + ' The five-star card is gold: it only comes from gold packs and the star vault.');
       for (const cell of cells) {
         const n = state.cards.owned[cell.c.id] || 0;
@@ -1247,7 +1277,9 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
   // and down; SWING stops it, the mallet comes down and the puck runs up the
   // rail that far. Three swings, each quicker than the last.
   const BELL_PERIOD = [1.7, 1.35, 1.05]; // seconds for the gauge to rise and fall
-  const BELL_MARKS = [[0.12, 'Feather'], [0.36, 'Not bad'], [0.6, 'Strong'], [0.82, 'So close']];
+  // marks up the rail, as a share of the way to the bell
+  const BELL_MARKS = [[0.4, 'Not bad'], [0.7, 'Strong'], [0.9, 'So close']];
+  const markFor = (height) => (BELL_MARKS.filter(([at]) => height >= at).pop() || [0, 'A tap'])[1];
   function openBell(p) {
     const RAIL = 250; // how far the puck can travel, in stage pixels
     const fill = h('i', { class: 'bt-fill' });
@@ -1256,6 +1288,8 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     const flash = h('i', { class: 'bt-flash' });
     const bellImg = h('img', { class: 'bt-bell', src: symURL('star'), alt: '' });
     const mallet = h('i', { class: 'bt-mallet' });
+    const ding = h('b', { class: 'bt-ding' }, 'DING!');
+    const pop = h('b', { class: 'bt-pop' });
     const rail = h('div', { class: 'bt-rail' }, BELL_MARKS.map(([at, label]) => h('span', { style: `bottom:${at * 100}%` }, label)), puck);
     const chips = BELL.shares.map((share, i) => {
       const amount = h('b', null, '–');
@@ -1282,7 +1316,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
       h('p', { class: 'dive-how' }, 'Hit SWING when the power is at the top. Three swings: the last is worth the most.'),
       h('div', { class: 'bt-rig' },
         gauge,
-        h('div', { class: 'bt-tower' }, bellImg, flash, rail, h('div', { class: 'bt-base' }, h('i', { class: 'bt-pad' })), mallet),
+        h('div', { class: 'bt-tower' }, bellImg, flash, ding, rail, pop, h('div', { class: 'bt-base' }, h('i', { class: 'bt-pad' })), mallet),
         h('div', { class: 'bt-side' }, prize, chips.map((c) => c.el))),
       swingBtn, total, done,
     ]);
@@ -1327,11 +1361,22 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
         audio.play('rise');
         puck.style.transition = 'transform 0.42s cubic-bezier(0.15, 0.7, 0.3, 1)';
         puck.style.transform = `translateY(${-height * RAIL}px)`;
+        puck.classList.add('moving');
       }, 110);
       setTimeout(() => {
         sum += res.amount;
+        puck.classList.remove('moving');
         showSwing(i, res);
+        // what the swing won, where the puck stopped
+        setHTML(pop, `${res.rung ? '' : `<small>${markFor(height)}</small>`}+${money(res.amount)}`);
+        pop.style.bottom = `${50 + height * RAIL}px`;
+        pop.classList.remove('on');
+        void pop.offsetWidth; // restart the animation
+        pop.classList.add('on');
         if (res.rung) {
+          ding.classList.remove('on');
+          void ding.offsetWidth;
+          ding.classList.add('on');
           audio.play('bell');
           buzz([20, 30, 60]);
           bellImg.classList.remove('ring');
@@ -1661,6 +1706,10 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
   // Point a new player at the next thing to press. Stops after the first builds.
   function updateCoach() {
     const s = st();
+    // once, after the first build: the new ride is on the reels now
+    if (s.stats.upgrades >= 1 && !s.seen.reels && base === 'machine' && !current && !sceneNow && !busy() && !slot.spinning && !held && !document.querySelector('.splash')) {
+      return coach(windowEl, 'Your ride is on the reels now!');
+    }
     if (busy() || sceneNow || slot.spinning || held || s.stats.upgrades >= 2 || s.mission.index > 2 || document.querySelector('.splash')) return coach(null);
     if (current) {
       if (current.key === 'build' && s.mission.index >= 1 && s.stats.upgrades === 0) return coach(sheetBody.querySelector('.site-buy:not([disabled])'), 'Build it!');
@@ -1696,7 +1745,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
 
   // Every frame: reels and the coin counter.
   function frame(dt) {
-    slot.draw(dt);
+    slot.draw(dt, base === 'machine' && !(current && current.page) && !sceneNow);
     fx.draw(dt);
     const s = st();
     // while the reels turn, do not give the result away in the totals
@@ -1754,9 +1803,10 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     betMinus.disabled = bi <= 0;
     betPlus.disabled = bi >= bets.length - 1;
     const spinning = slot.spinning;
-    setText(spinLabel, s.pending && !spinning ? 'BELL!' : tokens < 1 && !spinning ? 'EMPTY' : '');
+    setText(spinLabel, s.pending && !spinning ? 'RING THE BELL' : tokens < 1 && !spinning ? 'EMPTY' : '');
     setHTML(spinCost, '');
     toggle(spinBtn, 'empty', tokens < 1 && !spinning && !s.pending);
+    toggle(spinBtn, 'bell', !!s.pending && !spinning);
     toggle(spinBtn, 'ready', tokens >= 1 && !spinning && !auto && !held);
     if (auto && tokens < s.bet && !spinning && !held) setAuto(false);
     setHTML(gaugeCount, `${fmt(tokens)} <span>spins</span>`);
@@ -1837,7 +1887,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     ART, symURL, img, TOKEN, COIN, CHIPS, STAR, ICON, itemIcon, faceStyle, packURL, cardFace, cellStyle, host, wordmark,
     click, nope, buzz, describe, lootItems, fly, place, toast, celebrate, curtain,
     setSheet, closeSheet, sheetBody, sheetTitle, openScene, closeScene, at, hot, sceneClose, sceneInfo, overlay, closeOverlay, modal, closeModal, popup, nextPopup, busy: () => busy(),
-    refresh, onSave, onReplaceSave, onReset, setBase, goTo, lockedToast, setAuto,
+    refresh, onSave, onReplaceSave, onReset, setBase, goTo, lockedToast, setAuto, scrollSheetTo,
     watchAd, adFor, adsReady, buy, priceOf, bridge, interstitial, travelNow,
     openAlbum, openVault, openWheel, openPack, showCards, openTask: openMissions, openBellInfo, paytable, siteURL, siteName, syncBadges, BLANK,
     coinCard, tokenTarget, spinBtn, tabs, rails,
@@ -1852,6 +1902,7 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
   // paintings) and scaled to fit the screen.
   const safeProbe = h('div', { style: 'position:fixed;left:0;bottom:0;width:0;height:env(safe-area-inset-bottom,0px);visibility:hidden;pointer-events:none' });
   document.body.append(safeProbe);
+  document.body.append(h('div', { class: 'rotate-hint', 'aria-live': 'polite' }, h('i'), 'Turn your phone upright', h('small', null, 'Park! is played holding the phone the tall way.')));
   function measure() {
     const inset = safeProbe.offsetHeight || 0; // the home indicator's strip, where there is one
     const k = Math.min(window.innerWidth / STAGE_W, (window.innerHeight - inset * 0.5) / STAGE_H);
@@ -1861,6 +1912,17 @@ export function createUI({ world, renderer, audio, clock, onSave, onReplaceSave,
     slot.resize();
     fx.resize();
   }
+  // Nothing but the sheet body (and the screens' own lists) should ever
+  // scroll. If something gets scrolled by accident, put it straight back.
+  const pin = (node) => node.addEventListener('scroll', () => {
+    if (node.scrollTop || node.scrollLeft) {
+      node.scrollTop = 0;
+      node.scrollLeft = 0;
+    }
+  });
+  for (const node of [root, sheet, document.body, document.documentElement]) pin(node);
+  window.addEventListener('scroll', () => { if (window.scrollX || window.scrollY) window.scrollTo(0, 0); });
+
   syncTabs();
   refresh();
   measure();

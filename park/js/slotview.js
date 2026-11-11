@@ -21,6 +21,8 @@ export function createSlotView(canvas, hooks = {}) {
   let flashMask = [false, false, false];
   let running = false;
   let teasing = false;
+  let dirty = true; // the reels need painting even though nothing is moving
+  const mark = () => { dirty = true; };
 
   const pickSym = () => SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
   const reels = [0, 1, 2].map((i) => ({
@@ -41,6 +43,7 @@ export function createSlotView(canvas, hooks = {}) {
   const sprites = new Map();
   for (const [sym, file] of Object.entries(SYMBOL_ART)) {
     const img = new Image();
+    img.onload = mark;
     img.src = ART(file);
     sprites.set(sym, img);
   }
@@ -61,7 +64,10 @@ export function createSlotView(canvas, hooks = {}) {
   }
   // The eight site symbols are badges the page draws from the park's painting,
   // and redraws as the park is built.
-  const setSprite = (sym, canvas) => sprites.set(sym, canvas);
+  const setSprite = (sym, canvas) => {
+    sprites.set(sym, canvas);
+    dirty = true;
+  };
 
   function resize() {
     dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -69,6 +75,7 @@ export function createSlotView(canvas, hooks = {}) {
     h = canvas.clientHeight || 120;
     canvas.width = Math.round(w * dpr);
     canvas.height = Math.round(h * dpr);
+    dirty = true;
   }
 
   // Send the reels round to land on `symbols` (one per reel).
@@ -123,7 +130,10 @@ export function createSlotView(canvas, hooks = {}) {
     flashUntil = time + seconds;
   }
 
-  function draw(dt) {
+  // Called every frame. `visible` is false while the machine is off screen:
+  // the reels still turn (so a spin finishes) but nothing is painted, and an
+  // idle machine is not repainted at all.
+  function draw(dt, visible = true) {
     time += dt;
     let any = false;
     reels.forEach((r, i) => {
@@ -151,8 +161,16 @@ export function createSlotView(canvas, hooks = {}) {
     });
     if (running && !any) {
       running = false;
+      dirty = true; // paint the reels where they came to rest
       if (hooks.onStop) hooks.onStop();
     }
+    if (!visible) {
+      dirty = true;
+      return;
+    }
+    // a flash fades out just after it ends: paint one more frame to clear it
+    if (!running && !teasing && time > flashUntil + 0.1 && !dirty) return;
+    dirty = time <= flashUntil + 0.1;
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);

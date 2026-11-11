@@ -77,7 +77,7 @@ export default function install(kit) {
       toggle(stampLine, 'ready', s.shop.stamps >= 3);
     }, { page: true, tab: 'shop' });
     const jump = section && sheetBody.querySelector(`[data-pid="${section}"]`);
-    if (jump) jump.scrollIntoView({ block: 'start' });
+    if (jump) kit.scrollSheetTo(jump, 'start');
   }
 
   // Everything an advert can win today.

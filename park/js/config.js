@@ -2,7 +2,7 @@
 // game, the tests and the balance tool all read the same numbers.
 
 export const GAME_TITLE = 'Park!';
-export const VERSION = '9.0.0';
+export const VERSION = '9.1.0';
 export const SAVE_KEY = 'park.save.v4';
 // a save written under an earlier key is picked up once and carried over
 export const LEGACY_SAVE_KEYS = ['park.save.v3'];

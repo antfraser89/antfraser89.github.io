@@ -1,7 +1,7 @@
 // Park!'s service worker: keeps the game playable with no connection.
 // Everything from this folder is served from the cache when it is there, and
 // refreshed in the background, so a new version arrives on the next visit.
-const CACHE = 'park-v9.0.0';
+const CACHE = 'park-v9.1.0';
 const SHELL = ['./', 'index.html', 'css/style.css', 'css/screens.css', 'js/main.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'privacy.html', 'terms.html'];
 
 self.addEventListener('install', (event) => {

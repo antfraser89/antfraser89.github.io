@@ -51,7 +51,8 @@ export default function install(kit) {
       h('div', { class: 'faces' }, faces),
       h('div', { class: 'stat-list' }, [
         ['Level', fmt(E.level(s))], ['Stars', fmt(s.stats.upgrades)], ['Parks finished', fmt(s.stats.towns)], ['Spins', fmt(s.stats.spins)],
-        ['Coins won', money(s.stats.coinsWon)], ['Jackpots', fmt(s.stats.jackpots)], ['Cards collected', fmt(s.stats.cards)], ['Time played', fmtTime(s.stats.playTime)],
+        ['Coins won', money(s.stats.coinsWon)], ['Rush hours', fmt(s.stats.rushes)], ['Goes at the bell', `${fmt(s.stats.bells)} (${fmt(s.stats.peals)} rung three times)`], ['Jackpots', fmt(s.stats.jackpots)],
+        ['Cards collected', fmt(s.stats.cards)], ['Sets living in the park', fmt(s.cards.homes.filter((n) => n > 0).length)], ['Time played', fmtTime(s.stats.playTime)],
       ].map(([k, v]) => [h('span', null, k), h('b', null, v)])),
       h('div', { class: 'actions' }, h('button', { class: 'btn big wide', onclick: () => {
         click();

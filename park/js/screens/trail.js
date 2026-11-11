@@ -1,6 +1,6 @@
 // The Park Expedition, on its three paintings: the trail itself, the sword
 // garden that feeds it, and the cannon that feeds the garden.
-import { fmt, fmtClock } from '../format.js';
+import { fmt, fmtClock, fmtTime } from '../format.js';
 import * as T from '../games/trail.js';
 import * as R from '../rules.js';
 
@@ -128,7 +128,7 @@ export default function install(kit) {
       feed.disabled = maxed || s.inv.food < 1;
       setText(ready, `${fmt(Math.floor(p.stored))}/${fmt(T.plantStore(s))}`);
       const full = T.plantFullIn(s);
-      setText(rate, full > 0 ? `${Math.round(T.plantRate(s))} an hour · full in ${fmtClock(full)}` : 'Full: collect to keep growing');
+      setText(rate, full > 0 ? `${Math.round(T.plantRate(s))} an hour · full in ${fmtTime(full)}` : 'Full: collect to keep growing');
     }, { onClose: null });
   }
 

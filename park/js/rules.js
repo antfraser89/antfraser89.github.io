@@ -350,6 +350,9 @@ export function buyPack(state, type) {
 }
 
 const seasonMult = (state) => 1 + 0.5 * (state.cards.season - 1);
+// What finishing a set, or the album, pays in spins this season.
+export const setPrize = (state, s) => Math.round(CARD_SETS[s].reward * seasonMult(state));
+export const albumPrize = (state) => Math.round(ALBUM_REWARD.tokens * seasonMult(state));
 
 export function claimSet(state, s) {
   if (!CARD_SETS[s] || state.cards.sets[s] || !setComplete(state, s)) return null;
@@ -358,7 +361,7 @@ export function claimSet(state, s) {
   // the set's creatures move into the park, to the same site in every park
   const moved = state.cards.homes[s] < HOMES.max;
   if (moved) state.cards.homes[s]++;
-  const reward = grant(state, { tokens: Math.round(CARD_SETS[s].reward * seasonMult(state)), coins: 20 * (s + 1) });
+  const reward = grant(state, { tokens: setPrize(state, s), coins: 20 * (s + 1) });
   reward.home = moved ? { site: homeSite(s), level: state.cards.homes[s] } : null;
   return reward;
 }
@@ -366,7 +369,7 @@ export function claimSet(state, s) {
 // Finishing the album pays out and starts a fresh season of the same cards.
 export function claimAlbum(state) {
   if (!albumComplete(state)) return null;
-  const reward = grant(state, { tokens: Math.round(ALBUM_REWARD.tokens * seasonMult(state)), pack: 'gold' });
+  const reward = grant(state, { tokens: albumPrize(state), pack: 'gold' });
   state.cards.season++;
   state.cards.owned = {};
   state.cards.sets = CARD_SETS.map(() => false);

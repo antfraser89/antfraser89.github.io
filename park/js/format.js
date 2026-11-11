@@ -36,7 +36,10 @@ export function fmtTime(seconds) {
   return Math.floor(h / 24) + 'd ' + (h % 24) + 'h';
 }
 
+// A countdown: 1:15, or 3:59:41 once it runs past an hour.
 export function fmtClock(seconds) {
   const s = Math.max(0, Math.ceil(seconds));
-  return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  const pad = (n) => String(n).padStart(2, '0');
+  if (s >= 3600) return Math.floor(s / 3600) + ':' + pad(Math.floor(s / 60) % 60) + ':' + pad(s % 60);
+  return Math.floor(s / 60) + ':' + pad(s % 60);
 }
